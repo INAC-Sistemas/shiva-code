@@ -1,6 +1,9 @@
 packages:
   - vendor/*
   - packages/*/*
+  # Third-party dsh plugins maintained in-tree; each member is a profile
+  # bundle candidate (`dsh.bundle.patch`), linked into profiles on install.
+  - plugins/*
   # The Landlock launcher is developed with its harness consumers but keeps
   # its native build and publication scripts under native/landlock-run.
   - native/landlock-run
