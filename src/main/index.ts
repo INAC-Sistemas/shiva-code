@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import {
   app,
@@ -35,6 +35,17 @@ import {
   PLUGIN_RECOVERY_EVIDENCE_TIMEOUT_MS
 } from './plugin-recovery-detection'
 import { isDaemonLaunch, isUserInitiatedInstance } from './launchd-guard'
+import {
+  type GpuFallbackState,
+  defaultGpuFallbackState,
+  gpuFallbackStateEquals,
+  gpuFallbackSwitches,
+  isGpuLossFatal,
+  parseGpuFallbackState,
+  planGpuFallbackResponse,
+  planStableLaunch,
+  serializeGpuFallbackState
+} from './gpu-fallback'
 import { secureWindow } from './security'
 import { ensureLaunchRoot } from './state/launch-root'
 import {
@@ -125,6 +136,15 @@ let safeModeActionResolver: ((action: SafeModeAction) => void) | undefined
 let mainWindowRecoveryReloadAt = 0
 let mainWindowRecoveryReloadCount = 0
 const startInSafeMode = shouldStartInSafeMode(process.argv)
+// The GPU process can die before the harness is ever on screen, which is the
+// whole reason the fallback exists; tracking the first harness render is what
+// separates "this launch is unusable" from "the user is mid-task". Splash and
+// the recovery page do not count: both are local pages that render on a
+// machine whose harness never will.
+let harnessRendered = false
+let gpuFallbackState: GpuFallbackState = defaultGpuFallbackState
+let gpuFallbackRelaunching = false
+let gpuStableLaunchTimer: NodeJS.Timeout | undefined
 
 function appendRendererPluginFailureLog(message: string): void {
   const trimmed = message.trim()
@@ -522,6 +542,112 @@ function harnessLocale(): 'en' | 'zh' {
   }
 }
 
+function gpuFallbackStatePath(): string {
+  return join(app.getPath('userData'), 'gpu-fallback.json')
+}
+
+function readGpuFallbackState(): GpuFallbackState {
+  try {
+    return parseGpuFallbackState(readFileSync(gpuFallbackStatePath(), 'utf8'))
+  } catch {
+    return defaultGpuFallbackState
+  }
+}
+
+function writeGpuFallbackState(state: GpuFallbackState): void {
+  try {
+    writeFileSync(gpuFallbackStatePath(), serializeGpuFallbackState(state))
+  } catch {
+    // A fallback we cannot persist still applies to this launch; the next
+    // launch simply rediscovers it the same way this one did.
+  }
+}
+
+/**
+ * Apply the switches a previous launch discovered this machine needs. This
+ * has to run before Chromium boots, so it lives beside the other pre-ready
+ * command line configuration rather than in `bootstrap`.
+ */
+function configureGpuFallback(): void {
+  gpuFallbackState = readGpuFallbackState()
+  for (const name of gpuFallbackSwitches(gpuFallbackState.level)) {
+    app.commandLine.appendSwitch(name)
+  }
+  // Electron wants hardware acceleration turned off through its own call
+  // rather than the switch alone; the switches stay because they also cover
+  // compositing and the sandbox, which this API does not.
+  if (gpuFallbackState.level === 'gpu-disabled') app.disableHardwareAcceleration()
+}
+
+/**
+ * How long a launch has to hold on to its GPU process before it counts as
+ * stable. Long enough that the crash loop this fallback exists for has already
+ * happened, short enough that a normal session always reaches it.
+ */
+const GPU_STABLE_LAUNCH_DELAY_MS = 60_000
+
+/**
+ * Note that this launch rendered the harness and, if it then keeps its GPU
+ * process for a while, that it ran cleanly — which is what eventually lets a
+ * degraded machine climb back towards a sandboxed, hardware-accelerated
+ * Chromium.
+ */
+function markHarnessRendered(): void {
+  if (harnessRendered) return
+  harnessRendered = true
+  if (gpuFallbackState.level === 'default' && gpuFallbackState.stableLaunches === 0) return
+  gpuStableLaunchTimer = setTimeout(() => {
+    gpuStableLaunchTimer = undefined
+    const next = planStableLaunch(gpuFallbackState)
+    if (gpuFallbackStateEquals(next, gpuFallbackState)) return
+    if (next.level !== gpuFallbackState.level) {
+      runtime?.note(
+        `[desktop] GPU fallback lowered to ${next.level} after ` +
+          `${gpuFallbackState.stableLaunches + 1} stable launches`
+      )
+    }
+    gpuFallbackState = next
+    writeGpuFallbackState(next)
+  }, GPU_STABLE_LAUNCH_DELAY_MS)
+  gpuStableLaunchTimer.unref?.()
+}
+
+/**
+ * Watch for the GPU process going away and step the fallback forward. A
+ * launch whose harness never rendered is relaunched right away, because no
+ * window the user could act on exists; a launch that did render keeps going
+ * and only degrades once losses pile up, so a single crash during a driver
+ * update cannot cost this machine its GPU sandbox.
+ */
+function installGpuFallbackWatch(): void {
+  app.on('child-process-gone', (_event, details) => {
+    if (details.type !== 'GPU') return
+    if (gpuFallbackRelaunching || quitting) return
+    // Chromium tears the GPU process down on shutdown and Electron reports it
+    // here like any other loss; degrading on that would degrade everyone.
+    if (!isGpuLossFatal(details.reason)) return
+    if (gpuStableLaunchTimer) {
+      clearTimeout(gpuStableLaunchTimer)
+      gpuStableLaunchTimer = undefined
+    }
+    runtime?.note(
+      `[desktop] GPU process gone: reason=${details.reason} exitCode=${details.exitCode} ` +
+        `fallback=${gpuFallbackState.level} failures=${gpuFallbackState.failures}`
+    )
+    const plan = planGpuFallbackResponse({ state: gpuFallbackState, harnessRendered })
+    const escalated = plan.state.level !== gpuFallbackState.level
+    if (!gpuFallbackStateEquals(plan.state, gpuFallbackState)) {
+      gpuFallbackState = plan.state
+      writeGpuFallbackState(plan.state)
+    }
+    if (escalated) runtime?.note(`[desktop] GPU fallback raised to ${plan.state.level}`)
+    if (!plan.relaunch) return
+    gpuFallbackRelaunching = true
+    app.relaunch()
+    app.exit(0)
+  })
+}
+
 function configureApplicationLocale(): void {
   app.commandLine.appendSwitch('lang', harnessLocale() === 'zh' ? 'zh-CN' : 'en-US')
 }
@@ -659,6 +785,7 @@ async function openHarness(
     }
     if (navigationVersion !== mainWindowNavigationVersion) return
   }
+  markHarnessRendered()
   if (runtime.snapshot().url !== url || window.isDestroyed()) return
   await syncNativeTheme(window)
   raiseWindowWithoutStealingFocus(
@@ -1726,6 +1853,8 @@ if (isDaemonLaunch(process.env, process.platform)) {
 } else {
   configureAppIdentity()
   configureApplicationLocale()
+  configureGpuFallback()
+  installGpuFallbackWatch()
   const singleInstance = app.requestSingleInstanceLock()
   if (!singleInstance) {
     app.quit()
