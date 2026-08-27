@@ -1,0 +1,20 @@
+{
+  "key": "flow",
+  "idPrefix": "flow",
+  "name": "Live Flowglass (Host-only)",
+  "purpose": "Host-only: live flowgraph of the current session—a top-down arrow spine (user/assistant/tool groups), subagent git-tree branches (├─ branches expand sub-session steps live, ╰─ merge), plain calls synced as parallel cards; the panel carries data-autorefresh=2000 and the framework silently re-pulls every 2s; makeSessionLogReader caches per session",
+  "platform": "host-only",
+  "inject": [
+    "fs",
+    "sessionQuery",
+    "timer"
+  ],
+  "impl": [
+    "tool.js"
+  ],
+  "client": null,
+  "shared": true,
+  "order": 5,
+  "autoStart": true,
+  "approval": false
+}

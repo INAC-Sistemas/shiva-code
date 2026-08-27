@@ -1,0 +1,54 @@
+{
+  "name": "dsh-docs-panel",
+  "version": "0.1.0",
+  "description": "DSH 侧边栏里的「全局文档」：全局 Markdown 笔记，任何工作区随时可读。（依赖 dsh-better-sidebar）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "timer"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.4.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "author": "mlosun",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "better-sidebar",
+    "markdown",
+    "docs",
+    "reading",
+    "web",
+    "sidebar"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mlosun/dsh-docs-panel.git"
+  },
+  "homepage": "https://github.com/mlosun/dsh-docs-panel#readme"
+}

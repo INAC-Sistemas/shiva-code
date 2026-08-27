@@ -1,0 +1,332 @@
+// dsh-toolbox-bootstrap（host 面静态插件）：会话启动时自动 define+run 工具箱框架。
+// 只消费进程级全局服务（dynamicCordisRunner/fs/agents），不发布任何服务；
+// 动态插件的会话归属不变——define 的 sessionId 就是当前会话，与模型工具路径完全同构。
+//
+// 效果：在含本仓库的工作区打开会话（任何模式）→ 直接 define+run → 批准卡点一次允许 →
+// 框架 doRebuild 并行补齐其余插件。同意权收敛到每进程一次的批准弹框（不归属任何会话）；
+// 重启后同仓库多会话并发启动由进程级 single-flight 去重，不再每会话弹卡（v6.4 移除会话内询问）。
+// 全程 0 模型调用、1 次批准点击（Client 半每进程至少批一次是浏览器代码执行的安全闸门，不可免除）。
+//
+// 挂载方式见 REBUILD.md「零模型调用自举」：host-bootstrap/install.ps1 一键安装。
+
+const MARKER = 'plugins.json' // 仓库标记（与桩/findManifest 同约定）
+const PAYLOAD = 'plugins/toolbox/payload.json' // 框架 define 参数（完整 JSON）
+const DEFAULT_DATA_DIR = '.dsh-dynamic-toolbox' // 默认数据目录名（可被 <root>/toolbox.config.json 的 dataDir 覆盖）
+const MEMORY_FILE = 'toolbox-plugins.json' // 启停记忆（相对数据目录）
+const PREF_FILE = 'toolbox-bootstrap.json' // 自举偏好（never=完全不自举；AI 手动重建询问也会写它）
+
+export const name = 'dsh-toolbox-bootstrap'
+
+export function apply(ctx) {
+  // 全局 multiplex 注册表（v6.3）：由静态插件提供 → 进程级寿命，不随任何动态框架生死。
+  // 零安装（未装本插件）时框架兜底 provide（见 plugins/toolbox/host.js 的 makeRegistry 分支）。
+  if (!ctx.get('toolboxRegistry')) {
+    try { ctx.provide('toolboxRegistry', makeRegistry()) } catch (e) {
+      console.warn('[toolbox-bootstrap] 全局注册表提供失败: ' + String((e && e.message) || e))
+    }
+  }
+  ctx.on('agent/session-start', (payload) => {
+    const agent = payload && payload.agent
+    bootstrap(ctx, agent).catch((e) =>
+      console.warn('[toolbox-bootstrap] ' + String((e && e.message) || e)))
+  })
+}
+
+// 与 shared/registry.js 保持同一契约同一实现（本静态插件无法读仓库文件，保留同步副本；
+// 改契约须两边同步）。root → 工具表；build 用锁式 runInBuild(root, fn)：整个异步段持锁，段内 register 归 root。
+const makeRegistry = () => {
+  const tables = new Map() // root -> Map<id, entry>
+  let buildRoot = null
+  let lastRoot = null
+  let lock = Promise.resolve()
+  const tableOf = (root) => {
+    if (!root) return null
+    let t = tables.get(root)
+    if (!t) { t = new Map(); tables.set(root, t) }
+    return t
+  }
+  const register = (desc, handler) => {
+    if (!desc || typeof desc.id !== 'string' || !desc.id || typeof handler !== 'function') return () => {}
+    const t = tableOf(buildRoot || lastRoot)
+    if (!t) return () => {}
+    const entry = { id: desc.id, label: desc.label || desc.id, order: typeof desc.order === 'number' ? desc.order : 0, icon: desc.icon || null, handler }
+    t.set(desc.id, entry)
+    return () => { if (t.get(desc.id) === entry) t.delete(desc.id) }
+  }
+  return {
+    attach(root) { if (!root) return; lastRoot = root; tableOf(root) },
+    detach(root) { if (root) tables.delete(root) },
+    register,
+    async runInBuild(root, fn) {
+      const prev = lock
+      let r
+      lock = new Promise((res) => { r = res })
+      await prev
+      buildRoot = root || null
+      try { return await fn() } finally { buildRoot = null; r() }
+    },
+    tools(root) {
+      const t = tables.get(root || lastRoot) || new Map()
+      return [...t.values()].sort((a, b) => a.order - b.order)
+        .map((x) => ({ id: x.id, label: x.label, order: x.order, icon: x.icon || null }))
+    },
+    async panel(root, call) {
+      const t = tables.get(root || lastRoot)
+      const toolId = call && typeof call.tool === 'string' ? call.tool : ''
+      const entry = t && t.get(toolId)
+      if (!entry || !entry.handler) return { ok: false, error: '工具未注册或已停止: ' + (toolId || '(空)') }
+      try {
+        const res = await entry.handler({
+          action: call && typeof call.action === 'string' ? call.action : '',
+          fields: (call && call.fields && typeof call.fields === 'object') ? call.fields : {},
+          state: (call && call.state) || null,
+          root: (typeof root === 'string' && root) ? root : undefined,
+          session: (call && typeof call.session === 'string' && call.session) ? call.session : undefined,
+        })
+        if (!res || typeof res.html !== 'string') return { ok: false, error: '工具返回了无效的面板内容' }
+        const out = { ok: true, html: res.html, state: res.state == null ? null : res.state }
+        if (typeof res.copy === 'string' && res.copy) out.copy = res.copy
+        return out
+      } catch (e) { return { ok: false, error: String((e && e.message) || e) } }
+    },
+    has(root) { return root ? tables.has(root) : false },
+    roots() { return [...tables.keys()] },
+    clear() { tables.clear(); buildRoot = null; lastRoot = null },
+  }
+}
+
+// 进程级 single-flight（v6.4）：DSH 重启后 GUI 常并发恢复同仓库多个根会话，每个都触发
+// session-start；整个自举流程（含批准请求）每 root 只跑一份，并发会话复用其结果，
+// 避免重复 define / 重复批准弹框。流程结束后清表，之后的会话启动走常规幂等检查（静默跳过）。
+const inflight = new Map() // root -> Promise
+
+async function bootstrap(ctx, agent) {
+  const runner = ctx.get('dynamicCordisRunner')
+  const fs = ctx.get('fs')
+  if (!runner || !fs || !agent) return
+  // 显式能力检查：进程内 Service 方法不是 wire-level 稳定协议，后续版本若删除/改名，
+  // 在自举中途以 "is not a function" 失败前，先给出一条明确的版本/能力错误。
+  const requiredRunnerMethods = ['define', 'run', 'inventory']
+  const missingRunnerMethods = requiredRunnerMethods.filter(
+    (method) => typeof runner[method] !== 'function',
+  )
+  if (missingRunnerMethods.length) {
+    throw new Error(
+      '工具箱需要 DSH 动态运行接口，缺少：' + missingRunnerMethods.join(', '),
+    )
+  }
+  // 只服务根会话：子代理/工作流子会话不挂工具箱（否则每个 subagent 都弹卡）
+  const agents = ctx.get('agents')
+  if (agents && typeof agents.roots === 'function') {
+    try { if (agents.roots().indexOf(agent) < 0) return } catch (e) {}
+  }
+  const sid = agent.id
+  if (typeof sid !== 'string' || !sid) return
+  const cwd = agent.session && agent.session.header && agent.session.header.cwd
+  if (typeof cwd !== 'string' || !cwd) return
+
+  // 定位仓库：直下命中 plugins.json 优先，否则扫一级子目录（仓库 clone 为子目录的场景）
+  const root = await findRepo(fs, cwd)
+  if (!root) return
+
+  const pending = inflight.get(root)
+  if (pending) {
+    console.log('[toolbox-bootstrap] 同仓库自举进行中，本会话复用其结果（' + root + '）')
+    return pending
+  }
+  const run = bootstrapOnce(ctx, agent, runner, fs, root)
+  run.then(() => inflight.delete(root), () => inflight.delete(root))
+  inflight.set(root, run)
+  return run
+}
+
+async function bootstrapOnce(ctx, agent, runner, fs, root) {
+  // 数据目录名：跟随 <root>/toolbox.config.json 的 dataDir（与写方 shared/host.js mapDataRel
+  // 同一约定），读不到配置用默认——自定义目录下启停记忆/偏好才不会静默失联。
+  const dataDir = await dataDirOf(fs, root)
+
+  // 启停记忆：用户上次把框架停掉 → 尊重，本轮不自举
+  try {
+    const mt = await fs.resolve(dataDir + '/' + MEMORY_FILE, { cwd: root })
+    if (await fs.stat(mt)) {
+      const mem = JSON.parse(await fs.readText(mt))
+      const rec = mem && mem.plugins && mem.plugins.toolbox
+      if (rec && rec.enabled === false) return
+    }
+  } catch (e) {}
+
+  // 幂等：读框架 define 参数（注册表判定与 define 都要用）
+  let payload
+  try {
+    payload = JSON.parse(await fs.readText(await fs.resolve(PAYLOAD, { cwd: root })))
+  } catch (e) { return }
+
+  // 注册表级幂等（v6.3 multiplex + 幽灵根修复）：toolboxRegistry 按仓库分键，但「表存在」≠
+  // 「框架在跑」——工具插件 register 会懒建表、框架停止后残留或懒重建的空表同样占位，
+  // 单看 has(root) 会把死表当活框架、永久跳过自举。必须同时满足 inventory 里存在「该框架名」
+  // 的插件行（任意会话定义的都算）才复用跳过；异仓库照常自举（各仓库各挂一份）。
+  const reg = ctx.get('toolboxRegistry')
+  if (reg) {
+    let sameRoot = false
+    try {
+      const regHas = typeof reg.has === 'function'
+        ? reg.has(root)
+        : Boolean(reg.roots && reg.roots().indexOf(root) >= 0)
+      const frameworkRow = regHas && runner.inventory().some((row) =>
+        row && Array.isArray(row.packages) && row.packages.some((p) => p && p.name === payload.name))
+      sameRoot = Boolean(frameworkRow)
+    } catch (e) {}
+    if (sameRoot) {
+      console.log('[toolbox-bootstrap] 检测到已运行的工具箱框架（' + root + '），本会话跳过自举（同仓库复用）')
+      return
+    }
+  }
+
+  // 自举宿主会话：define/run 归属一个固定宿主 id（每仓库一个，稳定跨会话；进程重启后随 agents/Dynamic
+  // 插件一起消失，由本插件在下一次会话启动时重建）。宿主以「垫片 agent」注册进 agents 服务——
+  // 满足 DSH 网关对 Remote 参数的 agent lookup（批准卡 runHostHalf / Cordis 面板操作都能解析到），
+  // 而 runner 的完成/失败通知（agent.steer / agent.inject）打到垫片的 no-op 方法 → 用户会话零污染。
+  const hostId = hostIdOf(root)
+  const hostAgent = await ensureHostAgent(ctx, hostId, root)
+  if (!hostAgent) { console.warn('[toolbox-bootstrap] 宿主垫片创建失败，跳过自举'); return }
+  // 幂等只判本仓库宿主会话（评审阻断 1 修复）：两仓库框架同名时，第二仓库不得被第一仓库的行误判已定义
+  for (const row of runner.inventory()) {
+    if (row.agentId !== hostId) continue
+    if (row.packages.some((p) => p && p.name === payload.name)) return
+  }
+
+  // 同意权（v6.4）：不在任何会话里弹询问卡（重启并发恢复多会话时会重复污染会话）；
+  // 直接 define+run，用户同意收敛到每进程一次的批准弹框（Client 半安全闸门，不归属任何会话）。
+  // 偏好文件仍生效：{"auto":"never"} → 完全不自举。
+  const pref = await readPref(fs, root)
+  if (pref && pref.auto === 'never') return
+
+  const rec = runner.define({
+    sessionId: hostId,
+    plugin: payload.plugin,
+    name: payload.name,
+    purpose: payload.purpose,
+    code: payload.code,
+  })
+  const res = await runner.run(hostAgent, rec.pluginId, rec.packageId, 'run')
+  if (res && res.ok) {
+    console.log('[toolbox-bootstrap] toolbox ' +
+      (res.status === 'awaiting-approval' ? '等待批准（点一次允许即完成重建）' : '已启动') +
+      ' · 宿主 ' + hostId)
+  } else {
+    console.warn('[toolbox-bootstrap] run 失败: ' + String((res && (res.message || res.reason)) || 'unknown'))
+  }
+}
+
+// 生成宿主 id 前先规范化仓库路径：统一分隔符、去尾分隔符；Windows 盘符/UNC 路径的
+// 文件系统大小写不敏感，一并折叠——同一目录的不同合法写法（D:/work/repo 与
+// D:\work\repo\ 与 d:/work/repo）必须得到同一宿主 id，否则 bootstrap 与框架 Host
+// 对同一仓库算出不同 owner，破坏幂等检查与自动重挂。与 plugins/toolbox/host.js 同算法。
+function canonicalRoot(root) {
+  let s = String(root || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  if (/^[a-zA-Z]:/.test(s) || s.indexOf('//') === 0) s = s.toLowerCase()
+  return s
+}
+
+// 每仓库一个稳定宿主会话 id（进程内唯一；仅字母数字与连字符，避免非 ASCII/分隔符问题）：
+// 规范化短前缀（可读）+ canonical path 的 FNV-1a 哈希（防碰撞）。只截断 48 字符会让同前缀
+// 长路径（…/org/project-alpha 与 …/org/project-beta）或 a-b 与 a/b 归一后同形 —— 第二仓库
+// 复用第一仓库的垫片 agent，被同名 Package 幂等误判，无法自举。与 plugins/toolbox/host.js 同算法。
+export function hostIdOf(root) {
+  const canon = canonicalRoot(root)
+  const norm = canon.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase()
+  const prefix = norm.slice(-24)
+  return 'toolbox-host-' + (prefix ? prefix + '-' : '') + pathHash(canon)
+}
+
+// FNV-1a 32-bit：纯 JS 无 crypto 依赖，跨引擎结果稳定；base36 ≤ 7 字符
+function pathHash(s) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36)
+}
+
+// 宿主垫片 agent：进入 agents 服务（不产生真实会话/不触发 agent/session-start）。
+// 用 agents.enter 而非 agents.register：DSH 新版的 register 会把 stub 作为 root agent
+// announce（emit agent/created），agent-presets / schedule 等监听器访问 stub 缺失的
+// agent.ctx 会同步抛错，打断注册→自举；enter 只插入 store、不 announce，正是垫片语义。
+// 垫片对象仍需满足新契约 agent.id === agent.session.id（顶层 session.id，缺一不可）。
+async function ensureHostAgent(ctx, hostId, root) {
+  const agents = ctx.get('agents')
+  if (!agents) return null
+  if (typeof agents.get === 'function') {
+    const existing = agents.get(hostId)
+    if (existing) return existing
+  }
+  const stub = {
+    id: hostId,
+    session: { id: hostId, header: { id: hostId, cwd: root } },
+    steer() {},
+    inject() {},
+  }
+  // enter(agent, owner)：owner=undefined → 进程级 root（与"不产生真实会话"的垫片语义一致）。
+  // 返回的 detach 不调用——stub 生命周期跟随本静态插件（进程）-级，进程退出即清空。
+  if (typeof agents.enter === 'function') {
+    try {
+      agents.enter(stub, undefined)
+      return stub
+    } catch (e) {
+      console.warn('[toolbox-bootstrap] 宿主垫片进入失败: ' + String((e && e.message) || e))
+      return null
+    }
+  }
+  // 旧 DSH 兜底（无 enter 时退回 register；旧版无 announce 同步抛错问题）
+  if (typeof agents.register !== 'function') return null
+  try {
+    agents.register(stub)
+    return stub
+  } catch (e) {
+    console.warn('[toolbox-bootstrap] 宿主垫片注册失败: ' + String((e && e.message) || e))
+    return null
+  }
+}
+
+async function readPref(fs, root) {
+  try {
+    const t = await fs.resolve(await dataDirOf(fs, root) + '/' + PREF_FILE, { cwd: root })
+    if (await fs.stat(t)) return JSON.parse(await fs.readText(t))
+  } catch (e) {}
+  return null
+}
+
+// 数据目录名：直下 toolbox.config.json 的 dataDir 字段优先（trim 尾分隔符），否则默认值。
+// 与 shared/host.js 的 repoDataDir 同约定；本静态插件读不到共享层，保留独立最小实现。
+async function dataDirOf(fs, root) {
+  try {
+    const t = await fs.resolve('toolbox.config.json', { cwd: root })
+    if (await fs.stat(t)) {
+      const cfg = JSON.parse(await fs.readText(t))
+      if (cfg && typeof cfg.dataDir === 'string' && cfg.dataDir) return cfg.dataDir.replace(/[\\/]+$/, '')
+    }
+  } catch (e) {}
+  return DEFAULT_DATA_DIR
+}
+
+async function findRepo(fs, cwd) {
+  try {
+    const t = await fs.resolve(MARKER, { cwd })
+    if (await fs.stat(t)) return cwd
+  } catch (e) {}
+  try {
+    const dt = await fs.resolve('.', { cwd })
+    const entries = await fs.listDir(dt)
+    for (const ent of entries || []) {
+      if (!ent || ent.type !== 'directory' || !ent.name) continue
+      if (ent.name.charAt(0) === '.' || ent.name === 'node_modules') continue
+      const sub = cwd.replace(/[\\/]+$/, '') + '/' + ent.name
+      try {
+        const t = await fs.resolve(MARKER, { cwd: sub })
+        if (await fs.stat(t)) return sub
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return null
+}

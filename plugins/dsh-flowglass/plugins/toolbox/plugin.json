@@ -1,0 +1,18 @@
+{
+  "key": "toolbox",
+  "idPrefix": "tbx",
+  "name": "Toolbox Framework (Host registry + Client panel shell)",
+  "purpose": "Toolbox framework: the Host half maintains the tool registry and provides the toolbox/tools and toolbox/panel RPC; the Client half provides the drawer + Tab bar + generic HTML panel shell (the only new-architecture plugin that needs browser approval)",
+  "platform": "host+client",
+  "inject": [
+    "fs"
+  ],
+  "impl": [
+    "host.js"
+  ],
+  "client": "client.js",
+  "shared": false,
+  "order": 1,
+  "autoStart": true,
+  "approval": true
+}

@@ -1,0 +1,21 @@
+{
+  "version": 3,
+  "mode": "native-static",
+  "bundle": "flow",
+  "plugins": [
+    {
+      "id": "toolbox",
+      "name": "Toolbox Framework (Host registry + Client panel shell)",
+      "platform": "host+client",
+      "order": 1,
+      "purpose": "Toolbox framework: the Host half maintains the tool registry and provides the toolbox/tools and toolbox/panel RPC; the Client half provides the drawer + Tab bar + generic HTML panel shell (the only new-architecture plugin that needs browser approval)"
+    },
+    {
+      "id": "flow",
+      "name": "Live Flowglass (Host-only)",
+      "platform": "host-only",
+      "order": 5,
+      "purpose": "Host-only: live flowgraph of the current session—a top-down arrow spine (user/assistant/tool groups), subagent git-tree branches (├─ branches expand sub-session steps live, ╰─ merge), plain calls synced as parallel cards; the panel carries data-autorefresh=2000 and the framework silently re-pulls every 2s; makeSessionLogReader caches per session"
+    }
+  ]
+}

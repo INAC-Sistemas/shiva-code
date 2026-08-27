@@ -45,6 +45,10 @@ allowBuilds:
   lefthook: true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
+  # dsh-ssh-tunnel dependency: ssh2's install script builds its optional native
+  # crypto binding; cpu-features is an optional speedup we do not need.
+  ssh2: true
+  'cpu-features': false
   # Pulled in by @earendil-works/pi-ai (optional LLM API backend). pnpm lists
   # them only because they ship lifecycle scripts, but those are no-ops we don't
   # need, so we deny them — install still succeeds.

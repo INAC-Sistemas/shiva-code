@@ -1,0 +1,14 @@
+# 依赖
+node_modules/
+
+# 视觉工具临时产物
+.dsh-vision-router/
+
+# 系统与编辑器
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# AI 技能与工具落地文件
+.agents/
