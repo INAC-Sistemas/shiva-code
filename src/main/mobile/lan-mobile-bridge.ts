@@ -7,9 +7,14 @@ import { join } from 'node:path'
 import QRCode from 'qrcode'
 import {
   ensureCloudflaredBinary,
-  startCloudflareQuickTunnel,
-  type CloudflareTunnelInstance
+  startCloudflareQuickTunnel
 } from './cloudflared-tunnel'
+import {
+  startTunnelWithFallback,
+  type InternetTunnelInstance,
+  type InternetTunnelProvider
+} from './internet-tunnel'
+import { startPinggyTunnel } from './pinggy-tunnel'
 import {
   renderDesktopPairingPage,
   renderMobilePage,
@@ -44,6 +49,9 @@ export interface LanMobileBridgeOptions {
   port?: number
   cloudflaredCacheDir?: string
   cloudflaredPath?: string
+  pinggySshPath?: string
+  forceCloudflareFailure?: boolean
+  tunnelLog?: (message: string) => void
   now?: () => number
   onReconnectRequested?: () => void
   onConnectedChange?: (connected: boolean) => void
@@ -59,6 +67,7 @@ export interface LanMobileBridgeSnapshot {
   tunnelActive?: boolean
   tunnelLoading?: boolean
   tunnelUrl?: string
+  tunnelProvider?: InternetTunnelProvider
   tunnelError?: string
 }
 
@@ -109,7 +118,7 @@ export class LanMobileBridge {
   private port?: number
   private pairingToken?: string
   private pairingExpiresAt?: number
-  private tunnelInstance?: CloudflareTunnelInstance
+  private tunnelInstance?: InternetTunnelInstance
   private tunnelActive = false
   private tunnelLoading = false
   private tunnelError?: string
@@ -244,13 +253,28 @@ export class LanMobileBridge {
   private async launchTunnel(): Promise<void> {
     const port = this.port
     if (!port) throw new Error('Bridge is not running.')
-    const binaryPath = await ensureCloudflaredBinary({
-      cacheDir: this.options.cloudflaredCacheDir ?? join(tmpdir(), 'dsh-cloudflared'),
-      customPath: this.options.cloudflaredPath
-    })
-    this.tunnelInstance = await startCloudflareQuickTunnel({
-      port,
-      binaryPath
+    const cacheDir = this.options.cloudflaredCacheDir ?? join(tmpdir(), 'dsh-cloudflared')
+    this.tunnelInstance = await startTunnelWithFallback({
+      forceCloudflareFailure: this.options.forceCloudflareFailure,
+      startCloudflare: async () => {
+        const binaryPath = await ensureCloudflaredBinary({
+          cacheDir,
+          customPath: this.options.cloudflaredPath
+        })
+        return startCloudflareQuickTunnel({
+          port,
+          binaryPath,
+          log: this.options.tunnelLog
+        })
+      },
+      startPinggy: () =>
+        startPinggyTunnel({
+          port,
+          sshPath: this.options.pinggySshPath,
+          knownHostsPath: join(cacheDir, 'pinggy-known-hosts'),
+          log: this.options.tunnelLog
+        }),
+      log: this.options.tunnelLog
     })
   }
 
@@ -280,6 +304,7 @@ export class LanMobileBridge {
       tunnelActive: this.tunnelActive,
       tunnelLoading: this.tunnelLoading,
       tunnelUrl: this.tunnelInstance?.url,
+      tunnelProvider: this.tunnelInstance?.provider,
       tunnelError: this.tunnelError
     }
   }
@@ -306,7 +331,9 @@ export class LanMobileBridge {
     const transportAddress = normalizeRemoteAddress(request.socket.remoteAddress ?? '')
     if (!isPrivateAddress(transportAddress)) return this.text(response, 403, 'Private network only.')
     const connectionMode = this.requestConnectionMode(request, transportAddress)
-    const forwardedAddress = firstHeaderValue(request.headers['cf-connecting-ip'])
+    const forwardedAddress =
+      firstHeaderValue(request.headers['cf-connecting-ip']) ??
+      firstHeaderValue(request.headers['x-forwarded-for'])
     const remoteAddress =
       connectionMode === 'tunnel' && forwardedAddress
         ? normalizeRemoteAddress(forwardedAddress)
@@ -400,6 +427,7 @@ export class LanMobileBridge {
         active: snapshot.tunnelActive,
         loading: snapshot.tunnelLoading,
         url: snapshot.tunnelUrl,
+        provider: snapshot.tunnelProvider,
         error: snapshot.tunnelError,
         pairingUrl: snapshot.pairingUrl,
         qrSvg,
@@ -441,6 +469,7 @@ export class LanMobileBridge {
         active: snapshot.tunnelActive,
         loading: snapshot.tunnelLoading,
         url: snapshot.tunnelUrl,
+        provider: snapshot.tunnelProvider,
         error: snapshot.tunnelError,
         pairingUrl: snapshot.pairingUrl,
         qrSvg,
@@ -692,7 +721,7 @@ export class LanMobileBridge {
     const host = (request.headers.host ?? '').split(':', 1)[0]?.toLowerCase() ?? ''
     const forwardedAddress = firstHeaderValue(request.headers['cf-connecting-ip'])
     const ray = firstHeaderValue(request.headers['cf-ray'])
-    return host.endsWith('.trycloudflare.com') || Boolean(forwardedAddress && ray)
+    return isInternetTunnelHost(host) || Boolean(forwardedAddress && ray)
       ? 'tunnel'
       : 'lan'
   }
@@ -975,6 +1004,16 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
   const first = Array.isArray(value) ? value[0] : value?.split(',', 1)[0]
   const normalized = first?.trim()
   return normalized || undefined
+}
+
+export function isInternetTunnelHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/\.$/, '')
+  return (
+    (normalized.endsWith('.trycloudflare.com') && normalized !== 'api.trycloudflare.com') ||
+    normalized.endsWith('.pinggy.link') ||
+    normalized.endsWith('.pinggy-free.link') ||
+    normalized.endsWith('.pinggy.online')
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

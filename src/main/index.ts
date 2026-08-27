@@ -1779,6 +1779,8 @@ async function bootstrap(): Promise<void> {
     },
     appIconPath: desktopIconPath(),
     cloudflaredCacheDir: join(app.getPath('userData'), 'bin'),
+    forceCloudflareFailure: process.env.DSH_TUNNEL_FORCE_PINGGY === '1',
+    tunnelLog: (message) => console.warn(message),
     port: developmentBuild ? 43128 : 43127,
     onReconnectRequested: () => {
       void showMobilePairing().catch(showUnexpectedError)
