@@ -8,6 +8,13 @@ export async function proxy(request: NextRequest) {
     request.cookies.get(SESSION_COOKIE)?.value,
   );
 
+  // A raiz é a tela de login (ou o dashboard, se já houver sessão).
+  if (pathname === "/") {
+    return NextResponse.redirect(
+      new URL(session ? "/dashboard" : "/login", request.url),
+    );
+  }
+
   if (pathname.startsWith("/dashboard") && !session) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -20,5 +27,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/", "/dashboard/:path*", "/login"],
 };

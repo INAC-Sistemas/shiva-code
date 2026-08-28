@@ -28,10 +28,11 @@ Os dois usuários guest são apenas dados de demonstração — remova o bloco m
 
 ## Rotas
 
-| Rota         | Descrição                                                     |
-| ------------ | ------------------------------------------------------------- |
-| `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado |
-| `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado   |
+| Rota         | Descrição                                                       |
+| ------------ | --------------------------------------------------------------- |
+| `/`          | Redireciona para `/login` (ou `/dashboard`, se já houver sessão)  |
+| `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado   |
+| `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado     |
 
 O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenção
 `middleware` foi renomeada para `proxy`).
