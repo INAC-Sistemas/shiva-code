@@ -1,0 +1,20 @@
+# dsh-clock bundle patch
+#
+# The `dsh.bundle.patch` layer of the package: installing it into a profile —
+#
+#   dsh plugin --profile web add link:/home/rai/shiva-code/plugins/dsh-clock
+#
+# — appends `dsh-clock` to that profile's `dsh.profile.bundles`, and the boot
+# merges this single `insert` (one plugin row) into the loader entry list. No
+# profile file edits.
+#
+# The entry exists only so the web shell sees an ENABLED loader entry for this
+# package: the client-modules scan serves `dsh.client` bundles for enabled
+# entries alone. All behavior lives in the client half.
+#
+# The clock's position is fixed at `order: -100` in the client registration,
+# which puts it left of the shipped "Session log" capsule (order 0) in the
+# session header's utilities row.
+- insert:
+    - id: clock
+      name: 'dsh-clock'
