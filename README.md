@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Plugin Manager
 
-## Getting Started
+Next.js 16 + Postgres + Prisma 7, rodando em container no modo desenvolvimento com hot reload.
 
-First, run the development server:
+## Subir o projeto
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env   # já existe um .env pronto para dev
+docker compose up -d --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Aplicação: http://localhost:3000/login
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+O entrypoint do container ([docker/dev-entrypoint.sh](docker/dev-entrypoint.sh)) roda
+`prisma generate`, `prisma migrate deploy` e `prisma db seed` antes de subir o Next.
+O seed é idempotente (`upsert`), então pode rodar a cada start.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Credenciais do seed
 
-## Learn More
+| Nome        | E-mail                   | Senha       | Papel |
+| ----------- | ------------------------ | ----------- | ----- |
+| admin       | admin@inacsistemas.com   | `inac1255`  | ADMIN |
+| Maria Souza | maria@inacsistemas.com   | `guest1234` | GUEST |
+| João Lima   | joao@inacsistemas.com    | `guest1234` | GUEST |
 
-To learn more about Next.js, take a look at the following resources:
+Os dois usuários guest são apenas dados de demonstração — remova o bloco marcado em
+[prisma/seed.ts](prisma/seed.ts) se não quiser.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Rotas
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Rota         | Descrição                                                     |
+| ------------ | ------------------------------------------------------------- |
+| `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado |
+| `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado   |
 
-## Deploy on Vercel
+O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenção
+`middleware` foi renomeada para `proxy`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Papéis
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **ADMIN** — vê todos os usuários na listagem.
+- **GUEST** — vê apenas o próprio cadastro.
+
+A regra é um único `where` em [src/app/dashboard/page.tsx](src/app/dashboard/page.tsx).
+
+## Autenticação
+
+Senhas com hash `bcrypt` e sessão em JWT (`jose`) dentro de um cookie `httpOnly`,
+`sameSite=lax`, com `secure` ativado em produção. Validade de 7 dias.
+
+O segredo vem de `SESSION_SECRET`, definido no `.env` (gitignored) e injetado no
+container por interpolação no [docker-compose.yml](docker-compose.yml) — o valor
+não fica versionado. Gere um novo por ambiente:
+
+```bash
+openssl rand -base64 48
+```
+
+Trocar o segredo invalida todas as sessões abertas.
+
+## Comandos
+
+```bash
+docker compose up -d              # subir
+docker compose logs -f web        # logs da aplicação
+docker compose down               # parar
+docker compose down -v            # parar e apagar o volume do Postgres
+docker compose up -d --build      # rebuild (após mudar package.json)
+
+npm run db:migrate                # nova migration (roda do host, porta 5432 exposta)
+npm run db:seed                   # rodar o seed manualmente
+npm run db:studio                 # Prisma Studio
+```
+
+Novas dependências: `node_modules` é um volume anônimo do container, então
+`npm install <pacote>` no host não reflete lá dentro. Use
+`docker compose exec web npm install <pacote>` ou refaça o build.
