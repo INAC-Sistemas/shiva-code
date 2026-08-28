@@ -74,6 +74,7 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | POST   | `/api/auth/login` | —      | Recebe `{email, password}`, devolve o token       |
 | GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
+| GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
 
 Resposta do login:
 
@@ -101,6 +102,31 @@ if (!auth.ok) return auth.response;
 Token de API vale 24 horas; o cookie de sessão web vale 7 dias. Os dois são JWT
 assinados com o mesmo `SESSION_SECRET`, mas carregam uma claim `typ`
 (`"api"` / `"session"`) que impede usar um no lugar do outro.
+
+## Plugins
+
+Serviços em [plugins/](plugins/), importáveis pelo alias `@plugins/*`. Cada um é
+um módulo puro; a rota HTTP fica em `src/app/api/plugins/<nome>/route.ts` e só
+faz a autenticação e o wiring.
+
+### host-info
+
+`GET /api/plugins/host-info` (Bearer) → disco e memória do host, em bytes:
+
+```json
+{
+  "disk": { "totalBytes": 1081101176832, "usedBytes": 179197698048 },
+  "memory": { "totalBytes": 8197959680, "usedBytes": 5563781120 }
+}
+```
+
+Implementado em [plugins/host-info/index.ts](plugins/host-info/index.ts) só com
+built-ins do Node — `fs.statfs` para disco e `/proc/meminfo` para memória, sem
+shell e sem dependências.
+
+O filesystem inspecionado é `/` por padrão. Se o container tiver um disco próprio
+(diferente do host), monte o filesystem do host e aponte para ele com
+`HOST_INFO_DISK_PATH`.
 
 ## Autenticação
 
