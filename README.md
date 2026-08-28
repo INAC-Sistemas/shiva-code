@@ -39,10 +39,20 @@ O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenç
 
 ## Papéis
 
-- **ADMIN** — vê todos os usuários na listagem.
-- **GUEST** — vê apenas o próprio cadastro.
+- **ADMIN** — vê todos os usuários e pode criar novos.
+- **GUEST** — vê apenas o próprio cadastro e não pode criar.
 
-A regra é um único `where` em [src/app/dashboard/page.tsx](src/app/dashboard/page.tsx).
+A regra de visibilidade é um único `where` em
+[src/app/dashboard/page.tsx](src/app/dashboard/page.tsx); a de criação está no
+início de [src/app/actions/users.ts](src/app/actions/users.ts) — validada no
+servidor, não só escondendo o botão.
+
+## Criar usuário
+
+Botão **Novo usuário** no dashboard (visível só para admin). Valida nome, formato
+do e-mail, senha com no mínimo 8 caracteres e papel, e recusa e-mail duplicado —
+tanto por consulta prévia quanto pelo índice único do Postgres, que é a garantia
+real contra corrida.
 
 ## Autenticação
 

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import { RoleBadge } from "@/app/dashboard/role-badge";
+import { NewUserForm } from "@/app/dashboard/new-user-form";
 
 const dateFormat = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -30,6 +31,8 @@ export default async function UsersPage() {
             : "Como guest, você visualiza apenas o seu próprio cadastro."}
         </p>
       </div>
+
+      {isAdmin ? <NewUserForm /> : null}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <table className="w-full min-w-xl border-collapse text-left text-sm">
