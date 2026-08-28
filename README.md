@@ -81,7 +81,7 @@ Resposta do login:
 {
   "token": "eyJhbGciOiJIUzI1NiJ9...",
   "tokenType": "Bearer",
-  "expiresIn": 28800,
+  "expiresIn": 86400,
   "user": { "id": "...", "name": "admin", "email": "...", "role": "ADMIN" }
 }
 ```
@@ -98,7 +98,7 @@ if (!auth.ok) return auth.response;
 // auth.session.userId / .role disponíveis aqui
 ```
 
-Token de API vale 8 horas; o cookie de sessão web vale 7 dias. Os dois são JWT
+Token de API vale 24 horas; o cookie de sessão web vale 7 dias. Os dois são JWT
 assinados com o mesmo `SESSION_SECRET`, mas carregam uma claim `typ`
 (`"api"` / `"session"`) que impede usar um no lugar do outro.
 

@@ -6,7 +6,7 @@ import type { Role } from "@/generated/prisma/enums";
 
 export const SESSION_COOKIE = "session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 dias
-export const API_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 8; // 8 horas
+export const API_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24; // 24 horas
 
 /**
  * Tokens de sessão (cookie do navegador) e tokens de API são assinados com o
