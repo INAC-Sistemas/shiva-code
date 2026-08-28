@@ -54,6 +54,54 @@ do e-mail, senha com no mínimo 8 caracteres e papel, e recusa e-mail duplicado 
 tanto por consulta prévia quanto pelo índice único do Postgres, que é a garantia
 real contra corrida.
 
+## API
+
+Autenticação por token Bearer, independente do login web.
+
+```bash
+# 1. obter o token
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@inacsistemas.com","password":"inac1255"}' \
+  | jq -r .token)
+
+# 2. usar em requisições autenticadas
+curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
+```
+
+| Método | Rota              | Auth   | Descrição                                        |
+| ------ | ----------------- | ------ | ------------------------------------------------ |
+| POST   | `/api/auth/login` | —      | Recebe `{email, password}`, devolve o token       |
+| GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
+| GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
+
+Resposta do login:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 28800,
+  "user": { "id": "...", "name": "admin", "email": "...", "role": "ADMIN" }
+}
+```
+
+Erros: `400` body inválido, `401` credenciais ou token inválidos (com header
+`WWW-Authenticate: Bearer`), `403` papel insuficiente.
+
+A validação fica em [src/lib/api-auth.ts](src/lib/api-auth.ts). Para proteger uma
+nova rota:
+
+```ts
+const auth = await authenticateRequest(request);
+if (!auth.ok) return auth.response;
+// auth.session.userId / .role disponíveis aqui
+```
+
+Token de API vale 8 horas; o cookie de sessão web vale 7 dias. Os dois são JWT
+assinados com o mesmo `SESSION_SECRET`, mas carregam uma claim `typ`
+(`"api"` / `"session"`) que impede usar um no lugar do outro.
+
 ## Autenticação
 
 Senhas com hash `bcrypt` e sessão em JWT (`jose`) dentro de um cookie `httpOnly`,
