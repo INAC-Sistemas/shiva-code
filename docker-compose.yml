@@ -1,0 +1,20 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: plugin-manager-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Código do host montado no container -> hot reload
+      - .:/app
+      # Volumes anônimos preservam o node_modules e o .next do container,
+      # evitando que a montagem acima sobrescreva o que foi instalado no build
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
