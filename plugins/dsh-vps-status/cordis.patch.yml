@@ -27,6 +27,6 @@
 #           toolName: db_server_status
 - insert:
     - id: vps-status
-      name: 'dsh-vps-status'
+      name: "dsh-vps-status"
       config:
-        endpoint: http://127.0.0.1:8080/status
+        endpoint: http://127.0.0.1:8081/status
