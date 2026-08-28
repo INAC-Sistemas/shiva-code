@@ -1,0 +1,32 @@
+# dsh-vps-status bundle patch
+#
+# The `dsh.bundle.patch` layer of the package: installing it into a profile —
+#
+#   dsh plugin --profile web add link:/absolute/path/to/plugins/dsh-vps-status
+#
+# — appends `dsh-vps-status` to that profile's `dsh.profile.bundles`, and the
+# boot merges this single `insert` into the loader entry list.
+#
+# `config.endpoint` has no default on purpose: a status tool pointed at the
+# wrong host is worse than one that refuses to load, so an entry without it
+# fails at composition with a schema error.
+#
+# One entry watches one host. To watch several, add a row per host with its own
+# `id`, `endpoint`, and `toolName` (two tools cannot share a name):
+#
+#   - insert:
+#       - id: vps-status-app
+#         name: 'dsh-vps-status'
+#         config:
+#           endpoint: https://app.example.com/status
+#           toolName: app_server_status
+#       - id: vps-status-db
+#         name: 'dsh-vps-status'
+#         config:
+#           endpoint: https://db.example.com/status
+#           toolName: db_server_status
+- insert:
+    - id: vps-status
+      name: 'dsh-vps-status'
+      config:
+        endpoint: http://127.0.0.1:8080/status
