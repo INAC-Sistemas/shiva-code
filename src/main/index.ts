@@ -18,7 +18,10 @@ import {
 } from 'electron'
 import { extractFailureCause, HarnessRuntime } from './runtime/harness-runtime'
 import { launchDisclaimedUtilityProcess } from './runtime/disclaimed-utility-process'
-import { installProfileDependenciesWithDsh } from './runtime/profile-plugin-command'
+import {
+  installProfileDependenciesWithDsh,
+  removeProfilePluginWithDsh
+} from './runtime/profile-plugin-command'
 import { clearDamagedPackageDirectories, hasProfile } from './state/profile-repair'
 import {
   clearProfileInstallMarker,
@@ -60,10 +63,7 @@ import {
 } from './state/plugin-recovery'
 import { ensureSafeModeProfile, SAFE_MODE_PROFILE } from './state/safe-mode-profile'
 import {
-  desiredIsUntried,
-  markGenerationsBooted,
   prepareGenerationsForLaunch,
-  rollBackToLastKnownGood,
   uninstallGenerationPlugin
 } from './state/generation-launch'
 import {
@@ -629,11 +629,7 @@ const GPU_STABLE_LAUNCH_DELAY_MS = 60_000
 function markHarnessRendered(): void {
   if (harnessRendered) return
   harnessRendered = true
-  // The window rendered, so whatever plugin generations are enabled boot. This
-  // is the proof `.install-complete` never was — a pnpm exit code said nothing
-  // about whether the profile could start.
   const dshHome = join(app.getPath('userData'), 'harness')
-  void markGenerationsBooted(dshHome, (line) => runtime?.note(line))
   // A migrated profile that rendered a window is confirmed; the pre-upgrade
   // snapshot is no longer needed.
   if (isProfileMigrated(dshHome)) {
@@ -1094,19 +1090,16 @@ function launchHarness(): Promise<void> {
     await auditInstalledLaunchAgents(dshHome)
     await runtime.start(launchDirectory)
 
-    // A new plugin set that did not reach 'ready' is rolled back to the last
-    // set that rendered a window, then Harness is started once more. Reaching
-    // 'ready' is necessary but not sufficient for "known good" — the
-    // window-rendered commit in markHarnessRendered is what confirms it.
+    // A failed launch must not rewrite the user's enabled plugin set. Recovery
+    // and Safe Mode operate on explicit, exact plugin selections; automatically
+    // restoring a stale snapshot can resurrect an incompatible old version or
+    // collapse the whole profile when that snapshot is empty.
     if (runtime.snapshot().phase !== 'ready') {
       // A migration that did not boot rolls the whole profile back to the
       // pre-upgrade snapshot — nothing was lost, and the old shared-tree path
       // runs next launch.
       if (migrated && (await rollBackMigration(dshHome, (line) => runtime.note(line)))) {
         await repairProfilePackages(dshHome)
-        await runtime.start(launchDirectory)
-      } else if (await desiredIsUntried(dshHome).catch(() => false)) {
-        await rollBackToLastKnownGood(dshHome, (line) => runtime.note(line))
         await runtime.start(launchDirectory)
       }
     }

@@ -14,16 +14,9 @@ import { join } from 'node:path'
  * Windows operation that wedges pnpm: renaming over a directory that already
  * exists.
  *
- * Two pointer files, not one:
- *
- *   desired.json         the generations the user has asked to run
- *   last-known-good.json  the generations that actually booted — committed only
- *                         after Harness reports ready AND the window renders
- *
- * `.install-complete` recorded that a pnpm command exited zero, then got read
- * as "this profile boots". Those are different claims. `desired` carries the
- * first, `last-known-good` the second, and a failed launch falls back to the
- * second rather than to a hash that only ever meant the first.
+ * `desired.json` is the sole authority for the generations the user has asked
+ * to run. A failed launch never rewrites it; recovery requires an explicit,
+ * exact plugin selection so one incompatible plugin cannot remove siblings.
  */
 
 /**
@@ -45,7 +38,6 @@ export function registryLayout(dshHome) {
     staging: join(root, 'staging'),
     trash: join(root, 'trash'),
     desiredPointer: join(root, 'desired.json'),
-    lastKnownGoodPointer: join(root, 'last-known-good.json'),
     lockFile: join(root, '.lock')
   }
 }
@@ -185,29 +177,8 @@ export async function readDesired(dshHome) {
   return readPointer(registryLayout(dshHome).desiredPointer)
 }
 
-export async function readLastKnownGood(dshHome) {
-  return readPointer(registryLayout(dshHome).lastKnownGoodPointer)
-}
-
 export async function writeDesired(dshHome, generationIds) {
   await writePointerAtomically(registryLayout(dshHome).desiredPointer, generationIds)
-}
-
-/**
- * Commit the currently-desired set as known good. Call this only once Harness
- * has reported ready and the main window has rendered — never on a pnpm exit
- * code.
- */
-export async function commitLastKnownGood(dshHome) {
-  const desired = await readDesired(dshHome)
-  await writePointerAtomically(registryLayout(dshHome).lastKnownGoodPointer, desired)
-}
-
-/** Roll `desired` back to the last set that actually booted. */
-export async function revertToLastKnownGood(dshHome) {
-  const lkg = await readLastKnownGood(dshHome)
-  await writeDesired(dshHome, lkg)
-  return lkg
 }
 
 /**
@@ -252,18 +223,13 @@ export async function resolveEnabledGenerations(dshHome) {
   return enabled
 }
 
-/**
- * The generation ids that are safe to physically delete now: nothing in either
- * pointer references them, so no running process could be importing from them
- * once Harness is stopped.
- */
+/** The generation ids not referenced by the authoritative desired pointer. */
 export async function collectUnreferencedGenerations(dshHome) {
-  const [desired, lkg, all] = await Promise.all([
+  const [desired, all] = await Promise.all([
     readDesired(dshHome),
-    readLastKnownGood(dshHome),
     listGenerations(dshHome)
   ])
-  const referenced = new Set([...desired, ...lkg])
+  const referenced = new Set(desired)
   return all.filter((generation) => !referenced.has(generation.id)).map((generation) => generation.id)
 }
 

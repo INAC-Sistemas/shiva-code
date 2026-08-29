@@ -6,13 +6,9 @@ import {
   resolveProfileDir
 } from '@deepseek-ai/dsh-app-boot'
 import {
-  commitLastKnownGood,
   disableGeneration,
   isGenerationPlugin,
-  readDesired,
-  readLastKnownGood,
   resolveEnabledGenerations,
-  revertToLastKnownGood,
   sweepRegistry
 } from 'dsh-desktop-market-installer/generations/registry'
 import { projectGenerations } from 'dsh-desktop-market-installer/generations/projection'
@@ -71,32 +67,6 @@ export async function prepareGenerationsForLaunch(dshHome: string, note: Note): 
 }
 
 /**
- * Whether `desired` has moved ahead of the set that last booted. A failed
- * launch after this is true is a new generation set that did not work, and the
- * fix is to fall back — not to a hash that only meant "pnpm exited zero".
- */
-export async function desiredIsUntried(dshHome: string): Promise<boolean> {
-  const [desired, lkg] = await Promise.all([readDesired(dshHome), readLastKnownGood(dshHome)])
-  if (desired.length !== lkg.length) return true
-  const known = new Set(lkg)
-  return desired.some((id) => !known.has(id))
-}
-
-/**
- * Roll `desired` back to the last set that rendered a window, reproject, and
- * report it. The caller relaunches Harness once after this.
- */
-export async function rollBackToLastKnownGood(dshHome: string, note: Note): Promise<boolean> {
-  const reverted = await revertToLastKnownGood(dshHome)
-  await projectGenerations(dshHome).catch(() => undefined)
-  note(
-    `[desktop] a new plugin set failed to boot; rolled back to the last working set ` +
-      `(${reverted.length} generation(s))`
-  )
-  return true
-}
-
-/**
  * Uninstall a plugin that is a generation: drop it from `desired` and
  * reproject. Returns false when the plugin is not a generation, so the caller
  * can fall through to the shared-tree `dsh plugin remove`.
@@ -131,24 +101,5 @@ export async function uninstallGenerationPlugin(
         `${error instanceof Error ? error.message : error}`
     )
     return false
-  }
-}
-
-/**
- * Record the currently-desired generation set as known good. Call this only
- * once Harness has reported ready AND the window has rendered — the window is
- * the proof the set works, which `.install-complete` never was.
- */
-export async function markGenerationsBooted(dshHome: string, note: Note): Promise<void> {
-  try {
-    const before = await readLastKnownGood(dshHome)
-    await commitLastKnownGood(dshHome)
-    const after = await readLastKnownGood(dshHome)
-    if (before.length !== after.length || after.some((id) => !before.includes(id))) {
-      note('[desktop] committed the current plugin set as last-known-good')
-    }
-  } catch {
-    // A missing LKG file just means the next failed launch has nothing to roll
-    // back to — not a reason to fault a successful one.
   }
 }
