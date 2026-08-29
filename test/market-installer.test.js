@@ -380,6 +380,6 @@ describe('desktop plugin market installer', () => {
     expect(client).toContain("typeof bridge.uninstallMarket === 'function'")
     expect(main).toContain("ipcMain.handle('market:uninstall'")
     expect(main).toContain("await runtime.stop()")
-    expect(main).toContain("'dshmarket',\n    true")
+    expect(main).toMatch(/'dshmarket',\s+true/u)
   })
 })
