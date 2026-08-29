@@ -6,15 +6,12 @@ import {
   collectUnreferencedGenerations,
   disableGeneration,
   isGenerationPlugin,
-  commitLastKnownGood,
   ensureRegistryDirectories,
   generationId,
   listGenerations,
   readDesired,
-  readLastKnownGood,
   registryLayout,
   resolveEnabledGenerations,
-  revertToLastKnownGood,
   sweepRegistry,
   withRegistryLock,
   writeDesired,
@@ -61,11 +58,10 @@ describe('the plugin generation registry', () => {
     expect(generationId('name', '2.0.1', 'same')).toBe(generationId('name', '2.0.1', 'same'))
   })
 
-  it('starts with empty pointers and no generations', async () => {
+  it('starts with an empty desired pointer and no generations', async () => {
     const home = await freshHome()
     await ensureRegistryDirectories(home)
     expect(await readDesired(home)).toEqual([])
-    expect(await readLastKnownGood(home)).toEqual([])
     expect(await listGenerations(home)).toEqual([])
   })
 
@@ -84,37 +80,21 @@ describe('the plugin generation registry', () => {
     expect(enabled.has('@linxin666/dsh-pet')).toBe(false)
   })
 
-  it('commits last-known-good from desired, never the other way round', async () => {
-    const home = await freshHome()
-    await ensureRegistryDirectories(home)
-
-    await writeDesired(home, ['a+1+x'])
-    await commitLastKnownGood(home)
-    expect(await readLastKnownGood(home)).toEqual(['a+1+x'])
-
-    // A new install moves desired forward but not LKG.
-    await writeDesired(home, ['a+1+x', 'b+2+y'])
-    expect(await readLastKnownGood(home)).toEqual(['a+1+x'])
-
-    // A failed launch reverts desired to the set that booted.
-    const reverted = await revertToLastKnownGood(home)
-    expect(reverted).toEqual(['a+1+x'])
-    expect(await readDesired(home)).toEqual(['a+1+x'])
-  })
-
-  it('treats a generation as unreferenced only when neither pointer names it', async () => {
+  it('treats desired as the sole authority for generation retention', async () => {
     const home = await freshHome()
     await ensureRegistryDirectories(home)
     await fakeGeneration(home, 'a+1+x', 'a', '1')
     await fakeGeneration(home, 'b+2+y', 'b', '2')
     await fakeGeneration(home, 'c+3+z', 'c', '3')
 
-    await writeDesired(home, ['a+1+x'])
-    await commitLastKnownGood(home)
     await writeDesired(home, ['b+2+y'])
-    // a is still LKG, b is desired, c is neither.
+    await writeFile(
+      join(registryLayout(home).root, 'last-known-good.json'),
+      `${JSON.stringify(['a+1+x'])}\n`,
+      'utf8'
+    )
 
-    expect(await collectUnreferencedGenerations(home)).toEqual(['c+3+z'])
+    expect((await collectUnreferencedGenerations(home)).sort()).toEqual(['a+1+x', 'c+3+z'])
   })
 
   it('sweeps unreferenced generations and staging leftovers, keeps referenced ones', async () => {
