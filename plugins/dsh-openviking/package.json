@@ -1,0 +1,40 @@
+{
+  "name": "dsh-openviking",
+  "version": "0.1.0",
+  "description": "Native OpenViking memory for dsh: auto-installs and spawns the context database alongside the dsh server, registers its MCP tools on the model, and embeds the Web Studio in a better-sidebar tab",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-mcp-client": "workspace:^"
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.12.0",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "lib"
+  ]
+}

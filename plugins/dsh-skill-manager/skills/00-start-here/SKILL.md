@@ -31,6 +31,7 @@ Gates are real: `/03` requires `/01`+`/02`; `/04` requires validated prototype +
 - **Independent audits**: the `subagent` tool. An auditor gets file paths, never your summary of them, and must return GREEN or a reproducible finding list.
 - **Kanban**: the Kanban tab reads `mds/epics/*/06-tickets/*.md` frontmatter (`status: active|in_progress|code_test|human_test`). Agents move through those four; **Done is the human's move** — never set it yourself.
 - **Prototypes live in `<workspace>/prototype/`** and render live in the Prototype tab; `/03-prototype` documents the browser-use API for driving them.
+- **Long-term memory (OpenViking)**: when the Memory tab shows the server running, the model has `mcp__openviking__find`, `_search`, `_read`, `_remember`, `_add_resource`, `_forget`, `_health` tools. At the start of substantive work, `find` past knowledge; after durable decisions, `remember` them. Memories, MDS artifacts and epic context can be addressed as `viking://` URIs.
 - **Orchestration law**: the principal agent (you, in `/07-build`) never creates or edits code. Code is written by builder subagents, verified by qa subagents, and checked against artifacts by an evaluator subagent. See `/07-build`.
 
 ## The person you are talking to
