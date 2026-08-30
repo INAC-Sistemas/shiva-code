@@ -98,15 +98,21 @@ async function readSettings() {
   try { return JSON.parse(await readFile(SETTINGS_FILE, 'utf8')) } catch { return null }
 }
 
+// O OpenViking não conhece 'openrouter' como provider. O endpoint do OpenRouter
+// é OpenAI-compatível, então um provider 'openai' + api_base OpenRouter funciona.
+function toOvProvider(provider) {
+  return provider === 'openrouter' ? 'openai' : (provider || 'openai')
+}
+
 async function writeOvConf() {
   const s = await readSettings()
   if (!s?.embedding?.api_base) return false // sem embedding o server não sobe
   const conf = {}
   if (s.embedding?.api_base) {
-    conf.embedding = { dense: { api_base: s.embedding.api_base, api_key: s.embedding.api_key ?? '', provider: s.embedding.provider ?? 'openai', dimension: Number(s.embedding.dimension) || 1024, model: s.embedding.model ?? '' } }
+    conf.embedding = { dense: { api_base: s.embedding.api_base, api_key: s.embedding.api_key ?? '', provider: toOvProvider(s.embedding.provider), dimension: Number(s.embedding.dimension) || 1024, model: s.embedding.model ?? '' } }
   }
   if (s.vlm?.api_base) {
-    conf.vlm = { api_base: s.vlm.api_base, api_key: s.vlm.api_key ?? '', provider: s.vlm.provider ?? 'openai', model: s.vlm.model ?? '' }
+    conf.vlm = { api_base: s.vlm.api_base, api_key: s.vlm.api_key ?? '', provider: toOvProvider(s.vlm.provider), model: s.vlm.model ?? '' }
   }
   await mkdir(join(homedir(), '.openviking'), { recursive: true })
   await writeFile(OV_CONF, JSON.stringify(conf, null, 2), 'utf8')
