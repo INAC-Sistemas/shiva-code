@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, type Dirent } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 import {
   constants as fsConstants,
   copyFile,
@@ -209,7 +209,10 @@ function packageOwnersFromLaunchAgent(launchAgent: LaunchAgentDescription): stri
   ].filter((value): value is string => value !== undefined)
   const owners = new Set<string>()
   for (const value of values) {
-    if (!isAbsolute(value) || resolve(value) !== value) continue
+    // LaunchAgent plists are a macOS contract even when this parser is being
+    // exercised by the Windows CI runner. Parse their executable arguments as
+    // POSIX paths instead of using the host runner's path semantics.
+    if (!posix.isAbsolute(value) || posix.normalize(value) !== value) continue
     const segments = value.split('/')
     const marker = segments.lastIndexOf('node_modules')
     const first = segments[marker + 1]
