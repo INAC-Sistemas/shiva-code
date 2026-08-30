@@ -89,6 +89,14 @@ function MemoryView() {
     return () => clearInterval(t)
   }, [refresh, slow])
 
+  // Auto-seleciona o primeiro modelo de embedding do OpenRouter quando a lista
+  // chega (fora de qualquer ramo, por causa das regras de hooks do React).
+  React.useEffect(() => {
+    if (models?.embedding?.length && form?.embedding?.model === '') {
+      setForm((f) => ({ ...f, embedding: { ...f.embedding, model: models.embedding[0] } }))
+    }
+  }, [models, form])
+
   const startInstall = async () => {
     setBusy(true)
     await api('install')
@@ -178,14 +186,6 @@ function MemoryView() {
     const visList = isOpenRouter && models?.vision ? models.vision : []
     const keyFromDsh = isOpenRouter && st?.openrouterKey
     const needKey = !isOpenRouter && form.embedding.provider !== 'ollama'
-    // Se a lista do OpenRouter chegou e o modelo atual não está selecionado de
-    // fato, escolhe o primeiro modelo de embedding disponível.
-    React.useEffect(() => {
-      if (embList.length && !embList.includes(form.embedding.model)) {
-        setEmb({ model: embList[0] })
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [embList])
     return h('div', { className: 'ov-root' },
       h('div', { className: 'ov-center' },
         h('h3', null, 'Conectar a memória semântica'),
