@@ -197,6 +197,37 @@ export function buildHarnessArguments(
   ]
 }
 
+/**
+ * The captured PATH, looked up the way Windows actually stores it.
+ *
+ * `resolveShellEnvironment()` returns a plain object built by `parseEnvOutput`,
+ * keyed by whatever case the environment block reported — and Windows does not
+ * normalise that case, it follows the registry value name. A machine whose
+ * PATH value name is stored lowercase yields the key `path`, which an
+ * exact-case read misses entirely, launching the Harness with an empty PATH
+ * (issue #232). `process.env` never has this problem because Node makes it
+ * case-insensitive on win32 — but spreading it into a plain object keeps
+ * only the stored casing, so every copy needs this lookup too.
+ *
+ * POSIX keeps the exact read: there `path` and `PATH` are genuinely
+ * different variables.
+ */
+export function resolveEnvironmentPath(
+  environment: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): string {
+  if (platform !== 'win32') return environment.PATH ?? ''
+  // Exact-case reads first; the scan is the last resort for other casings.
+  // A real Windows block stores a single casing, so the order between them
+  // is never observable outside synthetic inputs.
+  const direct = environment.Path ?? environment.PATH
+  if (direct !== undefined) return direct
+  for (const [name, value] of Object.entries(environment)) {
+    if (/^path$/iu.test(name) && value !== undefined) return value
+  }
+  return ''
+}
+
 export function buildHarnessSpawnOptions(
   launchDirectory: string,
   dshHome: string,
@@ -233,7 +264,7 @@ export function buildHarnessSpawnOptions(
       // the dedicated lock-recovery runner instead (see pnpm-runner.mjs).
       npm_config_side_effects_cache: 'false',
       PNPM_CONFIG_SIDE_EFFECTS_CACHE: 'false',
-      [pathKey]: environment[pathKey] ?? environment.PATH ?? ''
+      [pathKey]: resolveEnvironmentPath(environment, platform)
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
