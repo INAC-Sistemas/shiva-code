@@ -167,8 +167,8 @@ function MemoryView() {
   if (!st.configured) {
     if (!form) {
       setForm({
-        embedding: { provider: 'openrouter', api_base: PROVIDERS.openrouter.base, api_key: '', model: 'openai/text-embedding-3-small', dimension: 1536 },
-        vlm: { provider: '', api_base: '', api_key: '', model: '' },
+        embedding: { provider: 'openrouter', api_base: PROVIDERS.openrouter.base, api_key: '', model: '', dimension: '' },
+        vlm: { provider: '', api_base: PROVIDERS.openrouter.base, api_key: '', model: '' },
       })
       return h('div', { className: 'ov-root' }, h('div', { className: 'ov-center' }, h('p', null, 'Loading…')))
     }
@@ -178,6 +178,14 @@ function MemoryView() {
     const visList = isOpenRouter && models?.vision ? models.vision : []
     const keyFromDsh = isOpenRouter && st?.openrouterKey
     const needKey = !isOpenRouter && form.embedding.provider !== 'ollama'
+    // Se a lista do OpenRouter chegou e o modelo atual não está selecionado de
+    // fato, escolhe o primeiro modelo de embedding disponível.
+    React.useEffect(() => {
+      if (embList.length && !embList.includes(form.embedding.model)) {
+        setEmb({ model: embList[0] })
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [embList])
     return h('div', { className: 'ov-root' },
       h('div', { className: 'ov-center' },
         h('h3', null, 'Conectar a memória semântica'),
@@ -199,11 +207,12 @@ function MemoryView() {
             : field('ek', 'API key', form.embedding.api_key, (v) => setEmb({ api_key: v }), 'password', form.embedding.provider === 'ollama' ? '(ollama não exige)' : 'sk-…'),
           h('div', { className: 'ov-field' },
             h('label', null, 'Modelo de embedding'),
-            h('input', { type: 'text', list: 'ov-emb-models', value: form.embedding.model ?? '', onChange: (e) => setEmb({ model: e.target.value }), placeholder: 'openai/text-embedding-3-small' }),
-            h('datalist', { id: 'ov-emb-models' }, (embList.length ? embList : ['openai/text-embedding-3-small', 'qwen/qwen3-embedding-0.6b', 'nvidia/llama-nemotron-embed-vl-1b-v2']).map((m) =>
-              h('option', { key: m, value: m })))),
-          field('ed', 'Dimensão', form.embedding.dimension, (v) => setEmb({ dimension: v })),
-          h('details', {},
+            embList.length
+              ? h('select', { value: form.embedding.model ?? '', onChange: (e) => setEmb({ model: e.target.value }) },
+                  embList.map((m) => h('option', { key: m, value: m }, m)))
+              : h('input', { type: 'text', value: form.embedding.model ?? '', onChange: (e) => setEmb({ model: e.target.value }), placeholder: 'openai/text-embedding-3-small' })),
+          field('ed', 'Dimensão', form.embedding.dimension, (v) => setEmb({ dimension: v }), 'text', 'ex.: 1536 (text-embedding-3-small), 1024 (voyage-4) — se não souber, deixe como está'),
+          h('details', { open: isOpenRouter },
             h('summary', { style: { fontSize: 11, cursor: 'pointer', color: 'var(--dsw-alias-label-secondary,#9a9aa5)' } }, 'VLM (opcional — para entender imagens/recursos visuais)'),
             h('div', { className: 'ov-form', style: { marginTop: 8 } },
               field('vb', 'API base', form.vlm.api_base, (v) => setVlm({ api_base: v })),
@@ -211,10 +220,12 @@ function MemoryView() {
                 ? h('p', { className: 'ov-note', style: { margin: 0, color: 'var(--dsw-alias-state-success-primary,#22c55e)' } }, '✓ Chave do dsh — não precisa digitar.')
                 : field('vk', 'API key', form.vlm.api_key, (v) => setVlm({ api_key: v }), 'password'),
               h('div', { className: 'ov-field' },
-                h('label', null, 'Modelo (visão)'),
-                h('input', { type: 'text', list: 'ov-vlm-models', value: form.vlm.model ?? '', onChange: (e) => setVlm({ model: e.target.value }), placeholder: 'google/gemini-2.0-flash' }),
-                h('datalist', { id: 'ov-vlm-models' }, (visList.length ? visList : ['google/gemini-2.0-flash', 'qwen/qwen2.5-vl-72b-instruct', 'openai/gpt-4o-mini']).map((m) =>
-                  h('option', { key: m, value: m })))))),
+                h('label', null, 'Modelo de visão (deixe em branco se não quiser VLM)'),
+                visList.length
+                  ? h('select', { value: form.vlm.model ?? '', onChange: (e) => setVlm({ model: e.target.value }) },
+                      h('option', { value: '' }, '— nenhum (opcional) —'),
+                      visList.map((m) => h('option', { key: m, value: m }, m)))
+                  : h('input', { type: 'text', value: form.vlm.model ?? '', onChange: (e) => setVlm({ model: e.target.value }), placeholder: 'google/gemini-2.0-flash' })))),
           h('button', { className: 'ov-btn primary', disabled: busy || (needKey && !form.embedding.api_key), onClick: saveConfig },
             busy ? 'Salvando…' : 'Salvar e conectar'),
           h('p', { className: 'ov-note' },
