@@ -9,7 +9,13 @@ import {
   migrateProfileToGenerations,
   rollBackMigration
 } from '../src/main/state/generation-migration'
-import { listGenerations, readDesired, registryLayout, writeDesired } from '../packages/dsh-desktop-market-installer/generations/registry'
+import {
+  listGenerations,
+  readDesired,
+  registryLayout,
+  writeDesired,
+  writeGenerationMeta
+} from '../packages/dsh-desktop-market-installer/generations/registry'
 
 const installCalls: string[] = []
 
@@ -91,6 +97,26 @@ describe('one-time profile migration to generations', () => {
     }
   }
 
+  async function installPreviousGeneration(home: string): Promise<void> {
+    const directory = join(registryLayout(home).generations, 'previous-generation')
+    const packageDirectory = join(directory, 'node_modules', 'previous-plugin')
+    await mkdir(packageDirectory, { recursive: true })
+    await writeFile(
+      join(packageDirectory, 'package.json'),
+      JSON.stringify({
+        name: 'previous-plugin',
+        version: '1.0.0',
+        dsh: { bundle: { patch: 'cordis.patch.yml' } }
+      })
+    )
+    await writeFile(join(packageDirectory, 'cordis.patch.yml'), '[]\n')
+    await writeGenerationMeta(directory, {
+      pluginName: 'previous-plugin',
+      version: '1.0.0'
+    })
+    await writeDesired(home, ['previous-generation'])
+  }
+
   afterEach(async () => {
     await Promise.all(homes.map((home) => rm(home, { recursive: true, force: true })))
     homes.length = 0
@@ -170,8 +196,7 @@ describe('one-time profile migration to generations', () => {
 
   it('defers an identical failed migration, preserves desired, and retries after the profile changes', async () => {
     const home = await preUpgradeProfile({ 'plugin-one': '1.0.0' })
-    await mkdir(registryLayout(home).root, { recursive: true })
-    await writeDesired(home, ['previous-generation'])
+    await installPreviousGeneration(home)
     const failing = deps(home, async () => ({ ok: false, detail: 'shared tree failed' }))
 
     const first = await migrateProfileToGenerations(failing)
@@ -221,13 +246,12 @@ describe('one-time profile migration to generations', () => {
 
   it('rolls a migrated profile back to the snapshot on a failed launch, then discards it on a good one', async () => {
     const home = await preUpgradeProfile({ 'dsh-vision-router': '2.0.1' })
-    await mkdir(registryLayout(home).root, { recursive: true })
-    await writeDesired(home, ['previous-generation'])
+    await installPreviousGeneration(home)
     await migrateProfileToGenerations(deps(home))
 
     // failed launch → roll back
     const rolled = await rollBackMigration(home, silent)
-    expect(rolled).toBe(true)
+    expect(rolled).toEqual({ outcome: 'restored' })
     expect(isProfileMigrated(home)).toBe(false)
     expect(await readDesired(home)).toEqual(['previous-generation'])
     const manifest = JSON.parse(

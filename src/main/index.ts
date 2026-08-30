@@ -22,10 +22,8 @@ import {
   installProfileDependenciesWithDsh,
   removeProfilePluginWithDsh
 } from './runtime/profile-plugin-command'
-import { clearDamagedPackageDirectories, hasProfile } from './state/profile-repair'
 import {
   clearProfileInstallMarker,
-  isProfileInstallComplete,
   markProfileInstallComplete
 } from './state/profile-install-marker'
 import { inspectProfileConsistency } from './state/profile-consistency'
@@ -58,7 +56,6 @@ import { secureWindow } from './security'
 import { ensureLaunchRoot } from './state/launch-root'
 import {
   listInstalledProfilePlugins,
-  pruneMissingProfileBundles,
   resetPluginProfile
 } from './state/plugin-recovery'
 import { ensureSafeModeProfile, SAFE_MODE_PROFILE } from './state/safe-mode-profile'
@@ -68,18 +65,24 @@ import {
 } from './state/generation-launch'
 import {
   confirmMigration,
-  isProfileMigrated,
+  inspectMigrationRecoveryLock,
   migrateProfileToGenerations,
   recoverInterruptedMigration,
   rollBackMigration
 } from './state/generation-migration'
+import { runProfileStartupMaintenance } from './state/profile-startup-maintenance'
 import { cleanupPluginOwnedComponents } from './state/plugin-component-cleanup'
 import {
+  cleanupVerifiedRemovalBackup,
   confirmPluginRemovalsBooted,
   enforcePendingPluginRemovals,
+  incompletePluginRestoreId,
   listPendingPluginRemovals,
   removePluginSafely,
+  resolvePluginRemovalBackup,
+  restorePluginRemovalBackup,
   shouldDeferProfileMaintenance,
+  snapshotPluginRemovalLedger,
   type PluginRemovalResult
 } from './state/plugin-removal'
 import {
@@ -125,6 +128,10 @@ import {
 type PluginRecoveryAction = 'uninstall' | 'show-log' | 'quit' | 'restart' | 'refresh' | 'safe-mode'
 type SafeModeAction =
   | { type: 'apply'; plugins: string[]; issues: string[] }
+  | { type: 'recovery-open' }
+  | { type: 'backup-open'; removalId: string }
+  | { type: 'backup-restore'; removalId: string }
+  | { type: 'backup-delete'; removalId: string }
   | { type: 'agent' }
   | { type: 'restart' }
   | { type: 'quit' }
@@ -160,6 +167,13 @@ let safeModeVisible = false
 let safeModeManagerVisible = false
 let safeModeManagerWindow: BrowserWindow | undefined
 let safeModeActionResolver: ((action: SafeModeAction) => void) | undefined
+let migrationRecoveryLocked = false
+let maintenanceRecoveryLocked = false
+let maintenanceAllowedRestoreId: string | undefined
+let profileBootConfirmationTimer: NodeJS.Timeout | undefined
+let profileRendererHealthAt = 0
+let profileBootNavigationVersion = 0
+let profileBootConfirmationComplete = false
 // A renderer that crashes (render-process-gone) and reloads that fails the
 // same way produces a permanent black window the user has to close by hand.
 // The cooldown keeps reloads from stacking up when the underlying crash
@@ -175,7 +189,6 @@ const startInSafeMode = shouldStartInSafeMode(process.argv)
 // the recovery page do not count: both are local pages that render on a
 // machine whose harness never will.
 let harnessRendered = false
-let pluginRemovalsConfirmedThisProcess = false
 let gpuFallbackState: GpuFallbackState = defaultGpuFallbackState
 let gpuFallbackRelaunching = false
 let gpuStableLaunchTimer: NodeJS.Timeout | undefined
@@ -328,6 +341,7 @@ function reloadMainWindowAfterRendererLoss(window: BrowserWindow): void {
 function installMainWindowRendererRecovery(window: BrowserWindow): void {
   const webContents = window.webContents
   webContents.on('render-process-gone', (event, details) => {
+    clearProfileBootConfirmation()
     // Take control: by default the window stays drawn but blank, which is
     // exactly the black screen this recovery is meant to prevent.
     event.preventDefault()
@@ -338,6 +352,7 @@ function installMainWindowRendererRecovery(window: BrowserWindow): void {
   })
   webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return
+    clearProfileBootConfirmation()
     // The harness web server is local; a failure to reach it is almost
     // always the renderer dropping, not a real network error. Surface the
     // failure and let the recovery path try to reload the page.
@@ -348,6 +363,7 @@ function installMainWindowRendererRecovery(window: BrowserWindow): void {
     reloadMainWindowAfterRendererLoss(window)
   })
   webContents.on('unresponsive', () => {
+    clearProfileBootConfirmation()
     // unresponsive fires before the renderer actually dies, so logging here
     // gives a useful "the GPU froze here" breadcrumb for the next time
     // the user has to recover the window.
@@ -356,6 +372,9 @@ function installMainWindowRendererRecovery(window: BrowserWindow): void {
   webContents.on('responsive', () => {
     if (!runtime) return
     runtime.note('[desktop] main window webContents became responsive again')
+  })
+  webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) clearProfileBootConfirmation()
   })
 }
 
@@ -619,6 +638,66 @@ function configureGpuFallback(): void {
  * happened, short enough that a normal session always reaches it.
  */
 const GPU_STABLE_LAUNCH_DELAY_MS = 60_000
+const PROFILE_BOOT_STABILITY_MS = 60_000
+const PROFILE_RENDERER_HEARTBEAT_MAX_AGE_MS = 15_000
+
+function clearProfileBootConfirmation(): void {
+  if (profileBootConfirmationTimer) clearTimeout(profileBootConfirmationTimer)
+  profileBootConfirmationTimer = undefined
+  profileRendererHealthAt = 0
+  profileBootNavigationVersion = 0
+  profileBootConfirmationComplete = false
+}
+
+function normalProfileBootIsHealthy(expectedNavigationVersion: number): boolean {
+  const snapshot = runtime.snapshot()
+  const window = mainWindow
+  return (
+    !safeModeVisible &&
+    !failureRecoveryVisible &&
+    snapshot.phase === 'ready' &&
+    !!window &&
+    !window.isDestroyed() &&
+    expectedNavigationVersion === mainWindowNavigationVersion &&
+    Date.now() - profileRendererHealthAt <= PROFILE_RENDERER_HEARTBEAT_MAX_AGE_MS &&
+    window.webContents.getURL().startsWith('http://127.0.0.1:')
+  )
+}
+
+function scheduleNormalProfileBootConfirmation(): void {
+  if (safeModeVisible || failureRecoveryVisible || runtime.snapshot().phase !== 'ready') return
+  profileRendererHealthAt = Date.now()
+  if (profileBootConfirmationComplete || profileBootConfirmationTimer) return
+  profileBootNavigationVersion = mainWindowNavigationVersion
+  profileBootConfirmationTimer = setTimeout(() => {
+    profileBootConfirmationTimer = undefined
+    const expectedNavigationVersion = profileBootNavigationVersion
+    const healthy = (): boolean => normalProfileBootIsHealthy(expectedNavigationVersion)
+    if (!healthy()) {
+      profileRendererHealthAt = 0
+      profileBootNavigationVersion = 0
+      return
+    }
+    profileBootConfirmationComplete = true
+    const dshHome = join(app.getPath('userData'), 'harness')
+    void (async () => {
+      await confirmMigration(dshHome, (line) => runtime.note(line), healthy)
+      if (!healthy()) {
+        profileBootConfirmationComplete = false
+        return
+      }
+      await confirmPluginRemovalsBooted(dshHome, (line) => runtime.note(line))
+    })().catch((error) => {
+      profileBootConfirmationComplete = false
+      runtime.note(
+        `[desktop] normal Profile boot confirmation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    })
+  }, PROFILE_BOOT_STABILITY_MS)
+  profileBootConfirmationTimer.unref?.()
+}
 
 /**
  * Note that this launch rendered the harness and, if it then keeps its GPU
@@ -629,12 +708,6 @@ const GPU_STABLE_LAUNCH_DELAY_MS = 60_000
 function markHarnessRendered(): void {
   if (harnessRendered) return
   harnessRendered = true
-  const dshHome = join(app.getPath('userData'), 'harness')
-  // A migrated profile that rendered a window is confirmed; the pre-upgrade
-  // snapshot is no longer needed.
-  if (isProfileMigrated(dshHome)) {
-    void confirmMigration(dshHome, (line) => runtime?.note(line))
-  }
   if (gpuFallbackState.level === 'default' && gpuFallbackState.stableLaunches === 0) return
   gpuStableLaunchTimer = setTimeout(() => {
     gpuStableLaunchTimer = undefined
@@ -879,14 +952,6 @@ async function openHarness(
     if (navigationVersion !== mainWindowNavigationVersion) return
   }
   markHarnessRendered()
-  // Safe Mode proves only the isolated recovery profile. Confirm an uninstall
-  // against the normal web profile once per app process, so its backup gets a
-  // full later launch before it is garbage-collected.
-  if (!safeModeVisible && !pluginRemovalsConfirmedThisProcess) {
-    pluginRemovalsConfirmedThisProcess = true
-    const dshHome = join(app.getPath('userData'), 'harness')
-    void confirmPluginRemovalsBooted(dshHome, (line) => runtime?.note(line)).catch(() => undefined)
-  }
   if (runtime.snapshot().url !== url || window.isDestroyed()) return
   await syncNativeTheme(window)
   raiseWindowWithoutStealingFocus(
@@ -898,6 +963,7 @@ async function openHarness(
 }
 
 async function showSplash(): Promise<void> {
+  clearProfileBootConfirmation()
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow()
   const navigationVersion = ++mainWindowNavigationVersion
   window.webContents.stop()
@@ -909,60 +975,11 @@ async function showSplash(): Promise<void> {
 }
 
 /**
- * Clear what an earlier failed package operation left behind, then put the
- * packages back — both while Harness is stopped, the only moment either is
- * safe. A profile damaged by an older build heals on the first launch of this
- * one; an undamaged profile costs a directory scan. Failure here is not fatal:
- * the prune below still keeps the profile bootable, and Harness reports
- * whatever remains.
- */
-async function repairProfilePackages(dshHome: string): Promise<void> {
-  try {
-    if (!hasProfile(dshHome)) return
-    const removed = await clearDamagedPackageDirectories(dshHome)
-    // An install that never finished leaves nothing a damage scan can see: the
-    // directories it did write are real packages, and the ones it never
-    // reached are simply absent. Skipping the install on "nothing damaged" is
-    // what let a half-built profile stay half-built across every later launch.
-    const complete = await isProfileInstallComplete(dshHome)
-    if (removed.length === 0 && complete) return
-
-    runtime.note(
-      removed.length === 0
-        ? '[desktop] repairing profile: the last install did not finish'
-        : `[desktop] repairing profile: cleared ${removed.length} damaged package ${
-            removed.length === 1 ? 'directory' : 'directories'
-          }`
-    )
-    // Withdrawn first: whatever happens to the run below, an interrupted
-    // install must not leave a marker claiming the profile is whole.
-    await clearProfileInstallMarker(dshHome)
-    const result = await installProfileDependenciesWithDsh({
-      dshHome,
-      dshEntryPath: dshEntryPath(),
-      nodeExecutablePath: bundledNodePath(),
-      pnpmEntryPath: bundledPnpmEntryPath(),
-      pnpmRunnerPath: bundledPnpmRunnerPath()
-    })
-    if (result.ok) await markProfileInstallComplete(dshHome)
-    runtime.note(
-      result.ok
-        ? '[desktop] profile repair completed'
-        : `[desktop] profile repair failed: ${result.detail ?? 'unknown error'}`
-    )
-  } catch (error) {
-    runtime.note(
-      `[desktop] profile repair failed: ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-}
-
-/**
- * Name what the profile contradicts about itself, once the repair above has
- * had its turn. A dangling declaration does not throw — it leaves a service
- * waiting on a provider that never arrives — so without this the profile reads
- * as a slow start and the fault is found by reading logs for an afternoon.
- * Reporting only: the launch continues either way.
+ * Name what the profile contradicts about itself without changing it. A
+ * dangling declaration does not throw — it leaves a service waiting on a
+ * provider that never arrives — so without this the profile reads as a slow
+ * start and the fault is found by reading logs for an afternoon. Reporting
+ * only: startup never repairs or prunes the normal Profile automatically.
  */
 async function reportProfileConsistency(dshHome: string): Promise<void> {
   try {
@@ -1027,6 +1044,64 @@ async function quarantineInstalledLaunchAgentsForUpdate(dshHome: string): Promis
   }
 }
 
+function profileRecoveryLocked(): boolean {
+  return maintenanceRecoveryLocked || migrationRecoveryLocked
+}
+
+async function refreshMigrationRecoveryLock(dshHome: string): Promise<boolean> {
+  migrationRecoveryLocked = await inspectMigrationRecoveryLock(dshHome)
+  return profileRecoveryLocked()
+}
+
+async function canRetryLockedPluginRestore(dshHome: string, removalId: string): Promise<boolean> {
+  await refreshMigrationRecoveryLock(dshHome)
+  if (migrationRecoveryLocked) return false
+  if (!maintenanceRecoveryLocked) {
+    try {
+      const incompleteRestore = await incompletePluginRestoreId(dshHome)
+      if (incompleteRestore === undefined) return true
+      maintenanceRecoveryLocked = true
+      maintenanceAllowedRestoreId = incompleteRestore
+    } catch {
+      maintenanceRecoveryLocked = true
+      maintenanceAllowedRestoreId = undefined
+      return false
+    }
+  }
+  if (maintenanceAllowedRestoreId !== removalId) return false
+  try {
+    return await incompletePluginRestoreId(dshHome) === removalId
+  } catch {
+    return false
+  }
+}
+
+async function enterMigrationSafeRecovery(
+  dshHome: string,
+  reason: string,
+  allowedRestoreId?: string
+): Promise<void> {
+  if (failureRecoveryVisible) resolvePluginRecoveryAction('safe-mode')
+  safeModeVisible = true
+  maintenanceRecoveryLocked = true
+  maintenanceAllowedRestoreId = allowedRestoreId
+  await refreshMigrationRecoveryLock(dshHome)
+  runtime.note(`[desktop] Profile recovery requires Safe Mode: ${reason}`)
+  await runtime.stop()
+  await ensureSafeModeProfile(dshHome)
+  runtime.note('[desktop] safe mode: normal Profile maintenance is blocked until recovery succeeds')
+  await runtime.start(launchDirectory, SAFE_MODE_PROFILE)
+  if (runtime.snapshot().phase !== 'ready') return
+
+  void mobileBridge.start().catch(showUnexpectedError)
+  const notice = harnessLocale() === 'zh'
+    ? `正常 Profile 恢复尚未完成，已停止所有自动修复并进入安全模式。恢复材料仍保留。${reason}`
+    : `Normal Profile recovery is incomplete. Automatic maintenance is blocked and recovery material is preserved. ${reason}`
+  queueMicrotask(() => {
+    void showSafeModeManager({ notice, noticeTone: 'error' }).catch(showUnexpectedError)
+  })
+}
+
 function launchHarness(): Promise<void> {
   if (harnessLaunchOperation) return harnessLaunchOperation
 
@@ -1034,69 +1109,59 @@ function launchHarness(): Promise<void> {
     safeModeVisible = false
     const dshHome = join(app.getPath('userData'), 'harness')
     await showSplash()
-    // The repair only holds on a stopped Harness, and a restart still has the
-    // previous one running: start() stops it, but that is after the repair.
-    // Stopping here is what makes the window this launch path assumes.
+    // Migration and generation projection only hold on a stopped Harness, and
+    // a restart still has the previous one running: start() stops it, but that
+    // is after maintenance. Stopping here owns that mutation window.
     await runtime.stop()
-    // Before anything else runs pnpm: a store the profile does not pin makes
-    // every package operation fail, repairs included.
-    const pinned = await ensureStoreDirPinned(dshHome).catch(() => undefined)
-    if (pinned) runtime.note(`[desktop] pinned the profile's pnpm store: ${pinned}`)
-    // A prior process may have stopped midway through the one-time migration.
-    // Restore its snapshot before projection or package repair can observe the
-    // partially switched profile.
-    await recoverInterruptedMigration(dshHome, (line) => runtime.note(line))
-    // A removal tombstone is authoritative even if its later cleanup failed.
-    // Enforce it before and after projection so a generation pointer cannot
-    // silently add the disabled bundle back during a recovery launch.
-    await enforcePendingPluginRemovals(dshHome, (line) => runtime.note(line))
-    // Cold start, Harness stopped: sweep unreferenced plugin generations and
-    // reproject so the profile's links match `desired`. A no-op on a profile
-    // that has never used a generation.
-    await prepareGenerationsForLaunch(dshHome, (line) => runtime.note(line))
-    await enforcePendingPluginRemovals(dshHome, (line) => runtime.note(line))
-    // One-time move of a pre-upgrade profile (community plugins in the shared
-    // tree) onto the generation model. Runs before the shared-tree repair and,
-    // when it succeeds, replaces it — the migration has already rebuilt the
-    // tree down to what stays there. A deferred-failure must NOT fall through
-    // to repairProfilePackages: that would run pnpm on a half-migrated legacy
-    // tree and the very next launch would see the snapshot disappear too.
-    const deferMaintenance = await shouldDeferProfileMaintenance(dshHome).catch(() => false)
-    let migrationRebuiltSharedTree = false
-    if (deferMaintenance) {
-      runtime.note('[desktop] profile package maintenance deferred while plugin removal is pending verification')
-    } else {
-      const migration = await migrateProfileToGenerations({
+    const maintenance = await runProfileStartupMaintenance({
+      note: (line) => runtime.note(line),
+      recoverInterruptedMigration: () =>
+        recoverInterruptedMigration(dshHome, (line) => runtime.note(line)),
+      incompletePluginRestoreId: () => incompletePluginRestoreId(dshHome),
+      preparePackageStore: async () => {
+        // This must run after interrupted-migration recovery has allowed
+        // Profile writes, but before any operation invokes pnpm.
+        const pinned = await ensureStoreDirPinned(dshHome)
+        if (pinned) runtime.note(`[desktop] pinned the profile's pnpm store: ${pinned}`)
+      },
+      enforcePendingPluginRemovals: () =>
+        enforcePendingPluginRemovals(dshHome, (line) => runtime.note(line)),
+      prepareGenerationsForLaunch: () =>
+        prepareGenerationsForLaunch(dshHome, (line) => runtime.note(line)),
+      shouldDeferProfileMaintenance: () => shouldDeferProfileMaintenance(dshHome),
+      migrateProfileToGenerations: () =>
+        migrateProfileToGenerations({
+          dshHome,
+          nodeExecutablePath: bundledNodePath(),
+          pnpmEntryPath: bundledPnpmEntryPath(),
+          dshEntryPath: dshEntryPath(),
+          note: (line) => runtime.note(line),
+          reinstallSharedTree: async () => {
+            await clearProfileInstallMarker(dshHome)
+            const result = await installProfileDependenciesWithDsh({
+              dshHome,
+              dshEntryPath: dshEntryPath(),
+              nodeExecutablePath: bundledNodePath(),
+              pnpmEntryPath: bundledPnpmEntryPath(),
+              pnpmRunnerPath: bundledPnpmRunnerPath()
+            })
+            if (result.ok) await markProfileInstallComplete(dshHome)
+            return result
+          }
+        }),
+      reportProfileConsistency: () => reportProfileConsistency(dshHome)
+    })
+    if (maintenance.outcome === 'safe-recovery') {
+      await enterMigrationSafeRecovery(
         dshHome,
-        nodeExecutablePath: bundledNodePath(),
-        pnpmEntryPath: bundledPnpmEntryPath(),
-        dshEntryPath: dshEntryPath(),
-        note: (line) => runtime.note(line),
-        reinstallSharedTree: async () => {
-          await clearProfileInstallMarker(dshHome)
-          const result = await installProfileDependenciesWithDsh({
-            dshHome,
-            dshEntryPath: dshEntryPath(),
-            nodeExecutablePath: bundledNodePath(),
-            pnpmEntryPath: bundledPnpmEntryPath(),
-            pnpmRunnerPath: bundledPnpmRunnerPath()
-          })
-          if (result.ok) await markProfileInstallComplete(dshHome)
-          return result
-        }
-      })
-      if (migration.outcome === 'migrated') {
-        migrationRebuiltSharedTree = true
-      } else if (migration.outcome === 'no-op') {
-        await repairProfilePackages(dshHome)
-      } else {
-        runtime.note(
-          `[desktop] profile repair skipped: migration deferred (${migration.reason})`
-        )
-      }
+        maintenance.reason,
+        maintenance.allowedRestoreId
+      )
+      return
     }
-    await pruneMissingProfileBundles(dshHome).catch(() => false)
-    await reportProfileConsistency(dshHome)
+    maintenanceRecoveryLocked = false
+    maintenanceAllowedRestoreId = undefined
+    await refreshMigrationRecoveryLock(dshHome)
     await auditInstalledLaunchAgents(dshHome)
     await runtime.start(launchDirectory)
 
@@ -1109,11 +1174,16 @@ function launchHarness(): Promise<void> {
       // pre-upgrade snapshot — nothing was lost, and the old shared-tree path
       // runs next launch. A failed rollback keeps the snapshot intact so the
       // user can recover instead of starting from an unverified half-tree.
-      if (migrationRebuiltSharedTree) {
-        const rolled = await rollBackMigration(dshHome, (line) => runtime.note(line))
-        if (rolled) {
-          await repairProfilePackages(dshHome)
+      if (maintenance.migrationRebuiltSharedTree) {
+        const rollback = await rollBackMigration(dshHome, (line) => runtime.note(line))
+        if (rollback.outcome === 'restored') {
+          runtime.note('[desktop] restarting the verified pre-upgrade Profile without package repair')
           await runtime.start(launchDirectory)
+        } else {
+          const reason = rollback.outcome === 'recovery-required'
+            ? rollback.reason
+            : 'the pre-upgrade migration snapshot is missing'
+          await enterMigrationSafeRecovery(dshHome, reason)
         }
       }
     }
@@ -1129,6 +1199,7 @@ function launchSafeHarness(): Promise<void> {
   harnessLaunchOperation = (async () => {
     safeModeVisible = true
     const dshHome = join(app.getPath('userData'), 'harness')
+    await refreshMigrationRecoveryLock(dshHome)
     await showSplash()
     await runtime.stop()
     await ensureSafeModeProfile(dshHome)
@@ -1555,6 +1626,10 @@ async function showRuntimeFailure(snapshot: RuntimeSnapshot): Promise<void> {
 async function waitForSafeModeAction(options: {
   plugins: readonly string[]
   issues: readonly ProfileCompatibilityIssue[]
+  backups: Awaited<ReturnType<typeof snapshotPluginRemovalLedger>>['backups']
+  recoveryLocked: boolean
+  backupRestoreLocked: boolean
+  allowedRestoreId?: string
   notice?: string
   noticeTone?: 'success' | 'error'
 }): Promise<SafeModeAction> {
@@ -1601,6 +1676,10 @@ async function waitForSafeModeAction(options: {
     locale: harnessLocale(),
     plugins: options.plugins,
     issues: options.issues,
+    backups: options.backups,
+    recoveryLocked: options.recoveryLocked,
+    backupRestoreLocked: options.backupRestoreLocked,
+    allowedRestoreId: options.allowedRestoreId,
     notice: options.notice,
     noticeTone: options.noticeTone
   })
@@ -1697,9 +1776,11 @@ async function removeProfilePluginCompletely(
   const result = await removePluginSafely({
     dshHome,
     pluginName,
-    cleanupOwnedComponents: () => cleanupPluginOwnedComponents({
+    cleanupOwnedComponents: ({ removalId, backupDirectory }) => cleanupPluginOwnedComponents({
       dshHome,
       pluginName,
+      removalId,
+      backupDirectory,
       log: (message) => runtime.note(`[${logPrefix}] ${message}`)
     }),
     uninstallGeneration: () => uninstallGenerationPlugin(
@@ -1728,26 +1809,87 @@ async function showSafeMode(): Promise<void> {
   await launchSafeHarness()
 }
 
-async function showSafeModeManager(): Promise<void> {
+async function showSafeModeManager(initial?: {
+  notice?: string
+  noticeTone?: 'success' | 'error'
+}): Promise<void> {
   if (!safeModeVisible || safeModeManagerVisible || quitting) return
   safeModeManagerVisible = true
   const dshHome = join(app.getPath('userData'), 'harness')
   const isChinese = harnessLocale() === 'zh'
-  let notice: string | undefined
-  let noticeTone: 'success' | 'error' | undefined
+  let notice = initial?.notice
+  let noticeTone = initial?.noticeTone
 
   try {
     while (!quitting) {
-      const active = await listInstalledProfilePlugins(dshHome)
-      const pendingRemovals = await listPendingPluginRemovals(dshHome)
+      let recoveryLocked = await refreshMigrationRecoveryLock(dshHome)
+      let removalLedgerReadable = true
+      let active: string[] = []
+      let pendingRemovals: string[] = []
+      let compatibility = { issues: [] as ProfileCompatibilityIssue[] }
+      let removalBackups: Awaited<ReturnType<typeof snapshotPluginRemovalLedger>> = {
+        backups: [],
+        pendingDeletion: []
+      }
+      try {
+        removalBackups = await snapshotPluginRemovalLedger(dshHome)
+        const incompleteRestoreIds = removalBackups.backups
+          .filter((backup) => backup.restoreStartedAt !== undefined)
+          .map((backup) => backup.removalId)
+        if (incompleteRestoreIds.length > 0) {
+          if (!maintenanceRecoveryLocked) {
+            const incompleteRestore = await incompletePluginRestoreId(dshHome)
+            maintenanceRecoveryLocked = true
+            maintenanceAllowedRestoreId = incompleteRestore
+          }
+          recoveryLocked = true
+          active = []
+          pendingRemovals = []
+          compatibility = { issues: [] }
+        }
+        if (!recoveryLocked) {
+          active = await listInstalledProfilePlugins(dshHome)
+          pendingRemovals = await listPendingPluginRemovals(dshHome)
+          compatibility = await inspectProfileCompatibility(
+            dshHome,
+            join(app.getAppPath(), 'node_modules')
+          )
+        }
+      } catch (error) {
+        removalLedgerReadable = false
+        maintenanceRecoveryLocked = true
+        maintenanceAllowedRestoreId = undefined
+        recoveryLocked = true
+        active = []
+        pendingRemovals = []
+        compatibility = { issues: [] }
+        const detail = error instanceof Error ? error.message : String(error)
+        runtime.note(`[plugin-removal] recovery ledger inspection failed: ${detail}`)
+        notice ??= isChinese
+          ? `卸载恢复账本无法读取，已锁定正常 Profile 并保留原文件：${detail}`
+          : `The removal recovery ledger is unreadable. The normal Profile is locked and the original file is preserved: ${detail}`
+        noticeTone ??= 'error'
+      }
       const installed = [...new Set([...active, ...pendingRemovals])]
-      const compatibility = await inspectProfileCompatibility(
-        dshHome,
-        join(app.getAppPath(), 'node_modules')
-      )
+      const allowedRestoreId = recoveryLocked &&
+        !migrationRecoveryLocked &&
+        removalLedgerReadable &&
+        maintenanceAllowedRestoreId !== undefined &&
+        removalBackups.backups.some(
+          (backup) =>
+            backup.removalId === maintenanceAllowedRestoreId &&
+            backup.restoreStartedAt !== undefined
+        )
+        ? maintenanceAllowedRestoreId
+        : undefined
+      const backupRestoreLocked = recoveryLocked || !removalLedgerReadable
       const action = await waitForSafeModeAction({
         plugins: installed,
         issues: compatibility.issues,
+        backups: removalBackups.backups,
+        recoveryLocked,
+        backupRestoreLocked,
+        allowedRestoreId,
         notice,
         noticeTone
       })
@@ -1763,6 +1905,118 @@ async function showSafeModeManager(): Promise<void> {
         if (snapshot.phase === 'ready' && snapshot.url) await openHarness(snapshot.url)
         return
       }
+      if (action.type === 'recovery-open') {
+        const openError = await shell.openPath(dshHome)
+        notice = openError
+          ? isChinese ? `无法打开恢复目录：${openError}` : `Unable to open the recovery folder: ${openError}`
+          : isChinese ? '已打开 Profile 恢复材料目录。' : 'Opened the Profile recovery material folder.'
+        noticeTone = openError ? 'error' : 'success'
+        continue
+      }
+      if (action.type === 'backup-open') {
+        const backup = await resolvePluginRemovalBackup(dshHome, action.removalId)
+        if (!backup) {
+          notice = isChinese ? '这份恢复备份已不存在。' : 'This recovery backup no longer exists.'
+          noticeTone = 'error'
+          continue
+        }
+        const openError = await shell.openPath(backup.backupDirectory)
+        notice = openError
+          ? isChinese ? `无法打开备份目录：${openError}` : `Unable to open the backup: ${openError}`
+          : isChinese ? `已打开 ${backup.pluginName} 的恢复备份。` : `Opened the recovery backup for ${backup.pluginName}.`
+        noticeTone = openError ? 'error' : 'success'
+        continue
+      }
+      if (action.type === 'backup-restore') {
+        if (!await canRetryLockedPluginRestore(dshHome, action.removalId)) {
+          notice = isChinese ? '另一个恢复事务尚未完成，只能重试对应的插件备份。' : 'Another recovery transaction is incomplete; only its matching plugin backup can be retried.'
+          noticeTone = 'error'
+          continue
+        }
+        const backup = await resolvePluginRemovalBackup(dshHome, action.removalId)
+        if (!backup || !backup.canRestore) {
+          notice = isChinese
+            ? `这份备份无法自动恢复：${backup?.integrityDetail ?? '恢复材料不存在或不完整'}`
+            : `This backup cannot be restored automatically: ${backup?.integrityDetail ?? 'recovery material is missing or incomplete'}`
+          noticeTone = 'error'
+          continue
+        }
+        const confirmationOptions: Electron.MessageBoxOptions = {
+          type: 'warning',
+          title: isChinese ? '恢复插件' : 'Restore plugin',
+          message: isChinese
+            ? `从这份备份恢复 ${backup.pluginName}？`
+            : `Restore ${backup.pluginName} from this backup?`,
+          detail: isChinese
+            ? '若当前已启用该插件的其他 generation，将切换为这份备份记录的版本。备份本身不会删除。'
+            : 'If another generation of this plugin is enabled, it will switch to the version recorded here. The backup itself will be kept.',
+          buttons: [isChinese ? '取消' : 'Cancel', isChinese ? '恢复' : 'Restore'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        }
+        const owner = safeModeManagerWindow
+        const confirmation = owner && !owner.isDestroyed()
+          ? await dialog.showMessageBox(owner, confirmationOptions)
+          : await dialog.showMessageBox(confirmationOptions)
+        if (confirmation.response !== 1) {
+          notice = isChinese ? '未恢复插件，备份保持不变。' : 'The plugin was not restored; the backup is unchanged.'
+          continue
+        }
+        const restored = await restorePluginRemovalBackup(
+          dshHome,
+          action.removalId,
+          (line) => runtime.note(line)
+        )
+        notice = restored.ok
+          ? isChinese ? `已恢复 ${backup.pluginName}；请重启正常模式验证。` : `Restored ${backup.pluginName}; restart in normal mode to verify it.`
+          : isChinese ? `恢复失败：${restored.reason ?? '未知错误'}` : `Restore failed: ${restored.reason ?? 'unknown error'}`
+        noticeTone = restored.ok ? 'success' : 'error'
+        continue
+      }
+      if (action.type === 'backup-delete') {
+        if (await refreshMigrationRecoveryLock(dshHome)) {
+          notice = isChinese ? 'Profile 恢复事务完成前禁止修改任何恢复材料。' : 'Recovery material is locked until the Profile recovery transaction completes.'
+          noticeTone = 'error'
+          continue
+        }
+        const backup = await resolvePluginRemovalBackup(dshHome, action.removalId)
+        if (!backup) {
+          notice = isChinese ? '这份恢复备份已不存在。' : 'This recovery backup no longer exists.'
+          noticeTone = 'error'
+          continue
+        }
+        const confirmationOptions: Electron.MessageBoxOptions = {
+          type: 'warning',
+          title: isChinese ? '永久删除恢复备份' : 'Permanently delete recovery backup',
+          message: isChinese
+            ? `永久删除 ${backup.pluginName} 的这份恢复备份？`
+            : `Permanently delete this recovery backup for ${backup.pluginName}?`,
+          detail: isChinese ? '此操作不可撤销。' : 'This action cannot be undone.',
+          buttons: [isChinese ? '取消' : 'Cancel', isChinese ? '永久删除' : 'Delete permanently'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        }
+        const owner = safeModeManagerWindow
+        const confirmation = owner && !owner.isDestroyed()
+          ? await dialog.showMessageBox(owner, confirmationOptions)
+          : await dialog.showMessageBox(confirmationOptions)
+        if (confirmation.response !== 1) {
+          notice = isChinese ? '已保留恢复备份。' : 'The recovery backup was kept.'
+          continue
+        }
+        const cleaned = await cleanupVerifiedRemovalBackup(
+          dshHome,
+          action.removalId,
+          (line) => runtime.note(line)
+        )
+        notice = cleaned.ok
+          ? isChinese ? `已永久删除 ${backup.pluginName} 的这份恢复备份。` : `Permanently deleted the recovery backup for ${backup.pluginName}.`
+          : isChinese ? `备份未删除：${cleaned.reason ?? '尚未通过正常启动验证'}` : `Backup kept: ${cleaned.reason ?? 'normal boot has not been verified'}`
+        noticeTone = cleaned.ok ? 'success' : 'error'
+        continue
+      }
       if (action.type === 'restart') {
         const unresolved = compatibility.issues.filter((issue) => issue.severity === 'blocking')
         if (unresolved.length > 0) {
@@ -1771,8 +2025,21 @@ async function showSafeModeManager(): Promise<void> {
           )
         }
         await launchHarness()
+        if (await refreshMigrationRecoveryLock(dshHome)) {
+          notice = isChinese
+            ? 'Profile 恢复事务仍未完成。已继续保留恢复材料和安全模式；请按提示重试。'
+            : 'The Profile recovery transaction is still incomplete. Recovery material and Safe Mode remain active; follow the prompt and retry.'
+          noticeTone = 'error'
+          continue
+        }
         void mobileBridge.start().catch(showUnexpectedError)
         return
+      }
+
+      if (await refreshMigrationRecoveryLock(dshHome)) {
+        notice = isChinese ? 'Profile 恢复事务完成前禁止修改正常 Profile。' : 'The normal Profile is locked until the recovery transaction completes.'
+        noticeTone = 'error'
+        continue
       }
 
       const issueById = new Map(compatibility.issues.map((issue) => [issue.id, issue]))
@@ -2082,6 +2349,15 @@ async function bootstrap(): Promise<void> {
     if (errorMessage) throw new Error(errorMessage)
     return { ok: true }
   })
+  ipcMain.removeHandler('harness:renderer-healthy')
+  ipcMain.handle('harness:renderer-healthy', (event) => {
+    assertTrustedMainWindowEvent(event)
+    if (safeModeVisible || failureRecoveryVisible || runtime.snapshot().phase !== 'ready') {
+      return { ok: false }
+    }
+    scheduleNormalProfileBootConfirmation()
+    return { ok: true }
+  })
   ipcMain.removeHandler('harness:open-recovery')
   ipcMain.handle('harness:open-recovery', async (event, frontendErrorMessage?: unknown) => {
     assertTrustedMainWindowEvent(event)
@@ -2106,15 +2382,28 @@ async function bootstrap(): Promise<void> {
     return { ok: false }
   })
   ipcMain.removeHandler('safe-mode:action')
-  ipcMain.handle('safe-mode:action', (event, action: unknown, selection: unknown) => {
+  ipcMain.handle('safe-mode:action', async (event, action: unknown, selection: unknown) => {
     assertTrustedSafeModeManagerEvent(event)
     if (
       !safeModeVisible ||
       !safeModeManagerVisible ||
-      (action !== 'apply' && action !== 'agent' && action !== 'restart' && action !== 'quit')
+      (
+        action !== 'apply' &&
+        action !== 'recovery-open' &&
+        action !== 'backup-open' &&
+        action !== 'backup-restore' &&
+        action !== 'backup-delete' &&
+        action !== 'agent' &&
+        action !== 'restart' &&
+        action !== 'quit'
+      )
     ) {
       return { ok: false }
     }
+    await refreshMigrationRecoveryLock(join(app.getPath('userData'), 'harness'))
+    if (
+      (action === 'apply' || action === 'backup-delete') && profileRecoveryLocked()
+    ) return { ok: false }
     if (action === 'apply') {
       if (typeof selection !== 'object' || selection === null) return { ok: false }
       const { plugins, issues } = selection as { plugins?: unknown; issues?: unknown }
@@ -2127,6 +2416,19 @@ async function bootstrap(): Promise<void> {
         return { ok: false }
       }
       resolveSafeModeAction({ type: 'apply', plugins, issues })
+    } else if (
+      action === 'backup-open' ||
+      action === 'backup-restore' ||
+      action === 'backup-delete'
+    ) {
+      if (typeof selection !== 'object' || selection === null) return { ok: false }
+      const { removalId } = selection as { removalId?: unknown }
+      if (typeof removalId !== 'string' || removalId.length === 0) return { ok: false }
+      if (
+        action === 'backup-restore' &&
+        !await canRetryLockedPluginRestore(join(app.getPath('userData'), 'harness'), removalId)
+      ) return { ok: false }
+      resolveSafeModeAction({ type: action, removalId })
     } else {
       resolveSafeModeAction({ type: action })
     }
@@ -2149,6 +2451,21 @@ async function bootstrap(): Promise<void> {
     assertTrustedMainWindowEvent(event)
     if (!safeModeVisible) return { ok: false }
     const dshHome = join(app.getPath('userData'), 'harness')
+    if (await refreshMigrationRecoveryLock(dshHome)) {
+      resolveSafeModeAction({ type: 'agent' })
+      await launchHarness()
+      if (await refreshMigrationRecoveryLock(dshHome)) {
+        void showSafeModeManager({
+          notice: harnessLocale() === 'zh'
+            ? 'Profile 恢复事务仍未完成，正常 Profile 继续保持锁定。'
+            : 'The Profile recovery transaction is still incomplete; the normal Profile remains locked.',
+          noticeTone: 'error'
+        }).catch(showUnexpectedError)
+        return { ok: false, blocked: true }
+      }
+      void mobileBridge.start().catch(showUnexpectedError)
+      return { ok: true }
+    }
     const compatibility = await inspectProfileCompatibility(
       dshHome,
       join(app.getAppPath(), 'node_modules')

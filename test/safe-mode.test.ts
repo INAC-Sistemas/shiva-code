@@ -128,6 +128,93 @@ describe('Safe Mode', () => {
     expect(model.noticeTone).toBe('success')
   })
 
+  it('shows every removal generation as a separate backup and blocks cleanup until a healthy boot', () => {
+    const model = buildSafeModeViewModel({
+      locale: 'zh',
+      plugins: [],
+      backups: [{
+        removalId: 'removal-1',
+        pluginName: 'paid-plugin',
+        backupDirectory: '/recovery/removal-1',
+        disabledAt: '2026-08-29T13:00:00.000Z',
+        status: 'removed',
+        integrity: 'verified',
+        canRestore: true,
+        generationIds: ['paid-plugin+1.0.0+abc']
+      }, {
+        removalId: 'removal-2',
+        pluginName: 'paid-plugin',
+        backupDirectory: '/recovery/removal-2',
+        disabledAt: '2026-08-29T14:00:00.000Z',
+        bootVerifiedAt: '2026-08-29T14:10:00.000Z',
+        status: 'removed',
+        integrity: 'verified',
+        canRestore: true,
+        generationIds: ['paid-plugin+2.0.0+def']
+      }]
+    })
+    expect(model.backupItems).toHaveLength(2)
+    expect(model.backupItems.map((entry) => entry.removalId)).toEqual(['removal-1', 'removal-2'])
+    expect(model.backupItems[0]?.cleanupReady).toBe(false)
+    expect(model.backupItems[0]?.restoreReady).toBe(true)
+    expect(model.backupItems[1]?.cleanupReady).toBe(true)
+    expect(model.backupSummary).toContain('不会按启动次数自动删除')
+  })
+
+  it('locks every mutating recovery action while migration rollback is incomplete', () => {
+    const model = buildSafeModeViewModel({
+      locale: 'zh',
+      plugins: ['plugin-a'],
+      recoveryLocked: true,
+      backups: [{
+        removalId: 'locked-backup',
+        pluginName: 'plugin-a',
+        backupDirectory: '/recovery/locked-backup',
+        disabledAt: '2026-08-29T14:00:00.000Z',
+        bootVerifiedAt: '2026-08-29T14:10:00.000Z',
+        status: 'removed',
+        integrity: 'verified',
+        canRestore: true
+      }]
+    })
+    expect(model.recoveryLocked).toBe(true)
+    expect(model.backupItems[0]).toMatchObject({ cleanupReady: false, restoreReady: false })
+    expect(model.backupSummary).toContain('不能修复、卸载或删除')
+  })
+
+  it('allows only the matching backup retry for an incomplete plugin restore', () => {
+    const model = buildSafeModeViewModel({
+      locale: 'zh',
+      plugins: [],
+      recoveryLocked: true,
+      backupRestoreLocked: true,
+      allowedRestoreId: 'retry-this',
+      backups: [{
+        removalId: 'retry-this',
+        pluginName: 'plugin-a',
+        backupDirectory: '/recovery/retry-this',
+        disabledAt: '2026-08-29T14:00:00.000Z',
+        restoreStartedAt: '2026-08-29T14:05:00.000Z',
+        restoreFailure: 'projection failed',
+        status: 'removed',
+        integrity: 'verified',
+        canRestore: true
+      }, {
+        removalId: 'not-this-one',
+        pluginName: 'plugin-b',
+        backupDirectory: '/recovery/not-this-one',
+        disabledAt: '2026-08-29T13:00:00.000Z',
+        status: 'removed',
+        integrity: 'verified',
+        canRestore: true
+      }]
+    })
+    expect(model.backupItems[0]).toMatchObject({ restoreReady: true, cleanupReady: false })
+    expect(model.backupItems[0]?.statusLabel).toContain('上次恢复未完成')
+    expect(model.backupItems[1]?.restoreReady).toBe(false)
+    expect(model.backupSummary).toContain('只允许重试')
+  })
+
   it('ships a selectable management page with no remote content', async () => {
     const html = await readFile('build/safe-mode.html', 'utf8')
     expect(html).toContain('id="items"')
@@ -140,6 +227,12 @@ describe('Safe Mode', () => {
     expect(html).toContain('checkbox.dataset.issueIds')
     expect(html).toContain("document.createElement('details')")
     expect(html).toContain("window.dshSafeMode.action('agent', {})")
+    expect(html).toContain("window.dshSafeMode.action('backup-open', { removalId:")
+    expect(html).toContain("window.dshSafeMode.action('backup-restore', { removalId:")
+    expect(html).toContain("window.dshSafeMode.action('backup-delete', { removalId:")
+    expect(html).toContain('backup.cleanupReady !== true')
+    expect(html).toContain('id="backup-card"')
+    expect(html).toContain('id="recovery-open"')
     expect(html).toContain('class="close" id="agent"')
     expect(html).toContain('class="button primary" id="restart"')
     expect(html).toContain('class="actions"')
@@ -165,7 +258,22 @@ describe('Safe Mode', () => {
     expect(main).toContain('shouldStartInSafeMode(process.argv)')
     expect(main).toContain('ensureSafeModeProfile(dshHome)')
     expect(main).toContain('runtime.start(launchDirectory, SAFE_MODE_PROFILE)')
+    expect(main).toContain('inspectMigrationRecoveryLock(dshHome)')
+    expect(main).toContain('let recoveryLocked = await refreshMigrationRecoveryLock(dshHome)')
+    expect(main.match(/refreshMigrationRecoveryLock\(dshHome\)/g)?.length ?? 0)
+      .toBeGreaterThanOrEqual(7)
     expect(main).toContain("ipcMain.handle('safe-mode:action'")
+    expect(main).toContain("action !== 'backup-open'")
+    expect(main).toContain("action !== 'backup-restore'")
+    expect(main).toContain("action !== 'backup-delete'")
+    expect(main).toContain('cleanupVerifiedRemovalBackup(')
+    expect(main).toContain('restorePluginRemovalBackup(')
+    expect(main).toContain('snapshotPluginRemovalLedger(dshHome)')
+    expect(main).toContain('canRetryLockedPluginRestore(dshHome, action.removalId)')
+    expect(main.indexOf('removalBackups = await snapshotPluginRemovalLedger(dshHome)'))
+      .toBeLessThan(main.indexOf('pendingRemovals = await listPendingPluginRemovals(dshHome)'))
+    expect(main).toContain("ipcMain.handle('harness:renderer-healthy'")
+    expect(main).toContain('confirmMigration(dshHome, (line) => runtime.note(line), healthy)')
     expect(main).toContain('inspectProfileCompatibility(')
     expect(main).toContain('repairSafeModeCompatibilityIssues(')
     expect(main).toContain('[safe-mode] user exited with')
@@ -183,6 +291,13 @@ describe('Safe Mode', () => {
     expect(preload).toContain("safeModeLocale === 'zh' ? '退出安全模式' : 'Exit Safe Mode'")
     expect(preload).toContain("safeModeLocale === 'zh'")
     expect(preload).toContain("ipcRenderer.invoke('safe-mode:action', action, selection)")
+    expect(preload).toContain("ipcRenderer.invoke('harness:renderer-healthy')")
+    expect(preload).toContain('RENDERER_HEALTH_HEARTBEAT_MS')
+    expect(main).toContain('PROFILE_BOOT_STABILITY_MS = 60_000')
+    expect(main).toContain('clearProfileBootConfirmation()')
+    expect(main).toContain('reportProfileConsistency: () => reportProfileConsistency(dshHome)')
+    expect(main).not.toContain('repairProfilePackages:')
+    expect(main).not.toContain('pruneMissingProfileBundles:')
     expect(JSON.parse(manifest).build.extraResources).toContainEqual({
       from: 'build/safe-mode.html',
       to: 'safe-mode.html'

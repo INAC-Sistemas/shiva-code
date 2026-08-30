@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs'
-import { lstat, mkdir, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { lstat, mkdir, readFile, readdir, readlink, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { resolveEnabledGenerations } from './registry.mjs'
 
 /**
@@ -45,14 +44,153 @@ function profileDir(dshHome, profile = 'web') {
   return join(dshHome, 'profiles', profile)
 }
 
+function isInsideDirectory(parent, candidate) {
+  const nested = relative(parent, candidate)
+  return nested === '' || (!nested.startsWith('..') && !isAbsolute(nested))
+}
+
+async function validateEnabledGenerationTarget(pluginName, generation) {
+  const generationDirectory = resolve(generation.directory)
+  const target = resolve(generation.directory, 'node_modules', pluginName)
+  if (!isInsideDirectory(generationDirectory, target)) {
+    throw new Error(`Enabled generation package path escapes its generation: ${pluginName}`)
+  }
+
+  let targetInfo
+  try {
+    targetInfo = await lstat(target)
+  } catch (error) {
+    throw new Error(
+      `Enabled generation package root is missing or unreadable for ${pluginName}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+  if (targetInfo.isSymbolicLink() || !targetInfo.isDirectory()) {
+    throw new Error(`Enabled generation package root is not a real directory for ${pluginName}`)
+  }
+  const canonicalTarget = await realpath(target)
+  const canonicalGeneration = await realpath(generationDirectory)
+  if (!isInsideDirectory(canonicalGeneration, canonicalTarget)) {
+    throw new Error(`Enabled generation package root resolves outside its generation: ${pluginName}`)
+  }
+
+  const manifestPath = join(target, 'package.json')
+  let manifestInfo
+  try {
+    manifestInfo = await lstat(manifestPath)
+  } catch (error) {
+    throw new Error(
+      `Enabled generation package manifest is missing or unreadable for ${pluginName}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+  if (manifestInfo.isSymbolicLink() || !manifestInfo.isFile()) {
+    throw new Error(`Enabled generation package manifest is not a real file for ${pluginName}`)
+  }
+  const canonicalManifest = await realpath(manifestPath)
+  if (!isInsideDirectory(canonicalTarget, canonicalManifest)) {
+    throw new Error(`Enabled generation package manifest resolves outside its package: ${pluginName}`)
+  }
+  return target
+}
+
 /** Whether an installed package declares its own `dsh.bundle` patch layer. */
 async function declaresBundle(packageDir) {
+  const path = join(packageDir, 'package.json')
+  let text
   try {
-    const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'))
-    return typeof manifest.dsh?.bundle?.patch === 'string'
-  } catch {
-    return false
+    text = await readFile(path, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false
+    throw new Error(
+      `Profile dependency manifest could not be read at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
   }
+  try {
+    const manifest = JSON.parse(text)
+    return typeof manifest.dsh?.bundle?.patch === 'string'
+  } catch (error) {
+    throw new Error(
+      `Profile dependency manifest is invalid JSON at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function assertProfileManifest(manifest, path) {
+  if (!isRecord(manifest)) throw new Error(`Profile manifest root is invalid at ${path}.`)
+  if (
+    manifest.dependencies !== undefined &&
+    (
+      !isRecord(manifest.dependencies) ||
+      !Object.values(manifest.dependencies).every((spec) => typeof spec === 'string')
+    )
+  ) {
+    throw new Error(`Profile manifest dependencies are invalid at ${path}.`)
+  }
+  if (manifest.dsh !== undefined && !isRecord(manifest.dsh)) {
+    throw new Error(`Profile manifest dsh configuration is invalid at ${path}.`)
+  }
+  if (manifest.dsh?.profile !== undefined && !isRecord(manifest.dsh.profile)) {
+    throw new Error(`Profile manifest dsh.profile configuration is invalid at ${path}.`)
+  }
+  if (
+    manifest.dsh?.profile?.bundles !== undefined &&
+    (
+      !Array.isArray(manifest.dsh.profile.bundles) ||
+      !manifest.dsh.profile.bundles.every((name) => typeof name === 'string')
+    )
+  ) {
+    throw new Error(`Profile manifest bundle list is invalid at ${path}.`)
+  }
+  return manifest
+}
+
+async function readProfileManifest(dir) {
+  const path = join(dir, 'package.json')
+  let current
+  try {
+    current = await readFile(path, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return {
+        current: undefined,
+        manifest: { name: 'dsh-profile-web', private: true }
+      }
+    }
+    throw new Error(
+      `Profile manifest could not be read at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(current)
+  } catch (error) {
+    throw new Error(
+      `Profile manifest is invalid JSON at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+  return { current, manifest: assertProfileManifest(parsed, path) }
 }
 
 /**
@@ -80,16 +218,24 @@ async function ensureDirLink(linkPath, target) {
  * in-box bundles are left untouched.
  */
 export async function projectGenerations(dshHome, profile = 'web') {
-  const enabled = await resolveEnabledGenerations(dshHome)
   const dir = profileDir(dshHome, profile)
+  // Validate the authoritative Profile manifest before touching links. A
+  // malformed or temporarily unreadable existing file must never be mistaken
+  // for an empty Profile and overwritten with a reduced generated manifest.
+  const manifestState = await readProfileManifest(dir)
+  const enabled = await resolveEnabledGenerations(dshHome)
+  const targets = new Map()
+  for (const [pluginName, generation] of enabled) {
+    targets.set(pluginName, await validateEnabledGenerationTarget(pluginName, generation))
+  }
   const modulesDir = join(dir, 'node_modules')
   await mkdir(modulesDir, { recursive: true })
 
   const linked = []
   const linkSpecs = new Map()
   for (const [pluginName, generation] of enabled) {
-    const target = join(generation.directory, 'node_modules', pluginName)
-    if (!existsSync(target)) continue
+    const target = targets.get(pluginName)
+    if (target === undefined) throw new Error(`Enabled generation target was not prevalidated: ${pluginName}`)
     await ensureDirLink(join(modulesDir, pluginName), target)
     linked.push(pluginName)
     // A `link:` spec is what makes the market's readInstalled() (which reads
@@ -100,7 +246,7 @@ export async function projectGenerations(dshHome, profile = 'web') {
   }
 
   const unlinked = await pruneStaleGenerationLinks(modulesDir, enabled)
-  const bundles = await syncProfileManifest(dir, enabled, linkSpecs)
+  const bundles = await syncProfileManifest(dir, enabled, linkSpecs, manifestState)
 
   return { linked, unlinked, bundles }
 }
@@ -147,14 +293,9 @@ async function pruneStaleGenerationLinks(modulesDir, enabled) {
  * In-box bundles keep their place at the front; the enabled generations
  * follow, and each is also a `link:` dependency pointing at its generation.
  */
-async function syncProfileManifest(dir, enabled, linkSpecs = new Map()) {
+async function syncProfileManifest(dir, enabled, linkSpecs, manifestState) {
   const manifestPath = join(dir, 'package.json')
-  let manifest = {}
-  try {
-    manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-  } catch {
-    manifest = { name: 'dsh-profile-web', private: true }
-  }
+  const { current, manifest } = manifestState
 
   // Real pnpm dependencies the profile already had (dshmarket, anything from
   // the old shared-tree path) carry through unchanged. Each enabled generation
@@ -204,12 +345,6 @@ async function syncProfileManifest(dir, enabled, linkSpecs = new Map()) {
   // Only touch the file when it actually changes. The projection runs every
   // launch; rewriting an identical manifest churns its mtime and breaks the
   // `.install-complete` fingerprint for no reason.
-  let current
-  try {
-    current = await readFile(manifestPath, 'utf8')
-  } catch {
-    current = undefined
-  }
   if (current !== body) {
     const temporary = `${manifestPath}.${process.pid}.${Date.now()}.tmp`
     await writeFile(temporary, body, 'utf8')

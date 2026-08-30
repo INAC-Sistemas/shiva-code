@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { isAbsolute, join, relative } from 'node:path'
 import { ensureRegistryDirectories, generationId, writeGenerationMeta } from './registry.mjs'
 
 /**
@@ -79,39 +79,24 @@ async function defaultRunInstall(options, stagingDir) {
 }
 
 /**
- * Delete every host-singleton package from a generation's own node_modules,
- * one level deep plus one level into each scope. Returns what was removed.
+ * Delete every host-singleton package from every nested node_modules in a
+ * generation. Returns what was removed.
  */
 async function hoistHostSingletons(generationDir) {
-  const modules = join(generationDir, 'node_modules')
   const removed = []
-  let entries
-  try {
-    entries = await readdir(modules, { withFileTypes: true })
-  } catch {
-    return removed
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    if (entry.name.startsWith('@')) {
-      let scoped = []
-      try {
-        scoped = await readdir(join(modules, entry.name))
-      } catch {
-        continue
-      }
-      for (const inner of scoped) {
-        const full = `${entry.name}/${inner}`
-        if (isHostSingleton(full)) {
-          await rm(join(modules, entry.name, inner), { recursive: true, force: true })
-          removed.push(full)
-        }
-      }
-    } else if (isHostSingleton(entry.name)) {
-      await rm(join(modules, entry.name), { recursive: true, force: true })
-      removed.push(entry.name)
+  await walkGenerationPackages(generationDir, {
+    async onPackage() {},
+    async onSingleton(name, path, info) {
+      // Never follow a package link while removing it. A hostile or malformed
+      // tarball can otherwise point a singleton name outside staging.
+      if (info.isSymbolicLink()) await unlink(path)
+      else await rm(path, { recursive: true, force: true })
+      removed.push(name)
+    },
+    async onUnsafePath(detail) {
+      throw new Error(`generation package tree is not self-contained: ${detail}`)
     }
-  }
+  })
   return removed
 }
 
@@ -203,30 +188,201 @@ export async function installGeneration(options) {
   }
 }
 
+function isInsideDirectory(parent, candidate) {
+  const path = relative(parent, candidate)
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path))
+}
+
+async function pathInfo(path, missingAllowed = false) {
+  try {
+    return await lstat(path)
+  } catch (error) {
+    if (missingAllowed && error?.code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
 /**
- * A quick check that a promoted generation's peers all resolve to the host.
- * Not a gate on install — a diagnostic the caller can log or surface.
+ * Walk package boundaries in every nested node_modules without following a
+ * symlink or allowing a real directory to escape the immutable generation.
  */
+async function walkGenerationPackages(generationDir, visitor) {
+  const rootInfo = await pathInfo(generationDir)
+  if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
+    await visitor.onUnsafePath(`generation root is not a real directory: ${generationDir}`)
+    return
+  }
+  const root = await realpath(generationDir)
+
+  const safeDirectoryEntries = async (directory, missingAllowed, description) => {
+    const info = await pathInfo(directory, missingAllowed)
+    if (info === undefined) return undefined
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      await visitor.onUnsafePath(`${description} is not a real directory: ${directory}`)
+      return undefined
+    }
+    const resolved = await realpath(directory)
+    if (!isInsideDirectory(root, resolved)) {
+      await visitor.onUnsafePath(`${description} resolves outside the generation: ${resolved}`)
+      return undefined
+    }
+    return readdir(directory, { withFileTypes: true })
+  }
+
+  const walkPackage = async (name, packagePath) => {
+    const info = await pathInfo(packagePath)
+    if (isHostSingleton(name)) {
+      await visitor.onSingleton(name, packagePath, info)
+      return
+    }
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      await visitor.onUnsafePath(`package ${name} is not a real directory: ${packagePath}`)
+      return
+    }
+    const resolved = await realpath(packagePath)
+    if (!isInsideDirectory(root, resolved)) {
+      await visitor.onUnsafePath(`package ${name} resolves outside the generation: ${resolved}`)
+      return
+    }
+    await visitor.onPackage(name, packagePath, root)
+    await walkModules(join(packagePath, 'node_modules'), true)
+  }
+
+  const walkScope = async (scopeName, scopePath) => {
+    const info = await pathInfo(scopePath)
+    if (scopeName === '@deepseek-ai' && (info.isSymbolicLink() || !info.isDirectory())) {
+      await visitor.onSingleton('@deepseek-ai/*', scopePath, info)
+      return
+    }
+    const entries = await safeDirectoryEntries(scopePath, false, `package scope ${scopeName}`)
+    if (entries === undefined) return
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      await walkPackage(`${scopeName}/${entry.name}`, join(scopePath, entry.name))
+    }
+  }
+
+  async function walkModules(modules, missingAllowed) {
+    const entries = await safeDirectoryEntries(modules, missingAllowed, 'node_modules')
+    if (entries === undefined) return
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === '.bin') continue
+      const path = join(modules, entry.name)
+      if (entry.name.startsWith('@')) await walkScope(entry.name, path)
+      else await walkPackage(entry.name, path)
+    }
+  }
+
+  await walkModules(join(generationDir, 'node_modules'), false)
+}
+
+async function installedPackageManifestPaths(generationDir) {
+  const manifests = []
+  const problems = []
+  await walkGenerationPackages(generationDir, {
+    async onPackage(name, packagePath, root) {
+      const manifestPath = join(packagePath, 'package.json')
+      const info = await pathInfo(manifestPath, true)
+      if (info === undefined) {
+        problems.push(`${name} has no package manifest`)
+        return
+      }
+      if (info.isSymbolicLink() || !info.isFile()) {
+        problems.push(`${name} package manifest is not a real file: ${manifestPath}`)
+        return
+      }
+      const resolved = await realpath(manifestPath)
+      if (!isInsideDirectory(root, resolved)) {
+        problems.push(`${name} package manifest resolves outside the generation: ${resolved}`)
+        return
+      }
+      manifests.push(manifestPath)
+    },
+    async onSingleton(name, path) {
+      problems.push(`private host singleton ${name} is present in the generation at ${path}`)
+    },
+    async onUnsafePath(detail) {
+      problems.push(detail)
+    }
+  })
+  return { manifests, problems }
+}
+
+/** Verify every installed package's required runtime dependency stays in an allowed closure. */
 export async function verifyGenerationPeers(dshHome, generation) {
   const { createRequire } = await import('node:module')
-  const closure = installationClosureDir(dshHome)
+  const generationRoot = await realpath(generation.directory)
+  const closure = await realpath(installationClosureDir(dshHome)).catch(
+    () => installationClosureDir(dshHome)
+  )
   const packageRoot = join(generation.directory, 'node_modules', generation.pluginName)
   const manifestPath = join(packageRoot, 'package.json')
   if (!existsSync(manifestPath)) return { ok: false, problems: ['plugin package root missing'] }
 
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-  const requireFromPlugin = createRequire(manifestPath)
   const problems = []
-  for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
-    let resolved
-    try {
-      resolved = requireFromPlugin.resolve(peer)
-    } catch {
-      resolved = undefined
+  const scanned = await installedPackageManifestPaths(generation.directory)
+  problems.push(...scanned.problems)
+  const manifests = scanned.manifests
+  if (!manifests.includes(manifestPath)) {
+    problems.push('plugin package root is not a self-contained package directory')
+  }
+  for (const currentManifestPath of manifests) {
+    const manifest = JSON.parse(await readFile(currentManifestPath, 'utf8'))
+    if (currentManifestPath === manifestPath && manifest.name !== generation.pluginName) {
+      problems.push(
+        `plugin package manifest name does not match generation metadata: ` +
+          `${String(manifest.name)} != ${generation.pluginName}`
+      )
     }
-    if (resolved === undefined) continue
-    if (isHostSingleton(peer) && !resolved.startsWith(closure)) {
-      problems.push(`${peer} resolves outside the installation closure: ${resolved}`)
+    const owner = typeof manifest.name === 'string' ? manifest.name : currentManifestPath
+    const prefix = currentManifestPath === manifestPath ? '' : `${owner}: `
+    const requireFromPackage = createRequire(currentManifestPath)
+    const peerDependencies = manifest.peerDependencies ?? {}
+    const dependencies = manifest.dependencies ?? {}
+    const optionalDependencies = manifest.optionalDependencies ?? {}
+    const candidates = new Set(
+      [
+        ...Object.keys(peerDependencies),
+        ...Object.keys(dependencies),
+        ...Object.keys(optionalDependencies)
+      ]
+    )
+    for (const dependency of candidates) {
+      let resolved
+      try {
+        resolved = requireFromPackage.resolve(dependency)
+      } catch {
+        resolved = undefined
+      }
+      const requiredDependency =
+        Object.hasOwn(dependencies, dependency) && !Object.hasOwn(optionalDependencies, dependency)
+      const requiredPeer =
+        Object.hasOwn(peerDependencies, dependency) &&
+        manifest.peerDependenciesMeta?.[dependency]?.optional !== true
+      const optional = !requiredDependency && !requiredPeer
+      if (resolved === undefined) {
+        if (!optional) {
+          problems.push(
+            isHostSingleton(dependency)
+              ? `${prefix}${dependency} does not resolve from the installation closure`
+              : `${prefix}${dependency} does not resolve from the generation or installation closure`
+          )
+        }
+        continue
+      }
+      const realResolved = await realpath(resolved).catch(() => resolved)
+      const insideClosure = isInsideDirectory(closure, realResolved)
+      if (isHostSingleton(dependency)) {
+        if (!insideClosure) {
+          problems.push(
+            `${prefix}${dependency} resolves outside the installation closure: ${realResolved}`
+          )
+        }
+      } else if (!insideClosure && !isInsideDirectory(generationRoot, realResolved)) {
+        problems.push(
+          `${prefix}${dependency} resolves outside the generation and installation closure: ${realResolved}`
+        )
+      }
     }
   }
   return { ok: problems.length === 0, problems }
