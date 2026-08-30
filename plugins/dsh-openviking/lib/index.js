@@ -119,6 +119,61 @@ async function isConfigured() {
   return !!(s?.embedding?.api_base)
 }
 
+/** Resolve the OpenRouter key the user already stored in dsh (never sent to the browser). */
+async function resolveOpenRouterKey(ctx) {
+  // Prefer the credentials seam when the service is visible; fall back to the
+  // file-backed provider document the Models page writes.
+  try {
+    const credentials = ctx.get('credentials')
+    if (credentials?.resolve) {
+      const hit = await credentials.resolve('OPENROUTER_API_KEY')
+      if (hit?.value) return hit.value
+    }
+  } catch { /* service not reachable from this scope */ }
+  try {
+    const { load } = await import('js-yaml')
+    const text = await readFile(join(homedir(), '.dsh', '.credentials.yaml'), 'utf8')
+    const doc = load(text)
+    const v = doc?.refs?.OPENROUTER_API_KEY
+    if (typeof v === 'string') return v
+    if (v && typeof v === 'object' && typeof v.value === 'string') return v.value
+  } catch { /* não encontrado */ }
+  return null
+}
+
+/** List models from the OpenRouter API (embedding + vision) using the resolved key. */
+async function openRouterModels(ctx) {
+  const key = await resolveOpenRouterKey(ctx)
+  if (!key) return { configured: false, embedding: [], vision: [] }
+  const headers = { authorization: `Bearer ${key}` }
+  const embedding = []
+  const vision = []
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/embeddings/models', { headers, signal: AbortSignal.timeout(20_000) })
+    if (r.ok) {
+      const j = await r.json()
+      for (const m of j?.data ?? []) if (typeof m?.id === 'string') embedding.push(m.id)
+    }
+  } catch { /* sem rede */ }
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/models', { headers, signal: AbortSignal.timeout(20_000) })
+    if (r.ok) {
+      const j = await r.json()
+      const seen = new Set()
+      for (const m of j?.data ?? []) {
+        const id = typeof m?.id === 'string' ? m.id : ''
+        if (!id || id.includes('embed')) continue
+        const mods = m?.architecture?.input_modalities ?? m?.architecture?.modalities ?? m?.supported_parameters ?? {}
+        const imagelike = JSON.stringify(mods).toLowerCase().includes('image')
+        if (imagelike && !seen.has(id)) { vision.push(id); seen.add(id) }
+      }
+      vision.sort()
+    }
+  } catch { /* sem rede */ }
+  // Cobre o caso de uma API que não expõe image na architecture.
+  return { configured: true, embedding, vision }
+}
+
 // ── server lifecycle ──────────────────────────────────────────────────────
 let child = null // process we spawned; dies with dsh
 let adopted = false // healthy server found on the port before we spawned
@@ -264,6 +319,7 @@ export function apply(ctx) {
           const p = statusPayload()
           p.configured = await isConfigured()
           p.studio = p.running ? await studioAvailable() : null
+          p.openrouterKey = !!await resolveOpenRouterKey(ctx)
           return json(res, 200, p)
         }
         case 'install': {
@@ -271,10 +327,21 @@ export function apply(ctx) {
           spawnInstaller()
           return json(res, 200, { ok: true })
         }
+        case 'models': {
+          return json(res, 200, { ok: true, ...await openRouterModels(ctx) })
+        }
         case 'configure': {
           const s = {
             embedding: payload.embedding ?? null,
             vlm: payload.vlm ?? null,
+          }
+          // OpenRouter sem chave digitada → importa a chave que o usuário já
+          // tem no dsh (via credentials seam); a chave nunca vai pro browser.
+          if (s.embedding?.provider === 'openrouter' && !s.embedding.api_key) {
+            s.embedding.api_key = await resolveOpenRouterKey(ctx) ?? ''
+          }
+          if (s.embedding?.provider === 'openrouter' && s.vlm && !s.vlm.api_key) {
+            s.vlm.api_key = await resolveOpenRouterKey(ctx) ?? ''
           }
           await mkdir(OV_DIR, { recursive: true })
           await writeFile(SETTINGS_FILE, JSON.stringify(s, null, 2), 'utf8')

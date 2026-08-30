@@ -63,6 +63,7 @@ function injectStyles() {
 function MemoryView() {
   const h = React.createElement
   const [st, setSt] = React.useState(null)
+  const [models, setModels] = React.useState(null)
   const [form, setForm] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   const [toast, setToast] = React.useState(null)
@@ -79,6 +80,9 @@ function MemoryView() {
   }, [])
 
   React.useEffect(() => { refresh() }, [refresh])
+  React.useEffect(() => {
+    api('models').then((r) => { if (r.ok) setModels(r) }).catch(() => {})
+  }, [])
   const slow = st?.phase === 'installing'
   React.useEffect(() => {
     const t = setInterval(refresh, slow ? 1200 : 6000)
@@ -169,31 +173,49 @@ function MemoryView() {
       return h('div', { className: 'ov-root' }, h('div', { className: 'ov-center' }, h('p', null, 'Loading…')))
     }
     const ep = PROVIDERS[form.embedding.provider] ?? PROVIDERS.custom
+    const isOpenRouter = form.embedding.provider === 'openrouter'
+    const embList = isOpenRouter && models?.embedding ? models.embedding : []
+    const visList = isOpenRouter && models?.vision ? models.vision : []
+    const keyFromDsh = isOpenRouter && st?.openrouterKey
+    const needKey = !isOpenRouter && form.embedding.provider !== 'ollama'
     return h('div', { className: 'ov-root' },
       h('div', { className: 'ov-center' },
         h('h3', null, 'Conectar a memória semântica'),
-        h('p', null, 'O OpenViking precisa de um serviço de embeddings para indexar memórias. Uma chave, uma vez só — fica salva no seu computador.')),
+        h('p', null, 'O OpenViking precisa de um serviço de embeddings para indexar memórias.')),
       h('div', { style: { display: 'flex', justifyContent: 'center', paddingBottom: 24 } },
         h('div', { className: 'ov-form' },
           h('div', { className: 'ov-field' },
             h('label', null, 'Provedor de embeddings'),
             h('select', {
               value: form.embedding.provider,
-              onChange: (e) => { const p = PROVIDERS[e.target.value]; setEmb({ provider: e.target.value, api_base: p.base }) },
+              onChange: (e) => { const p = PROVIDERS[e.target.value]; setEmb({ provider: e.target.value, api_base: p.base }); if (p.base) setVlm({ ...form.vlm, api_base: p.base }) },
             },
               Object.entries(PROVIDERS).map(([k, v]) => h('option', { key: k, value: k }, v.label)))),
           h('p', { className: 'ov-note' }, ep.hint),
           field('eb', 'API base', form.embedding.api_base, (v) => setEmb({ api_base: v })),
-          field('ek', 'API key', form.embedding.api_key, (v) => setEmb({ api_key: v }), 'password', form.embedding.provider === 'ollama' ? '(ollama não exige)' : 'sk-…'),
-          field('em', 'Modelo de embedding', form.embedding.model, (v) => setEmb({ model: v }), 'text', 'ex.: doubao-embedding, text-embedding-3-small, nomic-embed-text'),
+          keyFromDsh
+            ? h('p', { className: 'ov-note', style: { margin: 0, color: 'var(--dsw-alias-state-success-primary,#22c55e)' } },
+              '✓ Chave OpenRouter importada do seu dsh — não precisa digitar.')
+            : field('ek', 'API key', form.embedding.api_key, (v) => setEmb({ api_key: v }), 'password', form.embedding.provider === 'ollama' ? '(ollama não exige)' : 'sk-…'),
+          h('div', { className: 'ov-field' },
+            h('label', null, 'Modelo de embedding'),
+            h('input', { type: 'text', list: 'ov-emb-models', value: form.embedding.model ?? '', onChange: (e) => setEmb({ model: e.target.value }), placeholder: 'openai/text-embedding-3-small' }),
+            h('datalist', { id: 'ov-emb-models' }, (embList.length ? embList : ['openai/text-embedding-3-small', 'qwen/qwen3-embedding-0.6b', 'nvidia/llama-nemotron-embed-vl-1b-v2']).map((m) =>
+              h('option', { key: m, value: m })))),
           field('ed', 'Dimensão', form.embedding.dimension, (v) => setEmb({ dimension: v })),
           h('details', {},
             h('summary', { style: { fontSize: 11, cursor: 'pointer', color: 'var(--dsw-alias-label-secondary,#9a9aa5)' } }, 'VLM (opcional — para entender imagens/recursos visuais)'),
             h('div', { className: 'ov-form', style: { marginTop: 8 } },
               field('vb', 'API base', form.vlm.api_base, (v) => setVlm({ api_base: v })),
-              field('vk', 'API key', form.vlm.api_key, (v) => setVlm({ api_key: v }), 'password'),
-              field('vm', 'Modelo (visão)', form.vlm.model, (v) => setVlm({ model: v })))),
-          h('button', { className: 'ov-btn primary', disabled: busy || !form.embedding.api_key && form.embedding.provider !== 'ollama', onClick: saveConfig },
+              isOpenRouter
+                ? h('p', { className: 'ov-note', style: { margin: 0, color: 'var(--dsw-alias-state-success-primary,#22c55e)' } }, '✓ Chave do dsh — não precisa digitar.')
+                : field('vk', 'API key', form.vlm.api_key, (v) => setVlm({ api_key: v }), 'password'),
+              h('div', { className: 'ov-field' },
+                h('label', null, 'Modelo (visão)'),
+                h('input', { type: 'text', list: 'ov-vlm-models', value: form.vlm.model ?? '', onChange: (e) => setVlm({ model: e.target.value }), placeholder: 'google/gemini-2.0-flash' }),
+                h('datalist', { id: 'ov-vlm-models' }, (visList.length ? visList : ['google/gemini-2.0-flash', 'qwen/qwen2.5-vl-72b-instruct', 'openai/gpt-4o-mini']).map((m) =>
+                  h('option', { key: m, value: m })))))),
+          h('button', { className: 'ov-btn primary', disabled: busy || (needKey && !form.embedding.api_key), onClick: saveConfig },
             busy ? 'Salvando…' : 'Salvar e conectar'),
           h('p', { className: 'ov-note' },
             'Privacidade: os dados ficam no seu computador; o texto das memórias é enviado ao provedor de embeddings escolhido para vetorização. Ollama mantém tudo local.')),
