@@ -25,6 +25,7 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-mcp-client": "workspace:^"
   },
   "peerDependencies": {

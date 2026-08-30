@@ -1,4 +1,4 @@
-// dsh-openviking host half: makes the OpenViking context database belong to
+﻿// dsh-openviking host half: makes the OpenViking context database belong to
 // the dsh server. On activation it adopts a healthy server on the port, or
 // auto-installs (pinned wheel into a dedicated venv) and spawns one as a
 // child process that dies with dsh. Model tools arrive through the
@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import * as mcpClient from '@deepseek-ai/dsh-mcp-client'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 export const inject = ['webServer', 'sessions']
 
@@ -283,6 +284,93 @@ function mountMcp(ctx) {
   })
 }
 
+// ── memory hooks ──────────────────────────────────────────────────────────
+// Recall at session start (inject a system-reminder on the first step) and
+// capture at agent disposal (remember the session's latest decisions). Both
+// are no-ops unless the OpenViking server is healthy and configured.
+
+let hookLive = false
+const recalledAgents = new Set()
+
+async function ovRpc(tool, args) {
+  const payload = { jsonrpc: '2.0', id: Date.now().toString(36), method: 'tools/call', params: { name: tool, arguments: args } }
+  const res = await fetch(`${OV_BASE}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(20_000),
+  })
+  const text = await res.text()
+  const dataLine = text.split('\n').find((l) => l.startsWith('data:'))?.replace(/^data:\s?/, '')
+  const json = dataLine ? JSON.parse(dataLine) : null
+  const content = json?.result?.content
+  const resultText = Array.isArray(content)
+    ? content.filter((c) => c?.type === 'text').map((c) => c.text).join('\n')
+    : (json?.result?.structuredContent?.result ?? '')
+  if (json?.result?.isError) throw new Error(resultText || 'OpenViking tool error')
+  return resultText
+}
+
+const msgText = (content) => Array.isArray(content)
+  ? content.map((c) => (typeof c === 'string' ? c : c?.text ?? '')).join(' ')
+  : String(content ?? '')
+
+function sessionMessages(agent) {
+  const out = []
+  try {
+    for (const e of agent.session.events) {
+      if (e?.type !== 'user/message' && e?.type !== 'assistant/message') continue
+      const role = e.type === 'user/message' ? 'user' : 'assistant'
+      const payload = e?.payload ?? {}
+      const content = e.type === 'assistant/message' ? payload?.message?.content : payload?.content
+      const text = msgText(content)
+      if (text) out.push({ role, content: text })
+    }
+  } catch { /* sessão ainda não pronta */ }
+  return out.slice(-24)
+}
+
+async function recallContext(agent) {
+  const cwd = agent?.session?.header?.cwd ?? process.cwd()
+  const probe = `Decisions, preferences and project context for workspace ${cwd}`
+  try {
+    const found = await ovRpc('search', { query: probe, mode: 'context', limit: 5 })
+    return found.trim() && !/no matching context/i.test(found) ? found : ''
+  } catch { return '' }
+}
+
+function installMemoryHooks(ctx) {
+  // Recall: on the FIRST step of the FIRST turn, inject the recalled memory as
+  // a system-reminder (exact idiom the harness tool-skill uses).
+  ctx.on('agent/pre-step', async ({ agent, turn, step, signal }, next) => {
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    if (!hookLive || turn !== 0 || step !== 0) return decision
+    if (recalledAgents.has(agent.id)) return decision
+    signal.throwIfAborted()
+    const memory = await recallContext(agent)
+    if (!memory) return decision
+    recalledAgents.add(agent.id)
+    signal.throwIfAborted()
+    const reminder = createUserMessage({
+      content: [{
+        type: 'text',
+        text: '<system-reminder><openviking_memory>\n' + memory + '\n</openviking_memory></system-reminder>',
+      }],
+    })
+    return { kind: 'enter', messages: [...decision.messages, reminder] }
+  })
+
+  // Capture: at agent disposal, remember what the session established.
+  ctx.on('agent/disposed', ({ agent }) => {
+    if (!hookLive) return
+    const messages = sessionMessages(agent)
+    if (messages.length === 0) return
+    void ovRpc('remember', { messages }).then(() => log(`captured ${messages.length} mensagens da sessão ${agent.id}`))
+      .catch((e) => log(`capture falhou: ${e.message}`))
+  })
+}
+
 // ── API ───────────────────────────────────────────────────────────────────
 function json(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -363,7 +451,7 @@ export function apply(ctx) {
           } else if (!adopted) {
             await ensureServer()
           }
-          mountMcp(ctx)
+          mountMcp(ctx); hookLive = true
           log(`configuração salva (ov.conf escrito) — servidor no ar`)
           return json(res, 200, { ok: true })
         }
@@ -405,7 +493,7 @@ export function apply(ctx) {
     if (await serverAlive()) {
       adopted = true
       log(`servidor já em execução na porta ${OV_PORT} — adotado`)
-      mountMcp(ctx)
+      mountMcp(ctx); hookLive = true
       return
     }
     if (!existsSync(SERVER_EXE)) {
@@ -419,7 +507,7 @@ export function apply(ctx) {
     }
     try {
       await ensureServer()
-      mountMcp(ctx)
+      mountMcp(ctx); hookLive = true
     } catch (e) { log(`falha ao subir servidor: ${e.message}`) }
   })()
 
@@ -430,6 +518,8 @@ export function apply(ctx) {
       child = null
     }
   }, 'dsh-openviking: teardown')
+
+  installMemoryHooks(ctx)
 
   log('loaded')
 }
