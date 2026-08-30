@@ -1058,13 +1058,15 @@ function launchHarness(): Promise<void> {
     // One-time move of a pre-upgrade profile (community plugins in the shared
     // tree) onto the generation model. Runs before the shared-tree repair and,
     // when it succeeds, replaces it — the migration has already rebuilt the
-    // tree down to what stays there.
+    // tree down to what stays there. A deferred-failure must NOT fall through
+    // to repairProfilePackages: that would run pnpm on a half-migrated legacy
+    // tree and the very next launch would see the snapshot disappear too.
     const deferMaintenance = await shouldDeferProfileMaintenance(dshHome).catch(() => false)
-    let migrated = false
+    let migrationRebuiltSharedTree = false
     if (deferMaintenance) {
       runtime.note('[desktop] profile package maintenance deferred while plugin removal is pending verification')
     } else {
-      migrated = await migrateProfileToGenerations({
+      const migration = await migrateProfileToGenerations({
         dshHome,
         nodeExecutablePath: bundledNodePath(),
         pnpmEntryPath: bundledPnpmEntryPath(),
@@ -1083,7 +1085,15 @@ function launchHarness(): Promise<void> {
           return result
         }
       })
-      if (!migrated) await repairProfilePackages(dshHome)
+      if (migration.outcome === 'migrated') {
+        migrationRebuiltSharedTree = true
+      } else if (migration.outcome === 'no-op') {
+        await repairProfilePackages(dshHome)
+      } else {
+        runtime.note(
+          `[desktop] profile repair skipped: migration deferred (${migration.reason})`
+        )
+      }
     }
     await pruneMissingProfileBundles(dshHome).catch(() => false)
     await reportProfileConsistency(dshHome)
@@ -1097,10 +1107,14 @@ function launchHarness(): Promise<void> {
     if (runtime.snapshot().phase !== 'ready') {
       // A migration that did not boot rolls the whole profile back to the
       // pre-upgrade snapshot — nothing was lost, and the old shared-tree path
-      // runs next launch.
-      if (migrated && (await rollBackMigration(dshHome, (line) => runtime.note(line)))) {
-        await repairProfilePackages(dshHome)
-        await runtime.start(launchDirectory)
+      // runs next launch. A failed rollback keeps the snapshot intact so the
+      // user can recover instead of starting from an unverified half-tree.
+      if (migrationRebuiltSharedTree) {
+        const rolled = await rollBackMigration(dshHome, (line) => runtime.note(line))
+        if (rolled) {
+          await repairProfilePackages(dshHome)
+          await runtime.start(launchDirectory)
+        }
       }
     }
   })().finally(() => {

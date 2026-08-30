@@ -259,19 +259,55 @@ async function rewriteManifest(dshHome: string): Promise<void> {
 }
 
 /**
- * Migrate the profile if it has not been migrated yet. Returns whether a
- * migration ran (so the caller can skip the shared-tree repair it replaces).
+ * Tri-state outcome of `migrateProfileToGenerations`.
+ *
+ * The migration has three meaningfully different results, and conflating them
+ * is what allowed a deferred-failure to silently fall through to the
+ * shared-tree repair and rerun pnpm on a half-migrated profile. The caller
+ * must treat each outcome separately:
+ *
+ * - `migrated`: a full move ran. The pre-upgrade snapshot is still on disk
+ *   until the next clean launch discards it. The shared-tree repair is
+ *   already done; running it again would rebuild on top of the new tree.
+ * - `no-op`: nothing to migrate (already migrated, no community plugins, no
+ *   profile yet). The shared-tree repair is the right next step.
+ * - `deferred-failure`: a preflight or install errored. The pre-upgrade
+ *   profile is intact and the deferred marker is written so this exact
+ *   fingerprint retries cleanly. The shared-tree repair must NOT run —
+ *   it would re-install on the legacy manifest and clobber the snapshot
+ *   state the next launch still needs to recover from.
  */
-export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<boolean> {
+export type MigrationOutcome =
+  | { outcome: 'migrated' }
+  | { outcome: 'no-op' }
+  | { outcome: 'deferred-failure'; reason: string }
+
+function noop(): MigrationOutcome {
+  return { outcome: 'no-op' }
+}
+
+function deferred(reason: string): MigrationOutcome {
+  return { outcome: 'deferred-failure', reason }
+}
+
+function migrated(): MigrationOutcome {
+  return { outcome: 'migrated' }
+}
+
+/**
+ * Migrate the profile if it has not been migrated yet. Returns a tri-state
+ * outcome the caller must interpret before running the shared-tree repair.
+ */
+export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<MigrationOutcome> {
   const { dshHome, note } = deps
   await recoverInterruptedMigration(dshHome, note)
-  if (isProfileMigrated(dshHome)) return false
+  if (isProfileMigrated(dshHome)) return noop()
   if (!existsSync(join(profileDir(dshHome), 'package.json'))) {
     // No profile yet — nothing to migrate; mark so a fresh install skips this.
     await writeFile(join(profileDir(dshHome), MARKER), `${new Date().toISOString()}\n`, 'utf8').catch(
       () => undefined
     )
-    return false
+    return noop()
   }
 
   let plugins: string[]
@@ -282,11 +318,11 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
     const fingerprint = await migrationInputFingerprint(dshHome)
     if (await readDeferredFingerprint(dshHome) === fingerprint) {
       note('[desktop] migration deferred: this exact unreadable profile already failed preflight')
-      return false
+      return deferred(reason)
     }
     note(`[desktop] migration deferred before planning: ${reason}`)
     await writeDeferred(dshHome, fingerprint, reason).catch(() => undefined)
-    return false
+    return deferred(reason)
   }
   if (plugins.length === 0) {
     note('[desktop] migration: no community plugins to move')
@@ -295,7 +331,7 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
       `${new Date().toISOString()}\n`,
       'utf8'
     )
-    return false
+    return noop()
   }
 
   let plan: Awaited<ReturnType<typeof migrationPlan>>
@@ -306,15 +342,15 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
     const fingerprint = await migrationInputFingerprint(dshHome, plugins)
     if (await readDeferredFingerprint(dshHome) === fingerprint) {
       note('[desktop] migration deferred: this exact profile already failed preflight')
-      return false
+      return deferred(reason)
     }
     note(`[desktop] migration deferred before staging: ${reason}`)
     await writeDeferred(dshHome, fingerprint, reason).catch(() => undefined)
-    return false
+    return deferred(reason)
   }
   if (await readDeferredFingerprint(dshHome) === plan.fingerprint) {
     note('[desktop] migration deferred: this exact profile already failed preflight')
-    return false
+    return deferred('previously failed preflight for this exact fingerprint')
   }
 
   note(`[desktop] migration: moving ${plugins.length} plugin(s) to generations: ${plugins.join(', ')}`)
@@ -368,7 +404,7 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
     note(`[desktop] migration: complete, ${generationIds.length} generation(s) enabled`)
     // The snapshot stays until the first successful launch confirms the move;
     // the launch path discards it after the window renders.
-    return true
+    return migrated()
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     note(
@@ -377,7 +413,7 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
     )
     if (restore) await restore()
     await writeDeferred(dshHome, plan.fingerprint, reason).catch(() => undefined)
-    return false
+    return deferred(reason)
   }
 }
 
@@ -401,12 +437,27 @@ export async function confirmMigration(dshHome: string, note: Note): Promise<voi
   note('[desktop] migration: pre-upgrade snapshot discarded after a clean launch')
 }
 
-/** Roll a failed post-migration launch back to the pre-upgrade profile. */
-export async function rollBackMigration(dshHome: string, note: Note): Promise<boolean> {
+/**
+ * Roll a failed post-migration launch back to the pre-upgrade profile.
+ *
+ * The previous version swallowed every rename/rm error and reported success,
+ * which let a Windows rename failure wipe the snapshot while still logging
+ * "rolled back" — the next launch then ran repair on a profile that no longer
+ * had a working tree. This version verifies each move: a missing live path
+ * or a snapshot that still exists after the rename is treated as a failure.
+ * On any failure the snapshot is preserved, the deferred marker is refreshed,
+ * and the function returns false so the caller can surface the loss instead of
+ * pretending the rollback worked.
+ */
+export async function rollBackMigration(
+  dshHome: string,
+  note: Note
+): Promise<boolean> {
   const dir = profileDir(dshHome)
-  const snapshotExists = ['node_modules', 'package.json', 'pnpm-lock.yaml'].some((name) =>
-    existsSync(join(dir, `${name}${SNAPSHOT_SUFFIX}`))
+  const snapshotPaths = (['node_modules', 'package.json', 'pnpm-lock.yaml'] as const).map(
+    (name) => ({ name, snap: join(dir, `${name}${SNAPSHOT_SUFFIX}`), live: join(dir, name) })
   )
+  const snapshotExists = snapshotPaths.some(({ snap }) => existsSync(snap))
   if (!snapshotExists) return false
 
   let previousDesired: string[] | undefined
@@ -417,13 +468,60 @@ export async function rollBackMigration(dshHome: string, note: Note): Promise<bo
     if (typeof state.fingerprint === 'string') fingerprint = state.fingerprint
   } catch {}
 
-  for (const name of ['node_modules', 'package.json', 'pnpm-lock.yaml']) {
-    const snap = join(dir, `${name}${SNAPSHOT_SUFFIX}`)
-    const live = join(dir, name)
+  const failures: string[] = []
+  for (const { name, snap, live } of snapshotPaths) {
     if (!existsSync(snap)) continue
-    await rm(live, { recursive: true, force: true }).catch(() => undefined)
-    await rename(snap, live).catch(() => undefined)
+    // The live path was created by the migration that just failed; remove it
+    // first so the rename has nothing to clobber. A failure here leaves the
+    // live path intact, which the snapshot will overwrite via the rename —
+    // but we also need the rename itself to succeed for the profile to be
+    // runnable, so a failure on either step is recorded together.
+    try {
+      await rm(live, { recursive: true, force: true })
+    } catch (error) {
+      failures.push(
+        `remove ${name}: ${error instanceof Error ? error.message : String(error)}`
+      )
+      continue
+    }
+    try {
+      await rename(snap, live)
+    } catch (error) {
+      failures.push(
+        `restore ${name}: ${error instanceof Error ? error.message : String(error)}`
+      )
+      // Best-effort: if the live path was removed but the rename failed, the
+      // profile is now in a half-restored state. Re-derive live from whatever
+      // is on disk so the verification step below can detect it.
+    }
+    // The snapshot must be gone and the live path present for this step to
+    // count as a verified restore. Windows can leave a partially-merged
+    // directory if a virus scanner or locked file interrupts the rename.
+    if (existsSync(snap)) {
+      failures.push(`restore ${name}: snapshot path still present after rename`)
+    }
+    if (!existsSync(live)) {
+      failures.push(`restore ${name}: live path missing after rename`)
+    }
   }
+
+  if (failures.length > 0) {
+    // Preserve the snapshot state for manual recovery. The next launch can
+    // still inspect the deferred marker and the surviving snapshot to tell
+    // the user what went wrong instead of silently corrupting the profile.
+    if (fingerprint) {
+      await writeDeferred(
+        dshHome,
+        fingerprint,
+        `rollback could not be verified: ${failures.join('; ')}`
+      ).catch(() => undefined)
+    }
+    note(
+      `[desktop] migration rollback incomplete, snapshot preserved: ${failures.join('; ')}`
+    )
+    return false
+  }
+
   if (previousDesired !== undefined) await writeDesired(dshHome, previousDesired)
   await rm(join(dir, MARKER), { force: true }).catch(() => undefined)
   await rm(join(dir, SNAPSHOT_STATE), { force: true }).catch(() => undefined)

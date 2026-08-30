@@ -56,6 +56,26 @@ export interface PluginRemovalOptions {
   note?: (line: string) => void
 }
 
+export interface PluginRemovalBackup {
+  pluginName: string
+  backupDirectory: string
+  status: RemovalStatus
+  disabledAt: string
+  bootVerifiedAt?: string
+  backupDeletedAt?: string
+  failures: string[]
+}
+
+export interface PluginRemovalLedgerSnapshot {
+  backups: PluginRemovalBackup[]
+  /**
+   * Backups the user has not yet confirmed are safe to delete. The launcher
+   * keeps these visible (via `recovery/plugin-removals/` and the recovery
+   * log) instead of auto-cleaning on a second launch.
+   */
+  pendingDeletion: PluginRemovalBackup[]
+}
+
 function ledgerPath(dshHome: string): string {
   return join(dshHome, 'recovery', 'plugin-removals.json')
 }
@@ -276,6 +296,13 @@ export async function shouldDeferProfileMaintenance(dshHome: string): Promise<bo
   )
 }
 
+/**
+ * Mark removals that have survived a clean launch as boot-verified. The
+ * backup directory is intentionally NOT deleted here — the user must
+ * confirm cleanup through `cleanupVerifiedRemovalBackups` (or by hand) so
+ * that a single bad launch can never permanently destroy the only copy of a
+ * plugin the user paid for.
+ */
 export async function confirmPluginRemovalsBooted(
   dshHome: string,
   note: (line: string) => void = () => undefined
@@ -289,24 +316,103 @@ export async function confirmPluginRemovalsBooted(
       entry.bootVerifiedAt = verifiedAt
       entry.updatedAt = verifiedAt
       changed = true
-      continue
-    }
-    if (entry.backupDeletedAt !== undefined) continue
-    try {
-      await rm(entry.backupDirectory, { recursive: true, force: true })
-      entry.backupDeletedAt = verifiedAt
-      entry.updatedAt = verifiedAt
-      changed = true
-      note(`[plugin-removal] deleted verified recovery backup for ${entry.pluginName}`)
-    } catch (error) {
-      const detail = `verified backup cleanup failed: ${error instanceof Error ? error.message : error}`
-      if (!entry.failures.includes(detail)) entry.failures.push(detail)
-      entry.updatedAt = verifiedAt
-      changed = true
-      note(`[plugin-removal] kept recovery backup for ${entry.pluginName}: ${detail}`)
+      note(
+        `[plugin-removal] boot-verified removal of ${entry.pluginName}; ` +
+          `recovery backup kept at ${entry.backupDirectory} until user confirms cleanup`
+      )
     }
   }
   if (changed) await writeLedger(dshHome, ledger)
+}
+
+/**
+ * List verified removal backups. Used by the recovery UI to surface what is
+ * still on disk before the user makes a deletion decision.
+ */
+export async function listVerifiedRemovalBackups(
+  dshHome: string
+): Promise<PluginRemovalBackup[]> {
+  const ledger = await readLedger(dshHome)
+  const result: PluginRemovalBackup[] = []
+  for (const entry of Object.values(ledger.removals)) {
+    if (entry.status !== 'removed') continue
+    if (entry.backupDeletedAt !== undefined) continue
+    if (entry.bootVerifiedAt === undefined) continue
+    result.push({
+      pluginName: entry.pluginName,
+      backupDirectory: entry.backupDirectory,
+      status: entry.status,
+      disabledAt: entry.disabledAt,
+      bootVerifiedAt: entry.bootVerifiedAt,
+      failures: [...entry.failures]
+    })
+  }
+  return result
+}
+
+/**
+ * Snapshot the ledger for the recovery UI: every entry that has reached
+ * `removed` status and every entry the user has not yet confirmed as safe to
+ * delete. The UI uses this to render a recovery/cleanup surface instead of
+ * the previous automatic on-second-launch delete.
+ */
+export async function snapshotPluginRemovalLedger(
+  dshHome: string
+): Promise<PluginRemovalLedgerSnapshot> {
+  const ledger = await readLedger(dshHome)
+  const backups: PluginRemovalBackup[] = []
+  const pendingDeletion: PluginRemovalBackup[] = []
+  for (const entry of Object.values(ledger.removals)) {
+    if (entry.status !== 'removed') continue
+    if (entry.backupDeletedAt !== undefined) continue
+    const backup: PluginRemovalBackup = {
+      pluginName: entry.pluginName,
+      backupDirectory: entry.backupDirectory,
+      status: entry.status,
+      disabledAt: entry.disabledAt,
+      ...(entry.bootVerifiedAt !== undefined ? { bootVerifiedAt: entry.bootVerifiedAt } : {}),
+      failures: [...entry.failures]
+    }
+    backups.push(backup)
+    if (entry.bootVerifiedAt !== undefined) pendingDeletion.push(backup)
+  }
+  return { backups, pendingDeletion }
+}
+
+/**
+ * Delete a single verified recovery backup, on user request. The launcher
+ * never calls this on its own; the recovery UI surfaces a "delete this
+ * backup" action that the user has to confirm. Returns whether the backup
+ * existed and was removed.
+ */
+export async function cleanupVerifiedRemovalBackup(
+  dshHome: string,
+  pluginName: string,
+  note: (line: string) => void = () => undefined
+): Promise<{ ok: boolean; reason?: string }> {
+  const ledger = await readLedger(dshHome)
+  const entry = ledger.removals[pluginName]
+  if (!entry) return { ok: false, reason: 'no removal recorded for this plugin' }
+  if (entry.status !== 'removed') return { ok: false, reason: 'plugin is not in the removed state' }
+  if (entry.backupDeletedAt !== undefined) return { ok: true }
+  if (entry.bootVerifiedAt === undefined) {
+    return { ok: false, reason: 'plugin has not been boot-verified yet' }
+  }
+  try {
+    await rm(entry.backupDirectory, { recursive: true, force: true })
+  } catch (error) {
+    const detail = `verified backup cleanup failed: ${error instanceof Error ? error.message : error}`
+    if (!entry.failures.includes(detail)) entry.failures.push(detail)
+    entry.updatedAt = new Date().toISOString()
+    await writeLedger(dshHome, ledger).catch(() => undefined)
+    note(`[plugin-removal] kept recovery backup for ${pluginName}: ${detail}`)
+    return { ok: false, reason: detail }
+  }
+  entry.backupDeletedAt = new Date().toISOString()
+  entry.updatedAt = entry.backupDeletedAt
+  await writeLedger(dshHome, ledger)
+  note(`[plugin-removal] deleted verified recovery backup for ${pluginName} (user-confirmed)`)
+  return { ok: true }
 }
 
 /**
