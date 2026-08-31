@@ -1,29 +1,40 @@
-/* The badge rides the frame-wide overlay layer, pinned to the app's top-right.
-   The layer is `inset: 0` over the whole frame and passes pointer events only
-   to its entries, so the anchor must claim no more area than the button
-   itself — anything larger would swallow clicks meant for the app underneath.
-   Colours are the app's own tokens, so it follows the active theme. */
-
-.anchor {
-  position: absolute;
-  top: 14px;
-  /* Clear of the layout toggles the shell parks in the corner. */
-  right: 84px;
-  width: 28px;
-  height: 28px;
-}
+/* The last row of the sidebar foot, under Settings. `sidebar.footer.below` is
+   a COLUMN, so this row may claim the full width without pushing a neighbour
+   out — unlike the shared footer-action row above it. Metrics and colours come
+   from the sidebar's own tokens, so it reads as one column with Settings and
+   follows the active theme. */
 
 .trigger {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
   border: none;
-  border-radius: 999px;
+  border-radius: 10px;
   background: transparent;
+  color: var(--dsw-alias-label-primary);
   font-family: var(--dsw-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
   cursor: pointer;
+}
+
+/* Collapsed rail: the avatar alone, centred on the icon column. */
+.collapsed {
+  width: auto;
+  justify-content: center;
+  padding: 6px;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trigger:hover,
@@ -37,6 +48,7 @@
 }
 
 .avatar {
+  flex: none;
   display: grid;
   place-items: center;
   width: 24px;

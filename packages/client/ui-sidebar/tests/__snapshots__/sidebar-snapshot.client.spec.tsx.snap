@@ -87,6 +87,14 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
           style="display: contents;"
         />
       </div>
+      <div
+        class="belowArea"
+      >
+        <div
+          data-slot="sidebar.footer.below"
+          style="display: contents;"
+        />
+      </div>
     </div>
   </div>
 </div>
@@ -213,6 +221,14 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
           style="display: contents;"
         />
       </div>
+      <div
+        class="belowArea"
+      >
+        <div
+          data-slot="sidebar.footer.below"
+          style="display: contents;"
+        />
+      </div>
     </div>
   </div>
 </div>
@@ -336,6 +352,14 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
       >
         <div
           data-slot="sidebar.settings"
+          style="display: contents;"
+        />
+      </div>
+      <div
+        class="belowArea"
+      >
+        <div
+          data-slot="sidebar.footer.below"
           style="display: contents;"
         />
       </div>

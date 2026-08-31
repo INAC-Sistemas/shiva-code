@@ -44,6 +44,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's 'sidebar' entry; each action receives only the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
+    /**
+     * The last row of the sidebar foot, BELOW Settings. Declared by this
+     * package's 'sidebar' entry; each occupant receives only the column state.
+     *
+     * Separate from 'sidebar.footer.action' because that seat is one flex ROW
+     * shared by every occupant: a second full-width entry there overflows the
+     * column. This one stacks, so an occupant may claim the full width.
+     */
+    'sidebar.footer.below': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
   }
 }
 
@@ -114,5 +123,6 @@ export type SidebarRootComponentProps =
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
+    | 'sidebar.footer.below'
   >
   & SidebarRootInjected & PropsLocale<'sidebar'>

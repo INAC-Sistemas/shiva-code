@@ -10,6 +10,33 @@ describe('displayName', () => {
     expect(displayName({ name: '  Ana Silva  ' })).toBe('Ana Silva')
   })
 
+  it('reads a name nested under a container, as `{ token, user }` leaves behind', () => {
+    // dsh-login stores the answer MINUS the token, so a service answering
+    // `{ token, user: {…} }` leaves `{ user: {…} }` here.
+    expect(displayName({ user: { name: 'admin', email: 'admin@inacsistemas.com' } })).toBe('admin')
+  })
+
+  it('reads a nested name whatever the container is called', () => {
+    expect(displayName({ data: { name: 'Ana' } })).toBe('Ana')
+    expect(displayName({ profile: { name: 'Ana' } })).toBe('Ana')
+  })
+
+  it('prefers a name at the top level over a nested one', () => {
+    expect(displayName({ name: 'topo', user: { name: 'aninhado' } })).toBe('topo')
+  })
+
+  it('falls back to a nested e-mail', () => {
+    expect(displayName({ user: { email: 'ana@example.com' } })).toBe('ana')
+  })
+
+  it('does not descend past one level', () => {
+    expect(displayName({ a: { b: { name: 'fundo demais' } } })).toBeNull()
+  })
+
+  it('ignores arrays while descending', () => {
+    expect(displayName({ roles: [{ name: 'ADMIN' }] })).toBeNull()
+  })
+
   it('falls back to the e-mail local part, so the badge shows the person not the domain', () => {
     expect(displayName({ email: 'ana.silva@example.com' })).toBe('ana.silva')
   })

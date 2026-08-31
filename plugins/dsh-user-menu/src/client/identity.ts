@@ -15,22 +15,54 @@
 export const UNKNOWN_INITIALS = '?'
 
 /**
+ * Read one non-blank string field off a record.
+ * @param record - the object to read.
+ * @param key - the field name.
+ * @returns the trimmed value, or null when it is absent, blank, or not a string.
+ */
+function field(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  if (typeof value !== 'string' || value.trim() === '') return null
+  return value.trim()
+}
+
+/**
+ * Read a display name out of one record: `name` wins, an e-mail is the
+ * fallback, cut at the `@` so the badge shows the person and not the domain.
+ * @param record - a candidate object.
+ * @returns the name, or null when the record carries neither.
+ */
+function nameIn(record: Record<string, unknown>): string | null {
+  const name = field(record, 'name')
+  if (name !== null) return name
+  const email = field(record, 'email')
+  if (email === null) return null
+  const local = email.split('@')[0] ?? ''
+  return local === '' ? null : local
+}
+
+/**
  * Read a display name out of the session's user value.
  *
- * `name` wins; an e-mail is the fallback, cut at the `@` so the badge shows
- * the person rather than the domain.
+ * dsh-login stores the login answer MINUS the token, so this value is the
+ * response body as the service shaped it. Two shapes are conventional and both
+ * are read: the fields at the top level (`{ token, name, email }` leaves
+ * `{ name, email }`), and nested under a container (`{ token, user: {…} }`
+ * leaves `{ user: {…} }`). The nested pass tries every object-valued property
+ * rather than a hardcoded `user`/`data`/`profile` list, and stops at depth one
+ * — deeper would start matching unrelated records the answer happens to carry.
  * @param user - the session's user value, of unknown shape.
- * @returns the trimmed name, or null when the value carries neither.
+ * @returns the trimmed name, or null when no field carries one.
  */
 export function displayName(user: unknown): string | null {
   if (typeof user !== 'object' || user === null) return null
   const record = user as Record<string, unknown>
-  const name = record['name']
-  if (typeof name === 'string' && name.trim() !== '') return name.trim()
-  const email = record['email']
-  if (typeof email === 'string' && email.trim() !== '') {
-    const local = email.trim().split('@')[0] ?? ''
-    if (local !== '') return local
+  const own = nameIn(record)
+  if (own !== null) return own
+  for (const value of Object.values(record)) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
+    const nested = nameIn(value as Record<string, unknown>)
+    if (nested !== null) return nested
   }
   return null
 }
