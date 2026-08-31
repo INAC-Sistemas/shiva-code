@@ -1,5 +1,5 @@
 /**
- * dsh-login host half: the two routes behind the login gate.
+ * dsh-login host half: the routes behind the login gate.
  *
  * The browser never talks to the login service directly. It posts the typed
  * credentials to this harness, and this plugin forwards them to the configured
@@ -20,19 +20,19 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import z from '@deepseek-ai/schemastery'
 import { buildUpstreamPayload, interpretUpstream, LoginRequestError, parseCredentials } from './auth.ts'
-import { assertSessionTtl, assertTimeout, resolveEndpoint, sessionLifetime } from './config.ts'
+import { assertSessionTtl, assertTimeout, resolveEndpoint, resolveLogoutEndpoint, sessionLifetime } from './config.ts'
 import { isSameOriginRequest } from './fence.ts'
 import { readJsonBody, writeJson } from './http.ts'
-import { AUTHENTICATE_ROUTE, FORM_ROUTE } from './wire.ts'
-import type { AuthenticateResult, LoginError, LoginForm } from './wire.ts'
+import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from './wire.ts'
+import type { AuthenticateResult, LoginError, LoginForm, LogoutResult } from './wire.ts'
 
 export type { CredentialFields, AnswerReading, UpstreamAnswer } from './auth.ts'
 export { buildUpstreamPayload, interpretUpstream, LoginRequestError, parseCredentials, pickToken, withoutPath } from './auth.ts'
-export { assertSessionTtl, assertTimeout, resolveEndpoint, sessionLifetime } from './config.ts'
+export { assertSessionTtl, assertTimeout, resolveEndpoint, resolveLogoutEndpoint, sessionLifetime } from './config.ts'
 export { isSameOriginRequest } from './fence.ts'
-export { AUTHENTICATE_ROUTE, FORM_ROUTE } from './wire.ts'
+export { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from './wire.ts'
 export type {
-  AuthenticatedSession, AuthenticateResult, Credentials, LoginError, LoginErrorCode, LoginForm,
+  AuthenticatedSession, AuthenticateResult, Credentials, LoginError, LoginErrorCode, LoginForm, LogoutResult,
 } from './wire.ts'
 
 /** Loader-visible plugin name; the entry `id` in cordis.patch.yml stays independent. */
@@ -52,6 +52,12 @@ export interface Config {
   endpoint?: string
   /** Environment variable that overrides {@link endpoint} when it is set and non-blank. */
   endpointEnv?: string
+  /**
+   * Full URL that ends a session at the login service, requested verbatim with
+   * the signed-in user's own bearer token. Empty — the default — means the
+   * service has no such route: signing out then clears the browser alone.
+   */
+  logoutEndpoint?: string
   /** JSON field the endpoint expects the identifier in. */
   identifierField?: string
   /** JSON field the endpoint expects the secret in. */
@@ -83,6 +89,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   endpoint: z.string().default('http://localhost:3000/api/auth/login'),
   endpointEnv: z.string().default('DSH_LOGIN_ENDPOINT'),
+  logoutEndpoint: z.string().default(''),
   identifierField: z.string().default('email'),
   passwordField: z.string().default('password'),
   tokenPath: z.string().default('token'),
@@ -225,7 +232,60 @@ function authenticateHandler(
 }
 
 /**
- * Register both routes.
+ * Serve the sign-out, forwarding the browser's own bearer token.
+ *
+ * The token is taken from the incoming `authorization` header rather than
+ * stored here: this plugin keeps no session state, and the browser is the only
+ * place a granted token lives.
+ * @param endpoint - the resolved logout URL, or undefined when the service has none.
+ * @param config - the resolved plugin config.
+ * @returns the route handler.
+ */
+function logoutHandler(
+  endpoint: URL | undefined,
+  config: ResolvedConfig,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  return async (request, response) => {
+    if (!isSameOriginRequest(request)) {
+      writeJson(response, 403, { ok: false, message: 'cross-site request' } satisfies LogoutResult)
+      return
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { ok: false, message: 'method not allowed' } satisfies LogoutResult)
+      return
+    }
+    if (endpoint === undefined) {
+      // Configured without an upstream route: the browser has already signed
+      // itself out, and there is nothing to tell.
+      writeJson(response, 200, { ok: true } satisfies LogoutResult)
+      return
+    }
+    const bearer = request.headers.authorization
+    if (bearer === undefined) {
+      writeJson(response, 400, { ok: false, message: 'no bearer token' } satisfies LogoutResult)
+      return
+    }
+    let upstream: Response
+    try {
+      upstream = await fetch(endpoint, {
+        method: 'POST',
+        signal: AbortSignal.timeout(config.timeoutMs),
+        headers: { ...config.headers, authorization: bearer, accept: 'application/json' },
+      })
+    } catch {
+      writeJson(response, 502, { ok: false, message: 'the login service could not be reached' } satisfies LogoutResult)
+      return
+    }
+    writeJson(
+      response,
+      upstream.ok ? 200 : 502,
+      upstream.ok ? { ok: true } : { ok: false, message: `the login service answered ${upstream.status}` },
+    )
+  }
+}
+
+/**
+ * Register the routes.
  *
  * The endpoint is resolved and validated here so a gate pointed at a malformed
  * URL fails at load, with the operator watching, rather than locking the first
@@ -237,6 +297,7 @@ export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
   const { url: endpoint, from } = resolveEndpoint(process.env, resolved)
+  const logoutEndpoint = resolveLogoutEndpoint(resolved.logoutEndpoint)
   assertTimeout(resolved.timeoutMs)
   assertSessionTtl(resolved.sessionTtlMs)
   ctx.logger.info(
@@ -255,5 +316,13 @@ export function apply(ctx: Context, config: Config): void {
       handler: authenticateHandler(endpoint, resolved),
     }),
     `dsh-login: ${AUTHENTICATE_ROUTE} route`,
+  )
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: LOGOUT_ROUTE,
+      handler: logoutHandler(logoutEndpoint, resolved),
+    }),
+    `dsh-login: ${LOGOUT_ROUTE} route`,
   )
 }

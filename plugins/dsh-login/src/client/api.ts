@@ -1,10 +1,10 @@
 /**
- * The gate's two calls into the host half. Both are same-origin fetches
+ * The browser's calls into the host half. All of them are same-origin fetches
  * against this plugin's own routes; the login service is the host's business.
  * @module dsh-login/client/api
  */
-import { AUTHENTICATE_ROUTE, FORM_ROUTE } from '../wire.ts'
-import type { AuthenticateResult, Credentials, LoginForm } from '../wire.ts'
+import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from '../wire.ts'
+import type { AuthenticateResult, Credentials, LoginForm, LogoutResult } from '../wire.ts'
 
 /**
  * Fetch the form descriptor.
@@ -46,4 +46,30 @@ export async function submitCredentials(credentials: Credentials, signal: AbortS
     return { ok: false, error: { code: 'upstream', message: `Unexpected answer from the app (${response.status}).` } }
   }
   return parsed
+}
+
+/**
+ * Tell the login service the session is over, forwarding the browser's own
+ * bearer token through the host.
+ *
+ * Never throws: the browser has already signed itself out by the time this
+ * runs, so a service that refuses or cannot be reached changes nothing the
+ * user can act on — the outcome is a diagnostic.
+ * @param token - the token being retired.
+ * @returns whether the login service acknowledged it.
+ */
+export async function submitLogout(token: string): Promise<LogoutResult> {
+  try {
+    const response = await fetch(LOGOUT_ROUTE, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+    })
+    const parsed = await response.json().catch(() => undefined) as LogoutResult | undefined
+    if (parsed === undefined || typeof parsed.ok !== 'boolean') {
+      return { ok: false, message: `Unexpected answer from the app (${response.status}).` }
+    }
+    return parsed
+  } catch {
+    return { ok: false, message: 'The app could not be reached.' }
+  }
 }

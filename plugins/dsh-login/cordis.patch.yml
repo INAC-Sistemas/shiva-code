@@ -41,6 +41,7 @@
       name: 'dsh-login'
       config:
         endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
+        logoutEndpoint: !!js "new URL('/api/auth/logout', process.env.VPS_URL).href"
         title: Entrar
         subtitle: Faça login para usar o Shiva Code.
         identifierLabel: E-mail

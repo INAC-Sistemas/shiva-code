@@ -1,0 +1,17 @@
+# dsh-user-menu bundle patch
+#
+# The `dsh.bundle.patch` layer of the package: installing it into a profile —
+#
+#   dsh plugin --profile web add link:/home/rai/shiva-code/plugins/dsh-user-menu
+#
+# — appends `dsh-user-menu` to that profile's `dsh.profile.bundles`, and the
+# boot merges this single `insert` into the loader entry list.
+#
+# The entry carries no config: the badge is entirely browser-side and reads the
+# signed-in user from dsh-login's `ctx.loginSession` service, so there is
+# nothing here for a deployment to point somewhere else. The plugin does
+# require dsh-login to be installed in the same profile — without it the
+# `loginSession` service never appears and the client half stays unmounted.
+- insert:
+    - id: user-menu
+      name: "dsh-user-menu"

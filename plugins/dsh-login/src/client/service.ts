@@ -13,11 +13,13 @@
  * session — the published contract has no way to.
  * @module dsh-login/client/service
  */
+import { submitLogout } from './api.ts'
 import { STORAGE_KEY } from './session.ts'
 import type { StoredSession } from './session.ts'
 import type { SessionStore } from './store.ts'
 import type { ClientContext } from './context-types.ts'
 import type { LoginSessionContract } from './contract.ts'
+import type { LogoutResult } from '../wire.ts'
 
 /** The service name other plugins inject. */
 export const SERVICE_NAME = 'loginSession'
@@ -55,9 +57,21 @@ export class LoginSession implements LoginSessionContract {
     return this.store.getSnapshot()?.token ?? null
   }
 
-  /** End the session here, in storage, and in every other tab. */
-  signOut(): void {
+  /**
+   * End the session here, in storage, in every other tab, and at the login
+   * service.
+   *
+   * The local half is synchronous and unconditional, and it runs first: a
+   * login service that refuses or cannot be reached must never be able to trap
+   * someone inside the app. The returned promise reports only whether the
+   * service was told, and never rejects.
+   * @returns whether the login service acknowledged the sign-out.
+   */
+  signOut(): Promise<LogoutResult> {
+    const token = this.store.getSnapshot()?.token
     this.store.signOut()
+    if (token === undefined) return Promise.resolve({ ok: true })
+    return submitLogout(token)
   }
 }
 

@@ -49,6 +49,29 @@ export function resolveEndpoint(env: EnvLike, source: EndpointSource): { url: UR
 }
 
 /**
+ * Resolve the optional sign-out endpoint. Empty means the login service has no
+ * such route and signing out clears the browser alone; anything else is
+ * validated now, so a typo fails at load rather than on the first sign-out.
+ * @param logoutEndpoint - the configured URL, or the empty string.
+ * @returns the parsed URL, or undefined when none is configured.
+ * @throws Error when a non-empty value is not an absolute http(s) URL.
+ */
+export function resolveLogoutEndpoint(logoutEndpoint: string): URL | undefined {
+  const value = logoutEndpoint.trim()
+  if (value === '') return undefined
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`dsh-login: config.logoutEndpoint is not an absolute URL: ${value}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`dsh-login: config.logoutEndpoint must be http(s), got ${url.protocol}`)
+  }
+  return url
+}
+
+/**
  * Reject a non-positive deadline: a zero or negative timeout aborts every
  * request before it is sent, which reads as "the server is down" forever.
  * @param timeoutMs - the configured deadline.

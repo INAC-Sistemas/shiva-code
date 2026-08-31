@@ -1,0 +1,122 @@
+/* The badge rides the frame-wide overlay layer, pinned to the app's top-right.
+   The layer is `inset: 0` over the whole frame and passes pointer events only
+   to its entries, so the anchor must claim no more area than the button
+   itself — anything larger would swallow clicks meant for the app underneath.
+   Colours are the app's own tokens, so it follows the active theme. */
+
+.anchor {
+  position: absolute;
+  top: 14px;
+  /* Clear of the layout toggles the shell parks in the corner. */
+  right: 84px;
+  width: 28px;
+  height: 28px;
+}
+
+.trigger {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--dsw-font-family);
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[data-state='open'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-static-white, #fff);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  /* The letters are the identity here; never let them wrap or be selected
+     when the row is dragged. */
+  user-select: none;
+  white-space: nowrap;
+}
+
+.content {
+  min-width: 200px;
+  max-width: 280px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--dsw-shadow-lv2);
+  font-family: var(--dsw-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  /* Above the sidebar and the overlay layer the login gate uses. */
+  z-index: 10001;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.headerName {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--dsw-alias-border-l2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+/* Radix marks the keyboard- and pointer-highlighted item the same way, so one
+   rule covers both and the menu never shows two active rows. */
+.item[data-highlighted] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.item[data-disabled] {
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}

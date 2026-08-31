@@ -15,6 +15,24 @@ export const FORM_ROUTE = '/login/api/form'
 /** `POST` route that forwards one credential pair to the configured endpoint. */
 export const AUTHENTICATE_ROUTE = '/login/api/authenticate'
 
+/** `POST` route that ends the session at the login service. */
+export const LOGOUT_ROUTE = '/login/api/logout'
+
+/**
+ * The logout route's answer.
+ *
+ * The browser's own session is already gone before this arrives — signing out
+ * locally is unconditional, because a login service that refuses to end a
+ * session must never be able to trap someone inside the app. `ok: false` only
+ * says the service was not told.
+ */
+export interface LogoutResult {
+  /** Whether the login service acknowledged the sign-out. */
+  ok: boolean
+  /** Why it did not, for a diagnostic; never shown as a blocking error. */
+  message?: string
+}
+
 /** Everything the browser needs to draw the form; the host owns every value. */
 export interface LoginForm {
   /** Heading above the fields. */

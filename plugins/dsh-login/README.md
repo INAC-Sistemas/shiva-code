@@ -34,11 +34,12 @@ That keeps the endpoint URL — and any static header it needs — on the host, 
 
 `$DSH_LOGIN_ENDPOINT` wins whenever it is set and non-blank; otherwise `config.endpoint` applies. Rename the variable with `config.endpointEnv`. Both forms are validated at load — a URL that is malformed or not http(s) fails the boot, with the operator watching, rather than locking the first user out of the app.
 
-`config.endpoint` itself is not a literal in [cordis.patch.yml](cordis.patch.yml): it reads `$VPS_URL`, the base URL of the VPS shared by every plugin backed by it, and appends this plugin's own path.
+`config.endpoint` itself is not a literal in [cordis.patch.yml](cordis.patch.yml): it reads `$VPS_URL`, the base URL of the VPS shared by every plugin backed by it, and appends this plugin's own path. `config.logoutEndpoint` is composed the same way.
 
 ```yaml
 config:
   endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
+  logoutEndpoint: !!js "new URL('/api/auth/logout', process.env.VPS_URL).href"
 ```
 
 ```sh
@@ -102,7 +103,15 @@ The face is mirrored structurally, the same way this plugin mirrors `slots`: a p
 | `subscribe(listener)` | Sign-in, sign-out, expiry, and another tab. Returns the disposer. |
 | `getSnapshot()` | The live `StoredSession`, or `null`. Stable reference between changes. |
 | `token()` | The token alone, or `null`. |
-| `signOut()` | Ends the session here, in storage, and in every other tab. |
+| `signOut()` | Ends the session here, in storage, in every other tab, and at the login service. |
+
+### Signing out
+
+`signOut()` does two things in a deliberate order. The local half — clearing the store and the `localStorage` row — is synchronous and runs **first**, unconditionally. Only then does it `POST` the retired token to `/login/api/logout`, which forwards it to `config.logoutEndpoint` with the user's own bearer.
+
+That order is the point: a login service that refuses the sign-out, or that cannot be reached, must never be able to trap someone inside the app. The returned promise reports only whether the service was told, and never rejects — a caller with nothing to show for it may ignore it.
+
+`config.logoutEndpoint` is empty by default, meaning the service has no such route and signing out clears the browser alone. A non-empty value is validated at load, like the login endpoint.
 
 **Granting a session is not on the contract.** That authority stays with the gate, which holds the store object itself — a consumer plugin can end a session but cannot forge one.
 
