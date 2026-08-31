@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { chmod, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { delimiter, dirname, join } from 'node:path'
+import { resolveEnvironmentPath } from './harness-runtime'
 
 const PROFILE = 'web'
 const OPERATION_TIMEOUT_MS = 15 * 60 * 1000
@@ -146,11 +147,10 @@ export function buildProfilePluginCommandEnvironment(
   const result = { ...environment }
   delete result.ELECTRON_RUN_AS_NODE
 
-  const currentPath =
-    (process.platform === 'win32' ? result.Path : result.PATH) ??
-    result.PATH ??
-    result.Path ??
-    ''
+  // The spread above keeps only the casing the OS block actually stores —
+  // even for `process.env`, whose case-insensitivity does not survive a
+  // copy — so the PATH read must be case-insensitive itself (issue #232).
+  const currentPath = resolveEnvironmentPath(result)
   const parts = currentPath.split(delimiter).filter(Boolean)
   const additions = [shimDirectory, dirname(nodeExecutablePath)].filter(
     (directory) => !parts.includes(directory)

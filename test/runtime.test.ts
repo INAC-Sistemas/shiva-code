@@ -14,6 +14,7 @@ import {
   extractSlotConflictName,
   formatExitCode,
   isHarnessStartupProbeHealthy,
+  resolveEnvironmentPath,
   resolveShellEnvironment,
   updateReadyStability
 } from '../src/main/runtime/harness-runtime'
@@ -133,6 +134,25 @@ describe('Harness launch contract', () => {
     }
   })
 
+  it('finds the Windows PATH when the environment block stores it lowercase', () => {
+    // Windows environment variable names are case-insensitive and the captured
+    // block is not normalised, so a machine whose registry PATH value name is
+    // lowercase hands `resolveShellEnvironment()` the key `path`. An exact-case
+    // read misses it and the Harness launches with no PATH at all — every
+    // PATH-resolved tool call fails with ENOENT (issue #232).
+    const userPath = 'C:\\Windows\\System32;C:\\Users\\tester\\bin'
+    const options = buildHarnessSpawnOptions('C:\\launch-root', 'C:\\harness', 'win32', {
+      path: userPath
+    })
+    // Every key spelling PATH must carry the value: whichever of them survives
+    // Node's win32 case-dedupe, the child receives the user's PATH.
+    const pathEntries = Object.entries(options.env ?? {}).filter(([name]) =>
+      /^path$/iu.test(name)
+    )
+    expect(pathEntries.length).toBeGreaterThan(0)
+    for (const [, value] of pathEntries) expect(value).toBe(userPath)
+  })
+
   it('passes the internal-loader flag directly to bundled Node.js', () => {
     expect(
       buildNodeArguments(
@@ -247,8 +267,8 @@ describe('shell environment resolution', () => {
     () => {
       const env = resolveShellEnvironment()
       expect(env).toBeDefined()
-      // Windows may preserve the conventional mixed-case key.
-      expect(env.PATH ?? env.Path).toBeTruthy()
+      // Windows preserves whatever casing the environment block stores.
+      expect(resolveEnvironmentPath(env)).toBeTruthy()
     },
     20_000
   )
@@ -262,7 +282,7 @@ describe('shell environment resolution', () => {
 
   it('produces a PATH that includes platform-standard system directories', () => {
     const env = resolveShellEnvironment()
-    const path = env.PATH ?? env.Path ?? ''
+    const path = resolveEnvironmentPath(env)
     if (process.platform === 'win32') {
       expect(path).toMatch(/[A-Za-z]:\\/)
     } else {
