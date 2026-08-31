@@ -53,6 +53,7 @@ examples/    Runnable cordis.yml leaves over packages/examples bundles (see exam
 docs/        architecture, generated catalogs, postmortems, cookbook (see docs/AGENTS.md)
 scripts/     repo gates and generators
 website/     VitePress projection of selected bilingual docs/ sources
+plugin-manager/  Next.js plugin manager; standalone npm project, not a workspace member (see plugin-manager/README.md)
 ```
 
 Package groups: [packages/README.md](packages/README.md).
