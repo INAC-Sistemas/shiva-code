@@ -21,7 +21,15 @@ export type SessionPayload = {
   role: Role;
 };
 
-type TokenClaims = SessionPayload & { typ: TokenType };
+type RawClaims = SessionPayload & { typ: TokenType };
+
+/** O que um token carrega, além do payload de sessão. */
+export type TokenClaims = {
+  session: SessionPayload;
+  /** Identificador único do token; é ele que o logout coloca na lista de bloqueio. */
+  jti: string | undefined;
+  expiresAt: Date;
+};
 
 function getSecret() {
   const secret = process.env.SESSION_SECRET;
@@ -41,33 +49,49 @@ export async function encodeToken(
   return new SignJWT({ ...payload, typ: type })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
+    // Sem um `jti` o token não teria como ser revogado: é ele que identifica
+    // esta emissão específica na lista de bloqueio do logout.
+    .setJti(crypto.randomUUID())
     .setExpirationTime(`${maxAgeSeconds}s`)
     .sign(getSecret());
+}
+
+/** Valida assinatura, expiração e tipo, e devolve tudo o que o token carrega. */
+export async function decodeTokenClaims(
+  token: string | undefined,
+  expectedType: TokenType,
+): Promise<TokenClaims | null> {
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify<RawClaims>(token, getSecret());
+
+    if (payload.typ !== expectedType || payload.exp === undefined) {
+      return null;
+    }
+
+    return {
+      session: {
+        userId: payload.userId,
+        name: payload.name,
+        email: payload.email,
+        role: payload.role,
+      },
+      jti: payload.jti,
+      // `exp` é em segundos; Date trabalha em milissegundos.
+      expiresAt: new Date(payload.exp * 1000),
+    };
+  } catch {
+    // token inválido, expirado ou assinado com outro segredo
+    return null;
+  }
 }
 
 export async function decodeToken(
   token: string | undefined,
   expectedType: TokenType,
 ): Promise<SessionPayload | null> {
-  if (!token) return null;
-
-  try {
-    const { payload } = await jwtVerify<TokenClaims>(token, getSecret());
-
-    if (payload.typ !== expectedType) {
-      return null;
-    }
-
-    return {
-      userId: payload.userId,
-      name: payload.name,
-      email: payload.email,
-      role: payload.role,
-    };
-  } catch {
-    // token inválido, expirado ou assinado com outro segredo
-    return null;
-  }
+  return (await decodeTokenClaims(token, expectedType))?.session ?? null;
 }
 
 export function encodeSession(payload: SessionPayload) {
@@ -84,4 +108,8 @@ export function encodeApiToken(payload: SessionPayload) {
 
 export function decodeApiToken(token: string | undefined) {
   return decodeToken(token, "api");
+}
+
+export function decodeApiTokenClaims(token: string | undefined) {
+  return decodeTokenClaims(token, "api");
 }

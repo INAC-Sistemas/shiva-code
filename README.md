@@ -76,6 +76,7 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | ------ | ----------------- | ------ | ------------------------------------------------ |
 | POST   | `/api/auth/login` | —      | Recebe `{email, password}`, devolve o token       |
 | GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
+| POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
 
@@ -105,6 +106,28 @@ if (!auth.ok) return auth.response;
 Token de API vale 24 horas; o cookie de sessão web vale 7 dias. Os dois são JWT
 assinados com o mesmo `SESSION_SECRET`, mas carregam uma claim `typ`
 (`"api"` / `"session"`) que impede usar um no lugar do outro.
+
+### Logout da API
+
+```bash
+curl -X POST http://localhost:3000/api/auth/logout -H "Authorization: Bearer $TOKEN"
+# {"revoked":true}
+```
+
+Como o token é um JWT, nada é guardado na emissão — devolver `200` e não fazer
+nada deixaria o token valendo até expirar. Então o logout registra o `jti` do
+token na tabela `revoked_api_tokens`
+([src/lib/token-revocation.ts](src/lib/token-revocation.ts)), consultada pelo
+`authenticateRequest` a cada requisição; dali em diante as rotas respondem
+`401 Token revogado`. Repetir o logout com o mesmo token também dá `401` — ele
+já não vale mais.
+
+A lista só precisa guardar cada token até a expiração dele, então o próprio
+logout apaga as linhas já vencidas. Revogação é por token, não por usuário: os
+outros tokens da mesma conta continuam valendo.
+
+O logout da API não mexe no cookie do navegador — quem faz isso é o botão
+**Sair** do dashboard.
 
 ## Plugins
 

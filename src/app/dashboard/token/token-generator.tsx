@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Check, Copy, KeyRound } from "lucide-react";
 import { generateApiToken } from "@/app/actions/api-token";
 import { type ApiTokenState, initialApiTokenState } from "@/lib/api-token";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
 
 const dateFormat = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -28,8 +31,13 @@ function CopyButton({ value }: { value: string }) {
     <button
       type="button"
       onClick={copy}
-      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
     >
+      {copied ? (
+        <Check aria-hidden className="size-3.5 text-emerald-500" />
+      ) : (
+        <Copy aria-hidden className="size-3.5" />
+      )}
       {copied ? "Copiado" : "Copiar"}
     </button>
   );
@@ -53,20 +61,25 @@ export function TokenGenerator() {
       : new Date(state.issuedAt + state.expiresIn * 1000);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-      <button
-        type="button"
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+      <ShimmerButton
         onClick={generate}
         disabled={pending}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        borderRadius="12px"
+        className="dark:[--bg:rgb(250_250_250)] dark:text-zinc-900"
       >
-        {pending ? "Gerando..." : state.token ? "Gerar novo token" : "Gerar token"}
-      </button>
+        <KeyRound aria-hidden className="size-4" />
+        {pending
+          ? "Gerando..."
+          : state.token
+            ? "Gerar novo token"
+            : "Gerar token"}
+      </ShimmerButton>
 
       {state.error ? (
         <p
           role="alert"
-          className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
+          className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
         >
           {state.error}
         </p>
@@ -81,7 +94,7 @@ export function TokenGenerator() {
             <CopyButton value={state.token} />
           </div>
 
-          <code className="mt-2 block max-h-32 overflow-auto rounded-md bg-zinc-100 px-3 py-2 font-mono text-xs break-all text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+          <code className="mt-2 block max-h-32 overflow-auto rounded-lg bg-zinc-100 px-3 py-2 font-mono text-xs break-all text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
             {state.token}
           </code>
 
@@ -95,11 +108,13 @@ export function TokenGenerator() {
           <p className="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Como usar
           </p>
-          <pre className="mt-2 overflow-x-auto rounded-md bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+          <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
             {'curl http://localhost:3000/api/users \\\n  -H "Authorization: Bearer $TOKEN"'}
           </pre>
         </div>
       ) : null}
+
+      <BorderBeam size={80} duration={9} />
     </div>
   );
 }

@@ -1,9 +1,15 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { type SessionPayload, decodeApiToken } from "@/lib/session";
+import { type SessionPayload, decodeApiTokenClaims } from "@/lib/session";
+import { isApiTokenRevoked } from "@/lib/token-revocation";
 
 export type ApiAuthResult =
-  | { ok: true; session: SessionPayload }
+  | {
+      ok: true;
+      session: SessionPayload;
+      /** Identidade do token em si — o que o logout precisa para revogá-lo. */
+      token: { jti: string; expiresAt: Date };
+    }
   | { ok: false; response: NextResponse };
 
 function unauthorized(message: string) {
@@ -43,13 +49,30 @@ export async function authenticateRequest(
     };
   }
 
-  const session = await decodeApiToken(token);
+  const claims = await decodeApiTokenClaims(token);
 
-  if (!session) {
+  if (!claims) {
     return { ok: false, response: unauthorized("Token inválido ou expirado.") };
   }
 
-  return { ok: true, session };
+  if (!claims.jti) {
+    // Token emitido antes da revogação existir: sem `jti` não há como fazer
+    // logout dele, então não é aceito.
+    return {
+      ok: false,
+      response: unauthorized("Token em formato antigo. Gere um novo."),
+    };
+  }
+
+  if (await isApiTokenRevoked(claims.jti)) {
+    return { ok: false, response: unauthorized("Token revogado.") };
+  }
+
+  return {
+    ok: true,
+    session: claims.session,
+    token: { jti: claims.jti, expiresAt: claims.expiresAt },
+  };
 }
 
 /** Barra quem não é admin. Use depois de `authenticateRequest`. */

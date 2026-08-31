@@ -1,44 +1,36 @@
-import type { ReactNode } from "react";
 import { requireSession } from "@/lib/auth";
-import { logout } from "@/app/actions/auth";
-import { RoleBadge } from "@/app/dashboard/role-badge";
-import { DashboardNav } from "@/app/dashboard/nav";
+import { DashboardSidebar } from "@/app/dashboard/sidebar";
+import { DotPattern } from "@/components/magicui/dot-pattern";
 
 export default async function DashboardLayout({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: LayoutProps<"/dashboard">) {
   const session = await requireSession();
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <span className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Plugin Manager
-          </span>
+    <div className="relative min-h-screen bg-zinc-50 dark:bg-black">
+      <DotPattern
+        className="[mask-image:radial-gradient(60vw_circle_at_20%_0%,white,transparent)] opacity-70"
+        cr={0.8}
+        width={22}
+        height={22}
+      />
 
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
-              {session.name}
-            </span>
-            <RoleBadge role={session.role} />
-            <form action={logout}>
-              <button
-                type="submit"
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              >
-                Sair
-              </button>
-            </form>
-          </div>
-        </div>
+      <DashboardSidebar
+        user={{
+          name: session.name,
+          email: session.email,
+          role: session.role,
+        }}
+      />
 
-        <DashboardNav />
-      </header>
-
-      <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
+      {/* Conteúdo à direita da aside — o padding só existe a partir de lg,
+          onde a coluna fixa de 18rem ocupa a lateral. */}
+      <div className="relative lg:pl-72">
+        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8 sm:py-10">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

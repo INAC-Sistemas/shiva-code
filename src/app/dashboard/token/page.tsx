@@ -9,11 +9,11 @@ export default async function ApiTokenPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Token da API
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           Gera um token Bearer para <strong>{session.email}</strong>, com o
           mesmo papel da sua conta e validade de {HOURS} horas.
         </p>

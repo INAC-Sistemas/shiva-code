@@ -12,6 +12,21 @@ enum Role {
   GUEST
 }
 
+/// Lista de bloqueio dos tokens de API revogados pelo logout.
+///
+/// O token é um JWT: o servidor não guarda os emitidos, então a única forma de
+/// invalidar um antes da expiração é registrar aqui o `jti` dele. Linhas com
+/// `expiresAt` no passado são descartáveis — o próprio JWT já expirou.
+model RevokedApiToken {
+  jti       String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("revoked_api_tokens")
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
