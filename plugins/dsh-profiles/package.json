@@ -1,0 +1,37 @@
+{
+  "name": "dsh-profiles",
+  "version": "0.1.0",
+  "description": "Multiuser profiles (KISS): a gate screen listing user profiles, each with its own preset, skills and visible better-sidebar plugins; logout returns to the profile picker",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.12.0",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "lib"
+  ]
+}
