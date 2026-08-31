@@ -1,15 +1,38 @@
 ﻿// dsh-prototype host half: serves the workspace `prototype/` folder over a
 // same-origin route (so relative links, css, js and localStorage all work),
-// injects the automation shim into every served HTML page, and runs the
-// single-slot command queue agents use to drive the live browser view.
+// injects the automation shim into every served HTML page, and connects the tab
+// to the command queue agents use to drive the live browser view.
+//
+// What is local stays local: the file server, the `prototype/` CRUD, the
+// same-origin iframe, the screen capture and `open` in the editor all need the
+// user's own machine. The queue, the console ring, the stored screenshots and
+// the shim source live in the plugin library on the VPS — configure
+// `config.endpoint` and this plugin becomes their proxy, so the API the agent
+// and the tab call does not move.
 
 import { readFile, writeFile, readdir, mkdir, rm, rename, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, resolve, relative, dirname, sep, basename, extname } from 'node:path'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { resolveLoginAuthorization } from 'dsh-login/vps-auth'
 
 export const inject = ['webServer', 'sessions']
+
+/**
+ * Plugin config.
+ *
+ * `endpoint` decides where the queue runs, once, at load — there is no runtime
+ * fallback between the two. Configured: every automation call is proxied to the
+ * plugin library, authenticated as whoever signed in through dsh-login.
+ * Absent: the queue stays in this process, which is the offline mode the plugin
+ * shipped with — one client, nothing durable, gone on restart.
+ * @typedef {object} Config
+ * @property {string} [endpoint] Base URL of the library's prototype plugin,
+ *   e.g. `https://vps/api/plugins/prototype`. Sub-paths are appended to it.
+ * @property {number} [timeoutMs] Deadline for a library request other than the
+ *   `wait` long-poll, which gets its own budget on top of the awaited command.
+ */
 
 /** The folder this plugin owns, fixed by convention so agents can rely on it. */
 export const PROTOTYPE_FOLDER = 'prototype'
@@ -139,12 +162,21 @@ async function isDir(p) {
 // â”€â”€ automation shim â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Injected into every served HTML page. Bridges agent commands (relayed by
 // the plugin tab over postMessage) into the live page: clicks, fills, reads,
-// eval, waits â€” and captures console error/warn plus runtime errors.
+// eval, waits - and captures console error/warn plus runtime errors.
+//
+// The source of record is the plugin library (`plugins/prototype/shim.ts`), so
+// a fix to the browser-side automation ships by deploying the VPS rather than
+// by reinstalling this plugin on every machine. The copy below is the frozen
+// fallback served when no endpoint is configured or the library is unreachable;
+// it is what this plugin can still guarantee offline.
 
-const SHIM_JS = [
+/** Version of the frozen copy below. The library's copy carries its own. */
+const BUNDLED_SHIM_VERSION = '1'
+
+const BUNDLED_SHIM_JS = [
   '(function(){',
   "if (window.__DSH_PROTOTYPE_SHIM__) return;",
-  "window.__DSH_PROTOTYPE_SHIM__ = true;",
+  `window.__DSH_PROTOTYPE_SHIM__ = ${JSON.stringify(BUNDLED_SHIM_VERSION)};`,
   "var buffer = [];",
   "var MAX = 200;",
   "function push(level, text) {",
@@ -226,32 +258,48 @@ const SHIM_JS = [
   "})();",
 ].join('\n')
 
-/** Inject the shim tag before </body> (or append when the tag is absent). */
-function injectShim(html) {
-  const tag = '<script src="/prototype/shim.js"></script>'
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${tag}</body>`)
-  return html + tag
+// -- automation backend ------------------------------------------------------
+// One seam, two implementations, chosen once at load. Both answer the same
+// `{code, body}` the local API returns, so the route handler dispatches to
+// either without knowing which is mounted.
+
+/** Methods the tab and the agent may call. Anything else is a 404 at the route. */
+const AUTOMATION_METHODS = new Set([
+  'submit', 'pending', 'result', 'wait', 'results', 'console', 'console_push',
+])
+
+/**
+ * Reject a malformed endpoint at load rather than on the first command.
+ * @param {string} endpoint - the configured base URL.
+ * @returns {URL} the parsed base.
+ * @throws {Error} when the value is not an absolute http(s) URL.
+ */
+function resolveEndpoint(endpoint) {
+  let url
+  try {
+    url = new URL(endpoint)
+  } catch {
+    throw new Error(`dsh-prototype: endpoint is not an absolute URL: ${endpoint}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`dsh-prototype: endpoint must be http(s), got ${url.protocol}`)
+  }
+  // A trailing slash makes `new URL('automation/submit', base)` keep the base
+  // path instead of replacing its last segment.
+  if (!url.pathname.endsWith('/')) url.pathname += '/'
+  return url
 }
 
-// â”€â”€ plugin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export function apply(ctx) {
-  const webServer = ctx.get('webServer')
-  if (!webServer || typeof webServer.register !== 'function') {
-    log('webServer service unavailable â€” API not registered')
-    return
-  }
-
-  // Single-slot automation state. One command in flight; results keyed by id
-  // in a small ring so late readers still find them.
+/**
+ * The in-process queue: one command in flight, results in a small ring, console
+ * in another. This is the whole backend when no endpoint is configured.
+ * @returns {{call: (method: string, payload: object, scope: object) => Promise<{code: number, body: object}>}}
+ */
+function createLocalQueue() {
   let pending = null // { id, cmd, createdAt, delivered }
   const results = new Map() // id -> { ok, data?, error?, at }
   const resultsOrder = []
   const consoleRing = []
-
-  // token -> workspace, filled by every API request (the tab polls the queue,
-  // so a live tab re-registers its workspace continuously).
-  const scopes = new Map()
 
   function remember(id, entry) {
     results.set(id, entry)
@@ -265,6 +313,229 @@ export function apply(ctx) {
       pending = null
     }
   }
+
+  return {
+    async call(method, payload, scope) {
+      switch (method) {
+        case 'submit': {
+          expirePending(Date.now())
+          if (pending) return { code: 409, body: { ok: false, error: 'a command is already in flight' } }
+          const cmd = payload?.cmd
+          if (!cmd || typeof cmd.op !== 'string') return { code: 400, body: { ok: false, error: 'cmd.op required' } }
+          const id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+          pending = { id, cmd, createdAt: Date.now(), delivered: false }
+          return { code: 200, body: { ok: true, id } }
+        }
+        case 'pending': {
+          expirePending(Date.now())
+          if (pending && !pending.delivered) {
+            pending.delivered = true
+            return { code: 200, body: { ok: true, cmd: { id: pending.id, ...pending.cmd } } }
+          }
+          return { code: 200, body: { ok: true, cmd: null } }
+        }
+        case 'result': {
+          const id = String(payload.id ?? '')
+          if (pending && pending.id === id) pending = null
+          const { data } = await cacheShot(scope.root, payload)
+          remember(id, { ok: !!payload.ok, data, error: payload.error ?? null, at: new Date().toISOString() })
+          return { code: 200, body: { ok: true } }
+        }
+        case 'wait': {
+          const id = String(payload.id ?? '')
+          const deadline = Date.now() + Math.min(Number(payload.timeoutMs) || WAIT_MAX_MS, WAIT_MAX_MS)
+          while (Date.now() < deadline) {
+            if (results.has(id)) return { code: 200, body: { ok: true, result: results.get(id) } }
+            await new Promise((r) => setTimeout(r, 120))
+          }
+          return { code: 200, body: { ok: false, error: 'timeout waiting for command result' } }
+        }
+        case 'results':
+          return { code: 200, body: { ok: true, results: resultsOrder.map((id) => ({ id, ...results.get(id) })) } }
+        case 'console':
+          return { code: 200, body: { ok: true, entries: consoleRing.slice(-200) } }
+        case 'console_push': {
+          for (const entry of Array.isArray(payload.entries) ? payload.entries : []) {
+            consoleRing.push({ level: String(entry.level ?? 'log'), text: String(entry.text ?? ''), time: String(entry.time ?? new Date().toISOString()) })
+          }
+          while (consoleRing.length > 200) consoleRing.shift()
+          return { code: 200, body: { ok: true } }
+        }
+        default:
+          return { code: 404, body: { ok: false, error: `unknown method "automation/${method}"` } }
+      }
+    },
+  }
+}
+
+/** What the caller is told when there is no session to authenticate with. */
+const NO_SESSION_TEXT = {
+  'absent': 'No one is signed in, so there is no credential for the plugin library. Sign in in the app and try again.',
+  'expired': 'The signed-in session expired. Sign in again and try again.',
+  'no-store': 'This harness mounts no credential store, so a sign-in has nowhere to be recorded. Mount dsh-credentials-local.',
+  'malformed': 'The stored session record could not be read. Sign out and in again.',
+}
+
+/**
+ * The library-backed queue: every call is proxied to the VPS as the signed-in
+ * user, and the workspace travels as its opaque token so no local path leaves
+ * the machine.
+ *
+ * A screenshot is written to `prototype/.shots/` on the way through and the
+ * relative path rides along in `data.saved`, because the agent reads the PNG as
+ * a file. The durable copy is the library's; the local one is a cache.
+ * @param {import('@deepseek-ai/cordis').Context} ctx - host context, for credentials.
+ * @param {URL} base - validated endpoint base.
+ * @param {number} timeoutMs - deadline for a request other than `wait`.
+ * @returns {{call: (method: string, payload: object, scope: object) => Promise<{code: number, body: object}>}}
+ */
+function createRemoteQueue(ctx, base, timeoutMs) {
+  return {
+    async call(method, payload, scope) {
+      if (!AUTOMATION_METHODS.has(method)) {
+        return { code: 404, body: { ok: false, error: `unknown method "automation/${method}"` } }
+      }
+      const authorization = await resolveLoginAuthorization(ctx.get('credentials'), Date.now())
+      if (!authorization.ok) {
+        return { code: 401, body: { ok: false, error: NO_SESSION_TEXT[authorization.reason] } }
+      }
+      const body = { ...payload, workspace: scope.token }
+      if (method === 'result') {
+        // The image goes up so the library can store it; `data` already names
+        // the local cache copy the agent reads.
+        const { data, dataUrl } = await cacheShot(scope.root, payload)
+        body.data = dataUrl ? { ...data, dataUrl } : data
+      }
+      // The long-poll is bounded by the library, so its deadline is that budget
+      // plus one ordinary timeout of slack for the round trip.
+      const budget = method === 'wait' ? WAIT_MAX_MS + timeoutMs : timeoutMs
+      let response
+      try {
+        response = await fetch(new URL(`automation/${method}`, base), {
+          method: 'POST',
+          signal: AbortSignal.timeout(budget),
+          headers: {
+            'content-type': 'application/json',
+            authorization: authorization.authorization,
+            accept: 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+      } catch (e) {
+        return { code: 502, body: { ok: false, error: `plugin library unreachable: ${String((e && e.message) || e)}` } }
+      }
+      let parsed
+      try {
+        parsed = await response.json()
+      } catch {
+        return { code: 502, body: { ok: false, error: `plugin library answered ${response.status} with a non-JSON body` } }
+      }
+      return { code: response.status, body: parsed }
+    },
+  }
+}
+
+/**
+ * Write a screenshot result to `prototype/.shots/` and name it in the payload.
+ *
+ * The agent reads the capture as a file, so the PNG has to land on the machine
+ * the agent runs on, whichever backend stores it durably.
+ *
+ * The `data:` URL is split out rather than recorded: it is megabytes of base64
+ * that only the durable store needs, and leaving it in the result would put the
+ * whole image in front of the model on every read of the queue.
+ * @param {string} root - the workspace's `prototype/` folder.
+ * @param {object} payload - the `automation/result` payload from the tab.
+ * @returns {Promise<{data: unknown, dataUrl: string | null}>} the data to
+ *   record, carrying `saved` when a file was written, and the image to upload.
+ */
+async function cacheShot(root, payload) {
+  const data = payload.data ?? null
+  const dataUrl = data && typeof data.dataUrl === 'string' ? data.dataUrl : null
+  if (!payload.ok || !dataUrl?.startsWith('data:image/')) return { data, dataUrl: null }
+  const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  const shotsDir = join(root, '.shots')
+  await mkdir(shotsDir, { recursive: true })
+  const name = `shot-${Date.now()}.png`
+  await writeFile(join(shotsDir, name), Buffer.from(b64, 'base64'))
+  log(`screenshot saved: ${name}`)
+  const { dataUrl: _image, ...rest } = data
+  return { data: { ...rest, saved: `${PROTOTYPE_FOLDER}/.shots/${name}` }, dataUrl }
+}
+
+/**
+ * Resolve the shim served at `/prototype/shim.js`.
+ *
+ * The library's copy wins and is cached for the process; the bundled copy is
+ * the answer when no endpoint is configured, nobody is signed in, or the
+ * library cannot be reached. Which one is in use is logged the first time,
+ * because a stale shim explains automation failures that look like page bugs.
+ * @param {import('@deepseek-ai/cordis').Context} ctx - host context, for credentials.
+ * @param {URL | null} base - validated endpoint base, or null in offline mode.
+ * @param {number} timeoutMs - request deadline.
+ * @returns {() => Promise<string>} reader for the current shim source.
+ */
+function createShimSource(ctx, base, timeoutMs) {
+  let cached = null
+  if (!base) {
+    log(`shim: bundled copy v${BUNDLED_SHIM_VERSION} (no endpoint configured)`)
+    return async () => BUNDLED_SHIM_JS
+  }
+  return async () => {
+    if (cached) return cached
+    const authorization = await resolveLoginAuthorization(ctx.get('credentials'), Date.now())
+    if (!authorization.ok) {
+      log(`shim: bundled copy v${BUNDLED_SHIM_VERSION} (${authorization.reason} session)`)
+      return BUNDLED_SHIM_JS
+    }
+    try {
+      const response = await fetch(new URL('shim', base), {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { authorization: authorization.authorization, accept: 'text/javascript' },
+      })
+      if (!response.ok) throw new Error(`answered ${response.status}`)
+      cached = await response.text()
+      log(`shim: library copy v${response.headers.get('x-shim-version') ?? '?'}`)
+      return cached
+    } catch (e) {
+      log(`shim: bundled copy v${BUNDLED_SHIM_VERSION} (library unreachable: ${String((e && e.message) || e)})`)
+      return BUNDLED_SHIM_JS
+    }
+  }
+}
+
+/** Inject the shim tag before </body> (or append when the tag is absent). */
+function injectShim(html) {
+  const tag = '<script src="/prototype/shim.js"></script>'
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${tag}</body>`)
+  return html + tag
+}
+
+// â”€â”€ plugin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+export function apply(ctx, config = {}) {
+  const webServer = ctx.get('webServer')
+  if (!webServer || typeof webServer.register !== 'function') {
+    log('webServer service unavailable - API not registered')
+    return
+  }
+
+  // Where the queue runs is decided here, once. A bad endpoint fails the load
+  // rather than the first command the agent sends.
+  const timeoutMs = config.timeoutMs ?? 10_000
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`dsh-prototype: timeoutMs must be a positive finite number, got ${config.timeoutMs}`)
+  }
+  const base = config.endpoint ? resolveEndpoint(config.endpoint) : null
+  const queue = base
+    ? createRemoteQueue(ctx, base, timeoutMs)
+    : createLocalQueue()
+  const readShim = createShimSource(ctx, base, timeoutMs)
+  log(base ? `automation queue: plugin library at ${base.href}` : 'automation queue: in-process (no endpoint configured)')
+
+  // token -> workspace, filled by every API request (the tab polls the queue,
+  // so a live tab re-registers its workspace continuously).
+  const scopes = new Map()
 
   const apiHandler = async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local')
@@ -340,65 +611,16 @@ export function apply(ctx) {
           child.unref()
           return json(res, 200, { ok: true, editor })
         }
-        // â”€â”€ automation â”€â”€
-        case 'automation/submit': {
-          expirePending(Date.now())
-          if (pending) return json(res, 409, { ok: false, error: 'a command is already in flight' })
-          const cmd = payload?.cmd
-          if (!cmd || typeof cmd.op !== 'string') return json(res, 400, { ok: false, error: 'cmd.op required' })
-          const id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-          pending = { id, cmd, createdAt: Date.now(), delivered: false }
-          return json(res, 200, { ok: true, id })
-        }
-        case 'automation/pending': {
-          expirePending(Date.now())
-          if (pending && !pending.delivered) {
-            pending.delivered = true
-            return json(res, 200, { ok: true, cmd: { id: pending.id, ...pending.cmd } })
+        default: {
+          // Everything under automation/ belongs to the queue backend, wherever
+          // it runs. The scope carries the workspace token the library indexes
+          // by and the local folder a screenshot is cached into.
+          if (method.startsWith('automation/')) {
+            const { code, body } = await queue.call(method.slice('automation/'.length), payload, { token, root })
+            return json(res, code, body)
           }
-          return json(res, 200, { ok: true, cmd: null })
-        }
-        case 'automation/result': {
-          const id = String(payload.id ?? '')
-          if (pending && pending.id === id) pending = null
-          let entry = { ok: !!payload.ok, data: payload.data ?? null, error: payload.error ?? null, at: new Date().toISOString() }
-          // Full-screen screenshots arrive as a data URL; persist them under
-          // prototype/.shots/ so the agent (and the human) can read the file.
-          const dataUrl = entry.data && typeof entry.data.dataUrl === 'string' ? entry.data.dataUrl : null
-          if (entry.ok && dataUrl?.startsWith('data:image/')) {
-            const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-            const shotsDir = join(root, '.shots')
-            await mkdir(shotsDir, { recursive: true })
-            const name = `shot-${Date.now()}.png`
-            await writeFile(join(shotsDir, name), Buffer.from(b64, 'base64'))
-            entry = { ...entry, data: { ...entry.data, saved: `${PROTOTYPE_FOLDER}/.shots/${name}` } }
-            log(`screenshot saved: ${name}`)
-          }
-          remember(id, entry)
-          return json(res, 200, { ok: true })
-        }
-        case 'automation/wait': {
-          const id = String(payload.id ?? '')
-          const deadline = Date.now() + Math.min(Number(payload.timeoutMs) || WAIT_MAX_MS, WAIT_MAX_MS)
-          while (Date.now() < deadline) {
-            if (results.has(id)) return json(res, 200, { ok: true, result: results.get(id) })
-            await new Promise((r) => setTimeout(r, 120))
-          }
-          return json(res, 200, { ok: false, error: 'timeout waiting for command result' })
-        }
-        case 'automation/results':
-          return json(res, 200, { ok: true, results: resultsOrder.map((id) => ({ id, ...results.get(id) })) })
-        case 'automation/console':
-          return json(res, 200, { ok: true, entries: consoleRing.slice(-200) })
-        case 'automation/console_push': {
-          for (const entry of Array.isArray(payload.entries) ? payload.entries : []) {
-            consoleRing.push({ level: String(entry.level ?? 'log'), text: String(entry.text ?? ''), time: String(entry.time ?? new Date().toISOString()) })
-          }
-          while (consoleRing.length > 200) consoleRing.shift()
-          return json(res, 200, { ok: true })
-        }
-        default:
           return json(res, 404, { ok: false, error: `unknown method "${method}"` })
+        }
       }
     } catch (e) {
       return json(res, 400, { ok: false, error: String((e && e.message) || e) })
@@ -449,7 +671,7 @@ export function apply(ctx) {
   const shimHandler = async (req, res) => {
     if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'GET only' })
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-    res.end(SHIM_JS)
+    res.end(await readShim())
   }
 
   ctx.effect(() => webServer.register({ kind: 'prefix', path: '/prototype/api', handler: apiHandler }), 'dsh-prototype: api')

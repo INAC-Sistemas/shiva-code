@@ -1,3 +1,23 @@
+# dsh-prototype bundle patch
+#
+# `config.endpoint` decides where the automation queue runs, and it is read once
+# at load. Configured: the queue, the console ring, the stored screenshots and
+# the shim source all live in the plugin library on the VPS, and this plugin
+# proxies to them as whoever signed in through dsh-login — so dsh-login must be
+# mounted in the same profile. Absent: the queue stays in this process, which is
+# the offline mode (one client, nothing durable, gone on restart).
+#
+# The host lives in the environment, the path lives here: `$VPS_URL` carries the
+# base URL shared by every plugin backed by the same VPS, and this row appends
+# the one path this plugin reads. `new URL` rather than string concatenation —
+# it normalizes a trailing slash on the base, and an unset `$VPS_URL` throws at
+# composition instead of silently producing `undefined/api/...`.
+#
+# To run the queue locally instead — no VPS, no sign-in — drop the whole
+# `config` block. Nothing else changes: the tab and the agent call the same
+# `/prototype/api/automation/*` either way.
 - insert:
     - id: prototype
       name: dsh-prototype
+      config:
+        endpoint: !!js "new URL('/api/plugins/prototype', process.env.VPS_URL).href"

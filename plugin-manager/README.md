@@ -79,6 +79,9 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
+| POST   | `/api/plugins/prototype/automation/<op>` | Bearer | Fila de automação do protótipo   |
+| GET    | `/api/plugins/prototype/shots/<id>` | Bearer | Um screenshot gravado             |
+| GET    | `/api/plugins/prototype/shim` | Bearer | O JavaScript injetado no protótipo |
 
 Resposta do login:
 
@@ -153,6 +156,33 @@ shell e sem dependências.
 O filesystem inspecionado é `/` por padrão. Se o container tiver um disco próprio
 (diferente do host), monte o filesystem do host e aponte para ele com
 `HOST_INFO_DISK_PATH`.
+
+### prototype
+
+A inteligência do plugin `dsh-prototype`, cuja casca roda uma aba do `dsh` que
+renderiza a pasta `prototype/` do workspace e deixa o agente dirigir a página.
+O que ficou na máquina do cliente é o que não pode sair de lá — servidor de
+arquivos, iframe same-origin, captura de tela e abrir no editor. O que roda aqui
+é o estado que coordena agente e aba, em [plugins/prototype/index.ts](plugins/prototype/index.ts):
+
+- **Fila de automação** — um comando em voo por (usuário, workspace), TTL de 12 s
+  expirado preguiçosamente na leitura (sem cron). `submit` recusa com `409`
+  enquanto houver um vivo; `pending` entrega uma única vez, mesmo com duas abas
+  fazendo polling; `wait` é long-poll de até 10 s.
+- **Anel de console** — as últimas 200 linhas de `console.error`/`warn` e erros de
+  runtime capturados dentro do protótipo, podadas na escrita.
+- **Screenshots** — chegam como `data:` URL e viram linha em `prototype_shots`
+  (`bytea`), servida por `GET .../shots/<id>`. Só o dono lê a própria captura;
+  id de outra conta responde `404`, e não `403`.
+- **Shim** — [plugins/prototype/shim.ts](plugins/prototype/shim.ts) é a fonte de
+  verdade do JavaScript injetado em toda página do protótipo. Quem busca é a
+  casca, não a página: um `<script src>` não manda header de autorização, e o
+  iframe precisa continuar same-origin. Corrigir a automação do browser passa a
+  ser um deploy aqui.
+
+O `workspace` é um token opaco de 16 hex que a casca calcula a partir do caminho
+local — o caminho nunca sobe. O dono vem sempre do token Bearer, nunca do corpo:
+a casca roda na máquina do cliente e é código não confiável.
 
 ## Autenticação
 

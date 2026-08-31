@@ -27,6 +27,79 @@ model RevokedApiToken {
   @@map("revoked_api_tokens")
 }
 
+/// Estado de um comando de automação do plugin `prototype`.
+///
+/// `PENDING` → a casca ainda não entregou o comando à aba; `DELIVERED` → a aba
+/// pegou e está executando; `DONE` → resultado gravado (com sucesso ou não);
+/// `EXPIRED` → estourou o TTL antes de ser resolvido.
+enum PrototypeCommandStatus {
+  PENDING
+  DELIVERED
+  DONE
+  EXPIRED
+}
+
+/// Fila de automação do protótipo: um comando por vez, por (usuário, workspace).
+///
+/// O `workspace` é o token opaco que a casca calcula a partir do caminho local
+/// (16 hex) — o caminho em si nunca sobe. A exclusividade de "um em voo" não é
+/// um índice único porque `DONE` e `EXPIRED` podem repetir à vontade; é a
+/// consulta do `submit`, que recusa enquanto houver um comando vivo.
+model PrototypeCommand {
+  id          String                 @id @default(uuid())
+  userId      String
+  workspace   String
+  op          String
+  args        Json
+  status      PrototypeCommandStatus @default(PENDING)
+  ok          Boolean?
+  result      Json?
+  error       String?
+  createdAt   DateTime               @default(now())
+  deliveredAt DateTime?
+  settledAt   DateTime?
+  shot        PrototypeShot?
+
+  @@index([userId, workspace, status])
+  @@index([userId, workspace, createdAt])
+  @@map("prototype_commands")
+}
+
+/// Screenshot de tela cheia produzido por um comando `screenshot`.
+///
+/// Fica no Postgres como `bytea`: a VPS não tem object storage configurado, e
+/// uma captura PNG cabe folgada no limite de `MAX_SHOT_BYTES`. Some junto com o
+/// comando que a originou.
+model PrototypeShot {
+  id        String           @id @default(uuid())
+  userId    String
+  commandId String           @unique
+  command   PrototypeCommand @relation(fields: [commandId], references: [id], onDelete: Cascade)
+  mime      String
+  bytes     Bytes
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@map("prototype_shots")
+}
+
+/// `console.error`/`warn` e erros de runtime capturados dentro do protótipo.
+///
+/// O `time` é o instante que o shim registrou na página; `createdAt` é quando a
+/// linha chegou aqui. Os dois diferem quando a casca acumula e envia em lote.
+model PrototypeConsoleEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  workspace String
+  level     String
+  text      String
+  time      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, workspace, createdAt])
+  @@map("prototype_console_entries")
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
