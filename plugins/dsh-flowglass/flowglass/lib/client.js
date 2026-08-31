@@ -3805,6 +3805,7 @@ return {
       ctx.inject(['betterSidebar'], (sidebarCtx) => {
         const service = sidebarCtx.get('betterSidebar')
         if (!service || typeof service.registerTab !== 'function') return
+        if (!(window.__profileTabEnabled || (() => true))(FLOW_TAB_ID)) return
         const features = Array.isArray(service.features) ? service.features : []
         const sync = () => integration.sync(service)
         sync()

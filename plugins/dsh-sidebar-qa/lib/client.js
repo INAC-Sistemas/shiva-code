@@ -1256,77 +1256,77 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ask_panel_module_css_default = {
-			"userContent": "WMuuoq_userContent",
-			"busyHint": "WMuuoq_busyHint",
-			"meterPercent": "WMuuoq_meterPercent",
-			"quoteChip": "WMuuoq_quoteChip",
-			"input": "WMuuoq_input",
-			"quoteBlock": "WMuuoq_quoteBlock",
-			"modelOption": "WMuuoq_modelOption",
-			"userRow": "WMuuoq_userRow",
-			"meterRoot": "WMuuoq_meterRoot",
-			"meterSegment": "WMuuoq_meterSegment",
-			"error": "WMuuoq_error",
-			"meterColorTools": "WMuuoq_meterColorTools",
-			"root": "WMuuoq_root",
-			"switcher": "WMuuoq_switcher",
-			"modelGroups": "WMuuoq_modelGroups",
-			"meterPanel": "WMuuoq_meterPanel",
-			"emptyHint": "WMuuoq_emptyHint",
-			"modelGroupTitle": "WMuuoq_modelGroupTitle",
-			"modelMenu": "WMuuoq_modelMenu",
-			"modelCell": "WMuuoq_modelCell",
-			"modelName": "WMuuoq_modelName",
-			"modelError": "WMuuoq_modelError",
-			"quoteChipText": "WMuuoq_quoteChipText",
 			"modelRoot": "WMuuoq_modelRoot",
-			"meterRows": "WMuuoq_meterRows",
-			"modelCellValue": "WMuuoq_modelCellValue",
-			"meterFill": "WMuuoq_meterFill",
-			"meterTrigger": "WMuuoq_meterTrigger",
-			"assistantMarkdown": "WMuuoq_assistantMarkdown",
-			"meterSwatch": "WMuuoq_meterSwatch",
-			"startHint": "WMuuoq_startHint",
-			"meterColorMessages": "WMuuoq_meterColorMessages",
-			"strategyNote": "WMuuoq_strategyNote",
-			"transcript": "WMuuoq_transcript",
-			"meterHeader": "WMuuoq_meterHeader",
-			"modelCellLabel": "WMuuoq_modelCellLabel",
-			"chipChevronOpen": "WMuuoq_chipChevronOpen",
-			"seedDivider": "WMuuoq_seedDivider",
+			"quoteBlock": "WMuuoq_quoteBlock",
+			"quoteChipText": "WMuuoq_quoteChipText",
+			"modelOption": "WMuuoq_modelOption",
 			"quoteCancel": "WMuuoq_quoteCancel",
-			"modelGroup": "WMuuoq_modelGroup",
-			"primary": "WMuuoq_primary",
-			"chipLabel": "WMuuoq_chipLabel",
-			"chipIcon": "WMuuoq_chipIcon",
-			"meterTrack": "WMuuoq_meterTrack",
-			"modelStatus": "WMuuoq_modelStatus",
-			"modelDesc": "WMuuoq_modelDesc",
-			"meterHeadline": "WMuuoq_meterHeadline",
-			"modelRetry": "WMuuoq_modelRetry",
-			"quoteChipHead": "WMuuoq_quoteChipHead",
 			"tools": "WMuuoq_tools",
-			"meterRow": "WMuuoq_meterRow",
-			"modelCellChevron": "WMuuoq_modelCellChevron",
-			"questionText": "WMuuoq_questionText",
-			"meterBar": "WMuuoq_meterBar",
-			"meterColorSystem": "WMuuoq_meterColorSystem",
-			"card": "WMuuoq_card",
-			"switcherItem": "WMuuoq_switcherItem",
-			"chipEffort": "WMuuoq_chipEffort",
-			"trailing": "WMuuoq_trailing",
-			"assistantRow": "WMuuoq_assistantRow",
-			"newAsk": "WMuuoq_newAsk",
-			"body": "WMuuoq_body",
-			"chip": "WMuuoq_chip",
-			"chipReadonly": "WMuuoq_chipReadonly",
+			"userContent": "WMuuoq_userContent",
+			"userRow": "WMuuoq_userRow",
+			"switcher": "WMuuoq_switcher",
+			"modelGroup": "WMuuoq_modelGroup",
+			"modelCell": "WMuuoq_modelCell",
+			"quoteChip": "WMuuoq_quoteChip",
+			"modelMenu": "WMuuoq_modelMenu",
 			"row": "WMuuoq_row",
-			"chipChevron": "WMuuoq_chipChevron",
+			"switcherItem": "WMuuoq_switcherItem",
+			"error": "WMuuoq_error",
+			"trailing": "WMuuoq_trailing",
+			"modelCellLabel": "WMuuoq_modelCellLabel",
+			"modelCellValue": "WMuuoq_modelCellValue",
+			"chipReadonly": "WMuuoq_chipReadonly",
 			"modelWarn": "WMuuoq_modelWarn",
-			"switcherActive": "WMuuoq_switcherActive",
-			"modelCheck": "WMuuoq_modelCheck",
+			"modelGroups": "WMuuoq_modelGroups",
+			"meterRow": "WMuuoq_meterRow",
+			"transcript": "WMuuoq_transcript",
+			"chipChevronOpen": "WMuuoq_chipChevronOpen",
 			"meterFigures": "WMuuoq_meterFigures",
-			"modelOptionCopy": "WMuuoq_modelOptionCopy"
+			"primary": "WMuuoq_primary",
+			"meterFill": "WMuuoq_meterFill",
+			"chipEffort": "WMuuoq_chipEffort",
+			"assistantMarkdown": "WMuuoq_assistantMarkdown",
+			"input": "WMuuoq_input",
+			"modelRetry": "WMuuoq_modelRetry",
+			"modelCheck": "WMuuoq_modelCheck",
+			"meterTrack": "WMuuoq_meterTrack",
+			"meterTrigger": "WMuuoq_meterTrigger",
+			"startHint": "WMuuoq_startHint",
+			"card": "WMuuoq_card",
+			"strategyNote": "WMuuoq_strategyNote",
+			"body": "WMuuoq_body",
+			"meterHeadline": "WMuuoq_meterHeadline",
+			"meterSwatch": "WMuuoq_meterSwatch",
+			"meterPanel": "WMuuoq_meterPanel",
+			"chipLabel": "WMuuoq_chipLabel",
+			"meterSegment": "WMuuoq_meterSegment",
+			"meterColorSystem": "WMuuoq_meterColorSystem",
+			"meterColorTools": "WMuuoq_meterColorTools",
+			"newAsk": "WMuuoq_newAsk",
+			"meterRoot": "WMuuoq_meterRoot",
+			"chipIcon": "WMuuoq_chipIcon",
+			"modelError": "WMuuoq_modelError",
+			"modelDesc": "WMuuoq_modelDesc",
+			"meterPercent": "WMuuoq_meterPercent",
+			"modelGroupTitle": "WMuuoq_modelGroupTitle",
+			"meterHeader": "WMuuoq_meterHeader",
+			"modelCellChevron": "WMuuoq_modelCellChevron",
+			"emptyHint": "WMuuoq_emptyHint",
+			"meterRows": "WMuuoq_meterRows",
+			"modelOptionCopy": "WMuuoq_modelOptionCopy",
+			"quoteChipHead": "WMuuoq_quoteChipHead",
+			"meterBar": "WMuuoq_meterBar",
+			"root": "WMuuoq_root",
+			"questionText": "WMuuoq_questionText",
+			"switcherActive": "WMuuoq_switcherActive",
+			"busyHint": "WMuuoq_busyHint",
+			"chipChevron": "WMuuoq_chipChevron",
+			"modelName": "WMuuoq_modelName",
+			"assistantRow": "WMuuoq_assistantRow",
+			"seedDivider": "WMuuoq_seedDivider",
+			"modelStatus": "WMuuoq_modelStatus",
+			"meterColorMessages": "WMuuoq_meterColorMessages",
+			"chip": "WMuuoq_chip"
 		};
 		//#endregion
 		//#region src/client/StrategySelect.tsx
@@ -2788,17 +2788,17 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var config_panel_module_css_default = {
-			"desc": "XKZRxa_desc",
-			"textInput": "XKZRxa_textInput",
-			"rows": "XKZRxa_rows",
 			"rowText": "XKZRxa_rowText",
-			"numberInput": "XKZRxa_numberInput",
-			"select": "XKZRxa_select",
-			"loading": "XKZRxa_loading",
+			"rows": "XKZRxa_rows",
+			"textInput": "XKZRxa_textInput",
 			"error": "XKZRxa_error",
+			"select": "XKZRxa_select",
+			"root": "XKZRxa_root",
+			"loading": "XKZRxa_loading",
 			"row": "XKZRxa_row",
-			"title": "XKZRxa_title",
-			"root": "XKZRxa_root"
+			"desc": "XKZRxa_desc",
+			"numberInput": "XKZRxa_numberInput",
+			"title": "XKZRxa_title"
 		};
 		//#endregion
 		//#region src/client/ConfigPanel.tsx
@@ -3069,27 +3069,27 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var history_panel_module_css_default = {
-			"sideRow": "cyrW6a_sideRow",
-			"root": "cyrW6a_root",
-			"mainLabel": "cyrW6a_mainLabel",
 			"group": "cyrW6a_group",
-			"remove": "cyrW6a_remove",
-			"connector": "cyrW6a_connector",
-			"rowOpen": "cyrW6a_rowOpen",
-			"sideLabel": "cyrW6a_sideLabel",
-			"children": "cyrW6a_children",
-			"mainRow": "cyrW6a_mainRow",
-			"staleBadge": "cyrW6a_staleBadge",
-			"rowOpenDisabled": "cyrW6a_rowOpenDisabled",
-			"arrow": "cyrW6a_arrow",
-			"empty": "cyrW6a_empty",
+			"dot": "cyrW6a_dot",
 			"arrowOpen": "cyrW6a_arrowOpen",
 			"workspaceLabel": "cyrW6a_workspaceLabel",
-			"stale": "cyrW6a_stale",
-			"time": "cyrW6a_time",
+			"mainRow": "cyrW6a_mainRow",
+			"staleBadge": "cyrW6a_staleBadge",
+			"sideRow": "cyrW6a_sideRow",
 			"collapse": "cyrW6a_collapse",
+			"connector": "cyrW6a_connector",
+			"root": "cyrW6a_root",
 			"collapseSpacer": "cyrW6a_collapseSpacer",
-			"dot": "cyrW6a_dot"
+			"time": "cyrW6a_time",
+			"mainLabel": "cyrW6a_mainLabel",
+			"children": "cyrW6a_children",
+			"rowOpenDisabled": "cyrW6a_rowOpenDisabled",
+			"remove": "cyrW6a_remove",
+			"stale": "cyrW6a_stale",
+			"rowOpen": "cyrW6a_rowOpen",
+			"empty": "cyrW6a_empty",
+			"sideLabel": "cyrW6a_sideLabel",
+			"arrow": "cyrW6a_arrow"
 		};
 		//#endregion
 		//#region src/client/HistoryPanel.tsx
@@ -3371,8 +3371,8 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var selection_popover_module_css_default = {
-			"ask": "OOr4YG_ask",
-			"popover": "OOr4YG_popover"
+			"popover": "OOr4YG_popover",
+			"ask": "OOr4YG_ask"
 		};
 		//#endregion
 		//#region src/client/SelectionPopover.tsx
@@ -3677,7 +3677,9 @@ window.__ModuleLoader__.load({
 				};
 			}, "dsh-sidebar-qa: selection popover mount");
 			ctx.effect(() => {
-				const offAsk = ctx.betterSidebar.registerTab({
+				const askOn = (window.__profileTabEnabled || (() => true))("dsh-sidebar-qa:ask")
+				const histOn = (window.__profileTabEnabled || (() => true))("dsh-sidebar-qa:history")
+				const offAsk = askOn ? ctx.betterSidebar.registerTab({
 					id: "dsh-sidebar-qa:ask",
 					title: () => t("askTabTitle"),
 					icon: (size) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconQuestionOutline14, { size }),
@@ -3690,8 +3692,8 @@ window.__ModuleLoader__.load({
 						store
 					}),
 					onActivate: () => notifyTabActivated()
-				});
-				const offHistory = ctx.betterSidebar.registerTab({
+				}) : null;
+				const offHistory = histOn ? ctx.betterSidebar.registerTab({
 					id: "dsh-sidebar-qa:history",
 					title: () => t("histTabTitle"),
 					icon: (size) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconQueueOutline14, { size }),
@@ -3703,10 +3705,10 @@ window.__ModuleLoader__.load({
 						store
 					}),
 					onActivate: () => notifyTabActivated()
-				});
+				}) : null;
 				return () => {
-					offAsk();
-					offHistory();
+					offAsk?.();
+					offHistory?.();
 				};
 			}, "dsh-sidebar-qa: register sidebar tabs");
 			ctx.effect(() => () => {

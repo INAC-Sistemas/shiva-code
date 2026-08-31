@@ -64,6 +64,7 @@ window.__ModuleLoader__.load({ id: 'dsh-docs-panel', factory: (require) => {
       inject: ['betterSidebar'],
       apply(sidebarCtx) {
         const betterSidebar = sidebarCtx.betterSidebar
+        if (!(window.__profileTabEnabled || (() => true))('dsh-docs-panel:docs')) return
         // 注册为 better-sidebar 的侧边栏 tab（官方接入指南要求包在 ctx.effect 里，
         // 卸载/HMR 时Auto撤销注册；id 带包前缀避免与Built-in tab 冲突）
         ctx.effect(() => betterSidebar.registerTab({

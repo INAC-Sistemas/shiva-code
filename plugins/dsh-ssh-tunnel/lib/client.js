@@ -1399,6 +1399,7 @@ function Btn(props) {
 				}, "dsh-ssh-tunnel: dictionaries");
 			}
 			if (!ctx.betterSidebar) return;
+			if (!(window.__profileTabEnabled || (() => true))(TAB_ID)) return;
 			ctx.effect(function () {
 				return ctx.betterSidebar.registerTab({
 					id: TAB_ID,

@@ -151,6 +151,7 @@ function apply(ctx) {
     apply(sidebarCtx) {
       const betterSidebar = sidebarCtx.betterSidebar
       if (!betterSidebar || typeof betterSidebar.registerTab !== 'function') return
+      if (!(window.__profileTabEnabled || (() => true))(TAB_ID)) return
       ctx.effect(() => betterSidebar.registerTab({
         id: TAB_ID,
         title: 'Kanban',
