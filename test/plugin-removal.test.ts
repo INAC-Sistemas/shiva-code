@@ -53,25 +53,38 @@ describe('durable plugin removal', () => {
     homes.length = 0
   })
 
-  it('backs up and quarantines one exact legacy plugin without invoking pnpm', async () => {
+  it('backs up, quarantines, and reconciles one exact legacy plugin', async () => {
     const { dshHome, profileDirectory } = await profile()
     const uninstallGeneration = vi.fn(async () => false)
+    const staleDependency = join(profileDirectory, 'node_modules', '@deepseek-ai', 'stale-core')
+    await mkdir(staleDependency, { recursive: true })
+    const reconcileLegacyProfile = vi.fn(async () => {
+      const manifest = JSON.parse(await readFile(join(profileDirectory, 'package.json'), 'utf8'))
+      expect(manifest.dependencies).not.toHaveProperty('@example/plugin-a')
+      expect(manifest.dsh.profile.bundles).not.toContain('@example/plugin-a')
+      expect(existsSync(join(profileDirectory, 'pnpm-lock.yaml'))).toBe(false)
+      await rm(staleDependency, { recursive: true, force: true })
+      return { ok: true }
+    })
 
     const result = await removePluginSafely({
       dshHome,
       pluginName: '@example/plugin-a',
       cleanupOwnedComponents: async () => ({ ok: true, failures: [] }),
       uninstallGeneration,
+      reconcileLegacyProfile,
       now: () => new Date('2026-08-29T12:00:00.000Z')
     })
 
     expect(result).toMatchObject({ disabled: true, removed: true, pending: false })
     expect(uninstallGeneration).not.toHaveBeenCalled()
+    expect(reconcileLegacyProfile).toHaveBeenCalledOnce()
     const manifest = JSON.parse(await readFile(join(profileDirectory, 'package.json'), 'utf8'))
     expect(manifest.dependencies).toEqual({ '@example/plugin-b': '1.0.0' })
     expect(manifest.dsh.profile.bundles).toEqual(['@example/plugin-b'])
     expect(existsSync(join(profileDirectory, 'node_modules', '@example', 'plugin-a'))).toBe(false)
     expect(existsSync(join(profileDirectory, 'pnpm-lock.yaml'))).toBe(false)
+    expect(existsSync(staleDependency)).toBe(false)
     expect(existsSync(join(result.backupDirectory as string, 'package.json'))).toBe(true)
     expect(existsSync(join(
       result.backupDirectory as string,
@@ -86,6 +99,35 @@ describe('durable plugin removal', () => {
     expect(existsSync(result.backupDirectory as string)).toBe(true)
     await confirmPluginRemovalsBooted(dshHome)
     expect(existsSync(result.backupDirectory as string)).toBe(false)
+  })
+
+  it('keeps a detached legacy plugin disabled when profile reconciliation fails', async () => {
+    const { dshHome, profileDirectory } = await profile('plugin-one')
+    const reconcileLegacyProfile = vi.fn(async () => ({
+      ok: false,
+      detail: 'ERR_PNPM_FETCH_404'
+    }))
+
+    const result = await removePluginSafely({
+      dshHome,
+      pluginName: 'plugin-one',
+      cleanupOwnedComponents: async () => ({ ok: true, failures: [] }),
+      uninstallGeneration: async () => false,
+      reconcileLegacyProfile,
+      now: () => new Date('2026-08-29T12:02:00.000Z')
+    })
+
+    expect(result).toMatchObject({
+      disabled: true,
+      removed: false,
+      pending: true,
+      failures: ['profile rebuild failed: ERR_PNPM_FETCH_404']
+    })
+    const manifest = JSON.parse(await readFile(join(profileDirectory, 'package.json'), 'utf8'))
+    expect(manifest.dependencies).not.toHaveProperty('plugin-one')
+    expect(manifest.dsh.profile.bundles).not.toContain('plugin-one')
+    expect(existsSync(join(profileDirectory, 'node_modules', 'plugin-one'))).toBe(false)
+    expect(await listPendingPluginRemovals(dshHome)).toEqual(['plugin-one'])
   })
 
   it('keeps a failed cleanup disabled and preserves its package for a later retry', async () => {
@@ -164,6 +206,7 @@ describe('durable plugin removal', () => {
       version: '1.0.0'
     })
     await writeDesired(dshHome, [generationId])
+    const reconcileLegacyProfile = vi.fn(async () => ({ ok: true }))
 
     const result = await removePluginSafely({
       dshHome,
@@ -174,11 +217,13 @@ describe('durable plugin removal', () => {
         await projectGenerations(dshHome)
         return true
       },
+      reconcileLegacyProfile,
       now: () => new Date('2026-08-29T12:15:00.000Z')
     })
 
     expect(result).toMatchObject({ disabled: true, removed: true, pending: false })
     expect(await readDesired(dshHome)).toEqual([])
     expect(await listPendingPluginRemovals(dshHome)).toEqual([])
+    expect(reconcileLegacyProfile).not.toHaveBeenCalled()
   })
 })

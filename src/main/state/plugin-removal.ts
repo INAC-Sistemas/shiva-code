@@ -52,6 +52,14 @@ export interface PluginRemovalOptions {
   pluginName: string
   cleanupOwnedComponents: () => Promise<{ ok: boolean; failures: string[] }>
   uninstallGeneration: () => Promise<boolean>
+  /**
+   * Reconcile the shared profile after detaching a legacy root. Directly
+   * moving only the root package leaves its hoisted/transitive dependencies
+   * behind, which can keep shadowing the bundled Harness packages and render
+   * the normal profile blank. The tombstone is already durable when this runs,
+   * so a failed rebuild is retryable without resurrecting the plugin.
+   */
+  reconcileLegacyProfile?: () => Promise<{ ok: boolean; detail?: string }>
   now?: () => Date
   note?: (line: string) => void
 }
@@ -350,6 +358,7 @@ export async function removePluginSafely(options: PluginRemovalOptions): Promise
     }
   }
 
+  let detachedLegacyPlugin = false
   try {
     if (await isGenerationPlugin(options.dshHome, options.pluginName)) {
       if (!await options.uninstallGeneration()) throw new Error('generation pointer could not be disabled')
@@ -358,6 +367,7 @@ export async function removePluginSafely(options: PluginRemovalOptions): Promise
       if (!await verifyDetached(options.dshHome, options.pluginName)) {
         throw new Error('plugin is still present in the active profile')
       }
+      detachedLegacyPlugin = true
     }
   } catch (error) {
     const detail = `detach failed: ${error instanceof Error ? error.message : error}`
@@ -369,6 +379,25 @@ export async function removePluginSafely(options: PluginRemovalOptions): Promise
       pending: true,
       backupDirectory: entry.backupDirectory,
       failures: [detail]
+    }
+  }
+
+  if (detachedLegacyPlugin && options.reconcileLegacyProfile) {
+    const reconciliation = await options.reconcileLegacyProfile().catch((error) => ({
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error)
+    }))
+    if (!reconciliation.ok) {
+      const detail = `profile rebuild failed: ${reconciliation.detail ?? 'unknown error'}`
+      entry = await markPending(options.dshHome, entry, [detail]).catch(() => entry)
+      return {
+        pluginName: options.pluginName,
+        disabled: true,
+        removed: false,
+        pending: true,
+        backupDirectory: entry.backupDirectory,
+        failures: [detail]
+      }
     }
   }
 
