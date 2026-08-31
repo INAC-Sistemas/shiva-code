@@ -78,6 +78,8 @@ The project root is the nearest ancestor containing `.git`; without one, the cur
 
 `dsh-skill-badge` registers one immutable `bundled` candidate at `BUNDLED_SKILL_RANK` and exposes its packaged asset directory through `resourceBase`. The shipped CLI declares the plugin disabled, so enabling its composition row is an explicit opt-in.
 
+A deployment may add its own providers on the same seam. [dsh-skill-library](../../plugins/dsh-skill-library/README.md) is the shipped remote one: it registers into the global layer at rank `50`, ahead of every local root, so a workspace file cannot silently take over a served skill's name. Its authorization is resolved inside `get()`, never at registration — a provider that authenticates per body load is why an authoritative empty catalog and a transient failure must stay distinguishable, as they are through `SkillProviderObservation`.
+
 Chokidar watches existing roots for direct bundle/flat-entry additions and removals plus direct skill-entry changes. A missing root is followed one absent path segment at a time from its nearest existing ancestor until Chokidar can attach. Resource files below a bundle are not catalog changes. Model-facing `write` and `edit` observations synchronously invalidate the provider when their target is catalog-relevant, while the host watcher covers IDE, Git, shell, and external-process mutations. Watcher failures make the current observation incomplete without hiding readable candidates from direct loads; project-scoped watchers use a configured bounded LRU.
 
 ## Skill identity

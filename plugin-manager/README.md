@@ -196,6 +196,30 @@ O filesystem inspecionado é `/` por padrão. Se o container tiver um disco pró
 (diferente do host), monte o filesystem do host e aponte para ele com
 `HOST_INFO_DISK_PATH`.
 
+### skill-library
+
+A leitura da [biblioteca de skills](#biblioteca-de-skills) pelo cliente `dsh`,
+consumida pela casca [dsh-skill-library](../plugins/dsh-skill-library/README.md).
+Só leitura: quem cadastra é o painel, por server action com sessão de cookie.
+
+| Rota | Resposta |
+| --- | --- |
+| `GET /api/plugins/skill-library/skills` | `{ revision, skills: [...] }` — catálogo **sem corpo** |
+| `GET /api/plugins/skill-library/skills/<nome>` | a skill com `content`, sem frontmatter |
+
+Nenhuma das duas ramifica em papel: toda sessão autenticada lê a mesma
+biblioteca, e é isso que faz uma skill publicada no painel valer para todos. Um
+`403` aqui seria uma regra nova, não um refinamento.
+
+O corpo sai só pela segunda rota. A primeira é relida a cada refresh de
+descoberta do cliente, e mandar as instruções inteiras nela colocaria a
+biblioteca completa na requisição mais frequente — é o que faz o `get` ser
+naturalmente o ponto onde o token é exigido.
+
+Nome fora do kebab-case responde `400`; desconhecido **ou despublicado**
+responde `404`, sem distinguir os dois, para não vazar trabalho que ainda não
+foi liberado.
+
 ### prototype
 
 A inteligência do plugin `dsh-prototype`, cuja casca roda uma aba do `dsh` que

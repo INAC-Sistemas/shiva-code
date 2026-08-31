@@ -1,0 +1,25 @@
+# dsh-skill-library bundle patch
+#
+# Contributes the plugin manager's shared skill library to `ctx.skills`. It adds
+# a provider next to the local filesystem one; both are read and merged, so the
+# user's own skills under `.agents/skills` keep working untouched.
+#
+# `dsh-login` must be mounted in the same profile. This plugin has no credential
+# of its own: it reads the session that plugin records, per call. With nobody
+# signed in the library contributes nothing to the catalog and no body can be
+# loaded — that is the whole access rule, and it lives on the server, not here.
+#
+# The host lives in the environment, the path lives here: `$VPS_URL` carries the
+# base URL shared by every plugin backed by the same VPS, and this row appends
+# the one path this plugin reads. `new URL` rather than string concatenation —
+# it normalizes a trailing slash on the base, and an unset `$VPS_URL` throws at
+# composition instead of silently producing `undefined/api/...`.
+#
+# Candidates land at rank 50, below the strongest local root, so a same-named
+# file in a workspace cannot silently replace a library skill. Set `rank` above
+# 500 for the opposite policy.
+- insert:
+    - id: skill-library
+      name: dsh-skill-library
+      config:
+        endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
