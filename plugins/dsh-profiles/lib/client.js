@@ -3,23 +3,18 @@ window.__ModuleLoader__.load({ id: 'dsh-profiles', factory: (require) => {
   var module = { exports: {} }
   var exports = module.exports
   const React = require('react')
+  const ReactDOMClient = require('react-dom/client')
 
-// dsh-profiles client half: the KISS multiuser gate. When no profile is
-// active it takes over the screen with the profile picker (create/edit/
-// delete); when one is active it publishes window.__DSH_PROFILES__ so every
-// plugin decides whether its panel is in play, and registers a better-sidebar
-// footer action to switch/logout (logout = reload on the picker).
-
-let SCOPE = null
-
-const GATE_TAB_ID = 'dsh-profiles:gate'
-const FOOTER_TAB_ID = 'dsh-profiles:footer'
+// dsh-profiles client half: the KISS multiuser gate, mounted DIRECTLY into the
+// document — independent of better-sidebar, so it works in any dsh UI. With no
+// active profile it takes over the whole screen with the picker; with one it
+// shows a floating "Perfil" button to log out / switch. Switching is a reload.
 
 function api(method, payload) {
   return fetch('/profiles/api/' + method, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...(SCOPE ?? {}), ...(payload ?? {}) }),
+    body: JSON.stringify(payload ?? {}),
   }).then((r) => r.json())
 }
 
@@ -29,11 +24,11 @@ function injectStyles() {
   const el = document.createElement('style')
   el.id = id
   el.textContent = `
-.prfx-root{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--dsw-alias-bg-base,#141519);color:var(--dsw-alias-label-primary,#e8e8ea);padding:28px;font-family:inherit}
+.prfx-root{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--dsw-alias-bg-base,#141519);color:var(--dsw-alias-label-primary,#e8e8ea);padding:28px;font-family:inherit}
 .prfx-root h1{margin:0;font-size:20px;letter-spacing:.02em}
 .prfx-root .lead{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#b6b6bf);max-width:460px;text-align:center}
 .prfx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;width:100%;max-width:760px}
-.prfx-card{background:var(--dsw-alias-bg-layer-2,#202126);border:1px solid var(--dsw-alias-border-l2,#3a3b44);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;transition:border-color .12s ease}
+.prfx-card{background:var(--dsw-alias-bg-layer-2,#202126);border:1px solid var(--dsw-alias-border-l2,#3a3b44);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:border-color .12s ease}
 .prfx-card:hover{border-color:var(--dsw-alias-brand-primary,#f0b90b)}
 .prfx-card .nm{font-weight:600;font-size:14px}
 .prfx-card .meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#9a9aa5);line-height:1.5}
@@ -43,7 +38,7 @@ function injectStyles() {
 .prfx-btn.primary{background:var(--dsw-alias-brand-primary,#f0b90b);border-color:transparent;color:#111;font-weight:600}
 .prfx-btn.danger{color:#f87171;border-color:#7f1d1d}
 .prfx-btn.danger:hover{background:#3b1212}
-.prfx-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:24px}
+.prfx-modal{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:24px}
 .prfx-modal-in{background:var(--dsw-alias-bg-layer-2,#1e1f26);border:1px solid var(--dsw-alias-border-l2,#3a3b44);border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
 .prfx-modal-in h2{margin:0;font-size:16px}
 .prfx-field{display:flex;flex-direction:column;gap:5px}
@@ -52,13 +47,17 @@ function injectStyles() {
 .prfx-checks{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px}
 .prfx-checks label{display:flex;gap:6px;align-items:center;cursor:pointer;color:var(--dsw-alias-label-secondary,#b6b6bf)}
 .prfx-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
-.prfx-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10001;background:#111827;color:#f9fafb;border:1px solid #374151;border-radius:8px;padding:8px 14px;font-size:12.5px;max-width:80vw}
+.prfx-float{position:fixed;bottom:16px;right:16px;z-index:50000;display:inline-flex;align-items:center;gap:6px;background:var(--dsw-alias-bg-layer-3,#0a0b0e);border:1px solid var(--dsw-alias-border-l2,#3a3b44);border-radius:999px;padding:8px 14px;font-size:12.5px;color:var(--dsw-alias-label-primary,#e8e8ea);cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4);font-family:inherit}
+.prfx-float:hover{border-color:var(--dsw-alias-brand-primary,#f0b90b)}
+.prfx-menu{position:absolute;bottom:calc(100% + 8px);right:0;min-width:190px;background:var(--dsw-alias-bg-layer-3,#0a0b0e);border:1px solid var(--dsw-alias-border-l2,#3a3b44);border-radius:10px;padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.prfx-menu .lbl{font-size:11px;color:var(--dsw-alias-label-tertiary,#9a9aa5);padding:2px 8px}
+.prfx-menu button{width:100%;text-align:left;margin-top:4px}
+.prfx-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:100001;background:#111827;color:#f9fafb;border:1px solid #374151;border-radius:8px;padding:8px 14px;font-size:12.5px;max-width:80vw}
 .prfx-toast.err{border-color:#7f1d1d;color:#fca5a5}
 `
   document.head.appendChild(el)
 }
 
-// Cheat-sheet id→label for the plugin picker.
 const PLUGIN_LABELS = {
   'dsh-better-sidebar:skills': 'Skills',
   'dsh-mds:artifacts': 'MDS (markdown notes)',
@@ -84,7 +83,7 @@ function ProfileIcon(size) {
 function ProfileGate({ bootstrap }) {
   const h = React.createElement
   const [profiles, setProfiles] = React.useState(bootstrap.profiles)
-  const [modal, setModal] = React.useState(null) // null | 'create' | profile
+  const [modal, setModal] = React.useState(null)
   const [draft, setDraft] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   const [toast, setToast] = React.useState(null)
@@ -95,17 +94,15 @@ function ProfileGate({ bootstrap }) {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), err ? 5000 : 2400)
   }
-
   const openCreate = () => {
     setModal('create')
-    setDraft({ id: '', label: '', preset: 'default', plugins: bootstrap.plugins.map((p) => p), skills: [] })
+    setDraft({ id: '', label: '', preset: 'default', plugins: [...bootstrap.plugins], skills: [] })
   }
   const openEdit = (p) => {
     setModal(p)
     setDraft({ id: p.id, label: p.label, preset: p.preset, plugins: p.plugins, skills: p.skills })
   }
   const close = () => { setModal(null); setDraft(null) }
-
   const enter = async (id) => {
     await api('setActive', { active: id })
     location.reload()
@@ -121,8 +118,7 @@ function ProfileGate({ bootstrap }) {
     setBusy(true)
     const editing = modal !== 'create'
     const r = await api(editing ? 'update' : 'create', {
-      id: draft.id, label: draft.label, preset: draft.preset,
-      plugins: draft.plugins, skills: draft.skills,
+      id: draft.id, label: draft.label, preset: draft.preset, plugins: draft.plugins, skills: draft.skills,
     })
     setBusy(false)
     if (!r.ok) return shot(r.error, true)
@@ -132,7 +128,6 @@ function ProfileGate({ bootstrap }) {
     shot(editing ? 'Perfil atualizado' : 'Perfil criado')
   }
   const togglePlugin = (id) => setDraft((d) => ({ ...d, plugins: d.plugins.includes(id) ? d.plugins.filter((x) => x !== id) : [...d.plugins, id] }))
-
   const field = (key, label, value, onChange, placeholder = '') =>
     h('div', { className: 'prfx-field', key },
       h('label', null, label),
@@ -174,26 +169,23 @@ function ProfileGate({ bootstrap }) {
     toast && h('div', { className: 'prfx-toast' + (toast.err ? ' err' : '') }, toast.msg))
 }
 
-function ProfileMenu() {
+function ProfileButton({ active }) {
   const h = React.createElement
-  const [active, setActive] = React.useState(window.__DSH_PROFILES__?.active ?? null)
   const [open, setOpen] = React.useState(false)
   const logout = async () => {
     await api('logout')
     location.reload()
   }
-  return h('div', { style: { position: 'relative', display: 'inline-flex' } },
-    h('button', { className: 'ov-btn', style: { cursor: 'pointer' }, onClick: () => setOpen(!open), title: 'Perfil atual' },
+  return h('div', { style: { position: 'fixed', bottom: 16, right: 16, zIndex: 50000 } },
+    h('button', { className: 'prfx-float', onClick: () => setOpen(!open), title: 'Perfil atual' },
       ProfileIcon(14), ' ', active?.label ?? 'Perfil', h('span', { style: { fontSize: 10 } }, ' ▾')),
-    open && h('div', { style: { position: 'absolute', bottom: 'calc(100% + 6px)', right: 0, zIndex: 3000, minWidth: 180, background: 'var(--dsw-alias-bg-layer-3,#0a0b0e)', border: '1px solid var(--dsw-alias-border-l2,#3a3b44)', borderRadius: 8, padding: 6, boxShadow: '0 8px 24px rgba(0,0,0,.4)' } },
-      h('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary,#9a9aa5)', padding: '2px 8px' } }, `Perfil: ${active?.label ?? '—'}`),
-      h('button', { className: 'prfx-btn', style: { width: '100%', marginTop: 4 }, onClick: () => { setOpen(false); logout() } }, 'Sair / trocar perfil')))
+    open && h('div', { className: 'prfx-menu' },
+      h('div', { className: 'lbl' }, `Perfil: ${active?.label ?? '—'}`),
+      h('button', { className: 'prfx-btn', onClick: logout }, 'Sair / trocar perfil')))
 }
 
 function apply(ctx) {
   injectStyles()
-  // Helper global: cada plugin decide sua aba por perfil. Sem o dsh-profiles
-  // instalado (ou sem perfil ativo) tudo permanece visível.
   window.__profileTabEnabled = (tabId) => {
     try {
       const st = window.__DSH_PROFILES__
@@ -201,41 +193,19 @@ function apply(ctx) {
       return (st.active.plugins || []).includes(tabId)
     } catch { return true }
   }
-  ctx.plugin({
-    inject: ['betterSidebar'],
-    apply(sidebarCtx) {
-      const betterSidebar = sidebarCtx.betterSidebar
-      api('bootstrap').then((r) => {
-        if (!r.ok) return
-        window.__DSH_PROFILES__ = { active: r.active, profiles: r.profiles, plugins: r.plugins }
-        if (!r.active) {
-          // Sem perfil ativo: abre a aba de perfil (fullscreen via CSS) para
-          // que o gate tome a tela — o usuário escolhe e recarrega.
-          betterSidebar.registerTab?.({
-            id: GATE_TAB_ID,
-            title: 'Perfil',
-            order: 99,
-            single: true,
-            icon: (size) => ProfileIcon(size),
-            component: () => React.createElement(ProfileGate, { bootstrap: r }),
-          })
-          try { betterSidebar.openTab?.({ type: GATE_TAB_ID, id: GATE_TAB_ID }) } catch { /* aba indisponível */ }
-        } else {
-          // Perfil ativo: menu de perfil no rodapé da barra lateral.
-          if (betterSidebar.registerTab) {
-            betterSidebar.registerTab({
-              id: FOOTER_TAB_ID,
-              title: 'Perfil',
-              order: 1,
-              single: true,
-              icon: (size) => ProfileIcon(size),
-              component: () => React.createElement(ProfileMenu),
-            })
-          }
-        }
-      })
-    },
-  })
+  api('bootstrap').then((r) => {
+    if (!r.ok) return
+    window.__DSH_PROFILES__ = { active: r.active, profiles: r.profiles, plugins: r.plugins }
+    const host = document.createElement('div')
+    host.id = 'dsh-profiles-mount'
+    document.body.append(host)
+    const root = ReactDOMClient.createRoot(host)
+    if (!r.active) {
+      root.render(React.createElement(ProfileGate, { bootstrap: r }))
+    } else {
+      root.render(React.createElement(ProfileButton, { active: r.active }))
+    }
+  }).catch(() => {})
 }
 
   exports.apply = apply
