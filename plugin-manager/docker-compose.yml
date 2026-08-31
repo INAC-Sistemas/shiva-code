@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: plugin-manager-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: plugin_manager
+    ports:
+      # Exposto para que a CLI do Prisma possa rodar do host
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d plugin_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: plugin-manager-dev
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      # Código do host montado no container -> hot reload
+      - .:/app
+      # Volumes anônimos preservam o node_modules e o .next do container,
+      # evitando que a montagem acima sobrescreva o que foi instalado no build
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/plugin_manager?schema=public
+      # Lido do .env do host (que é gitignored), para não versionar o segredo
+      - SESSION_SECRET=${SESSION_SECRET:?defina SESSION_SECRET no .env}
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
+
+volumes:
+  pgdata:

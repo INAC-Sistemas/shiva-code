@@ -1,0 +1,21 @@
+FROM node:22-alpine
+
+# openssl é exigido pelos engines do Prisma na imagem alpine
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Instala dependências primeiro para aproveitar o cache de camadas
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+ENV NODE_ENV=development
+# Necessário para o file watching funcionar sobre bind mounts (WSL2/macOS)
+ENV WATCHPACK_POLLING=true
+ENV CHOKIDAR_USEPOLLING=true
+
+EXPOSE 3000
+
+ENTRYPOINT ["sh", "/app/docker/dev-entrypoint.sh"]

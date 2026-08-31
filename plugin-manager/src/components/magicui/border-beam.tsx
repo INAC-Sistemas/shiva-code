@@ -1,0 +1,74 @@
+"use client";
+
+import type { CSSProperties } from "react";
+import { motion, type MotionStyle, type Transition } from "motion/react";
+import { cn } from "@/lib/utils";
+
+interface BorderBeamProps {
+  /** Tamanho (em px) do rastro luminoso que percorre a borda. */
+  size?: number;
+  /** Duração de uma volta completa, em segundos. */
+  duration?: number;
+  delay?: number;
+  colorFrom?: string;
+  colorTo?: string;
+  transition?: Transition;
+  className?: string;
+  style?: CSSProperties;
+  reverse?: boolean;
+  initialOffset?: number;
+  borderWidth?: number;
+}
+
+export function BorderBeam({
+  className,
+  size = 50,
+  delay = 0,
+  duration = 6,
+  colorFrom = "#6366f1",
+  colorTo = "#22d3ee",
+  transition,
+  style,
+  reverse = false,
+  initialOffset = 0,
+  borderWidth = 1,
+}: BorderBeamProps) {
+  return (
+    <div
+      // A máscara recorta tudo que não for a borda, então o rastro só aparece
+      // no contorno do elemento pai (que precisa ser `relative`).
+      style={{ "--border-beam-width": `${borderWidth}px` } as CSSProperties}
+      className="pointer-events-none absolute inset-0 rounded-[inherit] border-[length:var(--border-beam-width)] border-transparent [mask-clip:padding-box,border-box] [mask-composite:intersect] [mask-image:linear-gradient(transparent,transparent),linear-gradient(#000,#000)]"
+    >
+      <motion.div
+        className={cn(
+          "absolute aspect-square",
+          "bg-linear-to-l from-[var(--color-from)] via-[var(--color-to)] to-transparent",
+          className,
+        )}
+        style={
+          {
+            width: size,
+            offsetPath: `rect(0 auto auto 0 round ${size}px)`,
+            "--color-from": colorFrom,
+            "--color-to": colorTo,
+            ...style,
+          } as MotionStyle
+        }
+        initial={{ offsetDistance: `${initialOffset}%` }}
+        animate={{
+          offsetDistance: reverse
+            ? [`${100 - initialOffset}%`, `${-initialOffset}%`]
+            : [`${initialOffset}%`, `${100 + initialOffset}%`],
+        }}
+        transition={{
+          repeat: Infinity,
+          ease: "linear",
+          duration,
+          delay: -delay,
+          ...transition,
+        }}
+      />
+    </div>
+  );
+}
