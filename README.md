@@ -33,6 +33,7 @@ Os dois usuários guest são apenas dados de demonstração — remova o bloco m
 | `/`          | Redireciona para `/login` (ou `/dashboard`, se já houver sessão)  |
 | `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado   |
 | `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado     |
+| `/dashboard/token` | Gera um token de API para o usuário logado                  |
 
 O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenção
 `middleware` foi renomeada para `proxy`).
@@ -56,7 +57,9 @@ real contra corrida.
 
 ## API
 
-Autenticação por token Bearer, independente do login web.
+Autenticação por token Bearer, independente do login web. Pelo navegador, o menu
+**Token da API** no dashboard gera um token para o usuário logado — sem pedir a
+senha de novo, já que o cookie de sessão prova quem é. Pelo terminal:
 
 ```bash
 # 1. obter o token

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { requireSession } from "@/lib/auth";
 import { logout } from "@/app/actions/auth";
 import { RoleBadge } from "@/app/dashboard/role-badge";
+import { DashboardNav } from "@/app/dashboard/nav";
 
 export default async function DashboardLayout({
   children,
@@ -33,6 +34,8 @@ export default async function DashboardLayout({
             </form>
           </div>
         </div>
+
+        <DashboardNav />
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
