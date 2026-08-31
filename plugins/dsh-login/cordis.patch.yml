@@ -1,0 +1,48 @@
+# dsh-login bundle patch
+#
+# The `dsh.bundle.patch` layer of the package: installing it into a profile —
+#
+#   dsh plugin --profile web add link:/home/rai/shiva-code/plugins/dsh-login
+#
+# — appends `dsh-login` to that profile's `dsh.profile.bundles`, and the boot
+# merges this single `insert` (one plugin row) into the loader entry list. No
+# profile file edits.
+#
+# `endpoint` is the fallback URL only: whenever $DSH_LOGIN_ENDPOINT is set and
+# non-blank it wins, so one installed profile serves every deployment. Both
+# forms are validated at load — a malformed URL fails the boot rather than
+# locking the first user out of the app.
+#
+# The fallback reads `$VPS_URL` — the base URL (origin only) shared by every
+# plugin backed by the same VPS — and appends this plugin's own path, so a
+# deployment moves by changing one line in `.env`. `new URL` rather than string
+# concatenation: it normalizes a trailing slash on the base, and an unset
+# `$VPS_URL` throws at composition instead of silently producing the string
+# `undefined/api/...`.
+#
+# $DSH_LOGIN_ENDPOINT still outranks it, but only from the launching shell: a
+# `.env` file may not set `DSH_`-prefixed names and the boot rejects the whole
+# file if it tries. `$VPS_URL` is deliberately outside that space, so `.env` is
+# the channel for the ordinary case and the exported variable stays the
+# one-off override.
+#
+# Point the plugin at an endpoint whose JSON body uses other field names, or
+# whose token sits deeper in the answer, by config alone:
+#
+#   config:
+#     identifierField: username
+#     passwordField: secret
+#     tokenPath: data.accessToken
+#     headers:
+#       x-api-key: local-dev-key
+#     sessionTtlMs: 43200000   # 12 h; 0 (the default) never expires on its own
+- insert:
+    - id: login
+      name: 'dsh-login'
+      config:
+        endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
+        title: Entrar
+        subtitle: Faça login para usar o Shiva Code.
+        identifierLabel: E-mail
+        passwordLabel: Senha
+        submitLabel: Entrar

@@ -1,0 +1,102 @@
+# dsh-login
+
+A sign-in screen as the DSH web app's first screen. The browser stays covered until a login service accepts the typed credentials.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                                                      │
+│                 ┌────────────────────┐               │
+│                 │ Entrar             │               │
+│                 │ E-mail  [        ] │               │
+│                 │ Senha   [        ] │               │
+│                 │      (  Entrar   ) │               │
+│                 └────────────────────┘               │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+        POST → $DSH_LOGIN_ENDPOINT
+               (default $VPS_URL + /api/auth/login)
+```
+
+## The exchange
+
+The browser never posts to the login service directly. It posts what the user typed to this plugin's own route, and the host half forwards it:
+
+```
+browser ──POST /login/api/authenticate──▶ dsh-login (host) ──POST──▶ login service
+        ◀──── { ok, session } ──────────                  ◀── { token, … } ───
+```
+
+That keeps the endpoint URL — and any static header it needs — on the host, where the environment variable lives, and keeps the browser's request same-origin, so the login service needs no CORS grant for the gate to work.
+
+`GET /login/api/form` answers the descriptor the screen renders (title, labels, button text): the host owns every string, so the copy is config, not a rebuild.
+
+## Where the endpoint comes from
+
+`$DSH_LOGIN_ENDPOINT` wins whenever it is set and non-blank; otherwise `config.endpoint` applies. Rename the variable with `config.endpointEnv`. Both forms are validated at load — a URL that is malformed or not http(s) fails the boot, with the operator watching, rather than locking the first user out of the app.
+
+`config.endpoint` itself is not a literal in [cordis.patch.yml](cordis.patch.yml): it reads `$VPS_URL`, the base URL of the VPS shared by every plugin backed by it, and appends this plugin's own path.
+
+```yaml
+config:
+  endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
+```
+
+```sh
+# .env, in the invoking directory or in $DSH_HOME (both are gitignored)
+VPS_URL=https://vps1.example.com
+```
+
+`VPS_URL` carries the origin only — scheme, host, port, no path. `new URL` is deliberate: it normalizes a trailing slash on the base, and an unset `$VPS_URL` throws at composition rather than yielding the string `undefined/api/auth/login`, which would fail later with a worse message.
+
+The two channels do not overlap by accident. A `.env` file may not set `DSH_`-prefixed names — the boot rejects the whole file if it tries — so `$DSH_LOGIN_ENDPOINT` only ever arrives from the launching shell. `.env` is therefore the channel for the ordinary deployment, and the exported variable stays the one-off override.
+
+The forwarded body carries the two typed values under the configured field names (`email` and `password` by default), plus any `config.headers`. A successful answer must carry a non-empty string at `config.tokenPath` (`token` by default, dot paths like `data.accessToken` supported); a 2xx without one is reported as a misconfigured endpoint and does **not** open the gate.
+
+| Answer | What the user sees |
+| --- | --- |
+| 2xx with a token | the app |
+| 401 / 403 | the service's own `message`, or "Invalid credentials." |
+| 2xx without a token | "…returned no token at `token`." |
+| anything else, or unreachable | the status, or "The login service could not be reached." |
+
+## Behavior
+
+- The granted session is stored in `localStorage` under `dsh-login.session` (token plus whatever else the answer carried, never the password), so a reload does not ask again and never flashes the screen: the first render reads that row synchronously.
+- `config.sessionTtlMs` sets how long that lasts; `0` (the default) means until the browser storage is cleared. The token's own expiry stays the login service's business — this plugin does not read or refresh it.
+- Unknown state resolves to *covered*: unreadable or blocked storage, a descriptor that fails to load, or an answer this plugin cannot read all leave the screen up.
+- Covering the app is not enough on its own, so focus that escapes the card — Tab into the page underneath — is pulled back to the first field.
+- Restyle the screen from a profile's custom CSS through the `[data-dsh-login]` attribute.
+
+## What this gates
+
+The browser UI, and only that. Every other DSH route stays reachable by anything that can reach the port, and the plugin's own routes accept non-browser callers (the fence refuses cross-site *browser* requests, which is a CSRF defense, not authentication). Bind the harness to loopback, or put a real proxy in front of it, where that matters.
+
+## How it attaches
+
+`shell.overlay` is the frame-wide floating layer declared by `@deepseek-ai/dsh-client-ui-layout`. This plugin registers a fresh cell id (`dsh-login`) at `order: 10000`, so the gate sits above every other overlay entry; the layer grants pointer events to each entry, so the cover really does take the clicks. Nothing is replaced — remove the plugin and the app is exactly as before.
+
+The `root` slot, which looks like the natural seat for a first screen, is deliberately not used: it is a single slot, so registering there would shadow the whole app frame and take every seat it declares with it.
+
+`dsh.client.immediately` puts the bundle in the boot's first fetch tier, so the cover goes up as early as the client module system can mount it.
+
+## Install
+
+```sh
+pnpm --filter dsh-login build
+dsh plugin --profile web add link:/home/rai/shiva-code/plugins/dsh-login
+pnpm dsh --profile web   # reads $VPS_URL from .env
+```
+
+`dsh plugin add` appends `dsh-login` to the profile's `dsh.profile.bundles`; boot then merges [cordis.patch.yml](cordis.patch.yml), which inserts the `login` entry and its Portuguese copy. Rebuild (`pnpm --filter dsh-login build`) after any source change — the web shell always serves the built `lib/client.js`, even on a source launch.
+
+To remove the gate: `dsh plugin --profile web remove dsh-login`. That is also the way back in when the login service is down and nobody can sign in.
+
+## Development
+
+```sh
+pnpm --filter dsh-login typecheck
+pnpm --filter dsh-login test     # credential exchange, endpoint resolution, stored session, fence
+pnpm --filter dsh-login watch    # rebuild the bundles on change
+```
+
+MIT.

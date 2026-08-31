@@ -47,6 +47,30 @@ The answer is a network boundary, so it is validated rather than trusted: a miss
 
 Misconfiguration fails at load, not on the model's first call — a non-absolute URL, a non-http(s) scheme, and a non-positive `timeoutMs` all reject during `apply`.
 
+### The host lives in the environment, the path lives in the entry
+
+The shipped `cordis.patch.yml` reads `$VPS_URL` — the base URL of the VPS, shared by every plugin backed by it — and appends the one path this plugin calls:
+
+```yaml
+config:
+  endpoint: !!js "new URL('/api/plugins/host-info', process.env.VPS_URL).href"
+```
+
+```sh
+# .env, in the invoking directory or in $DSH_HOME (both are gitignored)
+VPS_URL=https://vps1.example.com
+```
+
+`VPS_URL` carries the origin only — scheme, host, port, no path. Moving the deployment is one line; which path this plugin calls stays with the plugin, where it belongs. Watching a second host means a second row with its own base variable (`APP_VPS_URL`, `DB_VPS_URL`) and its own `toolName`.
+
+The boot loads `.env` before the Loader interpolates the entry's `config`, layering inherited environment > invoking directory > `$DSH_HOME`.
+
+Three constraints come with the mechanism:
+
+- **Fail-loud survives.** `new URL` is deliberate: it normalizes a trailing slash on the base, and an unset `$VPS_URL` throws at composition rather than yielding the string `undefined/api/plugins/host-info`, which would fail later with a worse message. Do not write a `?? 'http://localhost:3000'` fallback into the expression — that is exactly the silent wrong host the required field exists to prevent.
+- **A `.env` file may not set bootstrap names** — anything prefixed `DSH_`, `XDG_`, `DYLD_`, `BASH_FUNC_`, plus `DEEPSEEK_BASE_URL`, the proxy and TLS variables, and the runtime/VCS hooks. The boot rejects the file with a named error; export those instead. `VPS_URL` is deliberately outside that space.
+- **An overlay that replaces the whole `config` drops the expression.** Patches target an entry by `id` and replace its `config` entirely, so a `$DSH_HOME/cordis.patch.yml` override must repeat the `!!js` line to keep reading the environment. `dsh --dump-config` prints expressions unevaluated alongside the file that supplied each row.
+
 ### One host per entry
 
 ```yaml
@@ -54,12 +78,12 @@ Misconfiguration fails at load, not on the model's first call — a non-absolute
     - id: vps-status-app
       name: 'dsh-vps-status'
       config:
-        endpoint: https://app.example.com/status
+        endpoint: !!js "new URL('/api/plugins/host-info', process.env.APP_VPS_URL).href"
         toolName: app_server_status
     - id: vps-status-db
       name: 'dsh-vps-status'
       config:
-        endpoint: https://db.example.com/status
+        endpoint: !!js "new URL('/api/plugins/host-info', process.env.DB_VPS_URL).href"
         toolName: db_server_status
 ```
 
@@ -85,7 +109,7 @@ pnpm --filter dsh-vps-status build
 dsh plugin --profile web add link:/absolute/path/to/plugins/dsh-vps-status
 ```
 
-Then point `config.endpoint` at the real host in the profile's `cordis.patch.yml`. Rebuild after any source change.
+Then set `VPS_URL` in the `.env` the run will see. Rebuild after any source change.
 
 To remove: `dsh plugin --profile web remove dsh-vps-status`.
 

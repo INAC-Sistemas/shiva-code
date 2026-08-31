@@ -11,22 +11,35 @@
 # wrong host is worse than one that refuses to load, so an entry without it
 # fails at composition with a schema error.
 #
+# The host lives in the environment, the path lives here: `$VPS_URL` carries
+# the base URL (origin only) shared by every plugin backed by the same VPS, and
+# this row appends the one path it reads. The boot loads the invoking
+# directory's `.env` and then `$DSH_HOME/.env` (an inherited variable outranks
+# both) before the Loader interpolates the expression below, so a deployment
+# moves by changing one line in `.env`.
+#
+# `new URL` rather than string concatenation: it normalizes a trailing slash on
+# the base, and an unset `$VPS_URL` throws at composition instead of silently
+# producing the string `undefined/api/...`. A `.env` file may not set
+# `DSH_`/`XDG_`-prefixed or other bootstrap names — `VPS_URL` is deliberately
+# outside that space.
+#
 # One entry watches one host. To watch several, add a row per host with its own
-# `id`, `endpoint`, and `toolName` (two tools cannot share a name):
+# `id`, base variable, and `toolName` (two tools cannot share a name):
 #
 #   - insert:
 #       - id: vps-status-app
 #         name: 'dsh-vps-status'
 #         config:
-#           endpoint: https://app.example.com/status
+#           endpoint: !!js "new URL('/api/plugins/host-info', process.env.APP_VPS_URL).href"
 #           toolName: app_server_status
 #       - id: vps-status-db
 #         name: 'dsh-vps-status'
 #         config:
-#           endpoint: https://db.example.com/status
+#           endpoint: !!js "new URL('/api/plugins/host-info', process.env.DB_VPS_URL).href"
 #           toolName: db_server_status
 - insert:
     - id: vps-status
       name: "dsh-vps-status"
       config:
-        endpoint: http://127.0.0.1:8081/status
+        endpoint: !!js "new URL('/api/plugins/host-info', process.env.VPS_URL).href"
