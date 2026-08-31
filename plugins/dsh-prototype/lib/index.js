@@ -7,6 +7,7 @@ import { readFile, writeFile, readdir, mkdir, rm, rename, stat } from 'node:fs/p
 import { existsSync } from 'node:fs'
 import { join, resolve, relative, dirname, sep, basename, extname } from 'node:path'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 export const inject = ['webServer', 'sessions']
 
@@ -54,8 +55,16 @@ function workspaceOf(ctx, payload) {
   return process.cwd()
 }
 
-function prototypeRoot(ctx, payload) {
-  return join(workspaceOf(ctx, payload), PROTOTYPE_FOLDER)
+/**
+ * Opaque, stable handle for one workspace. The file route is reached by the
+ * iframe and by the relative links inside it, and neither can carry the JSON
+ * scope the API routes receive — so the workspace travels in the URL path as
+ * this token, and relative navigation stays pinned to the workspace that
+ * minted it. Only workspaces the tab has reported are resolvable, so the route
+ * cannot be pointed at an arbitrary directory.
+ */
+function scopeToken(workspace) {
+  return createHash('sha256').update(workspace).digest('hex').slice(0, 16)
 }
 
 function guardRel(root, rel) {
@@ -240,6 +249,10 @@ export function apply(ctx) {
   const resultsOrder = []
   const consoleRing = []
 
+  // token -> workspace, filled by every API request (the tab polls the queue,
+  // so a live tab re-registers its workspace continuously).
+  const scopes = new Map()
+
   function remember(id, entry) {
     results.set(id, entry)
     resultsOrder.push(id)
@@ -262,11 +275,13 @@ export function apply(ctx) {
     try { payload = await readBody(req) } catch (e) { return json(res, 400, { ok: false, error: e.message }) }
 
     const workspace = workspaceOf(ctx, payload)
-    const root = prototypeRoot(ctx, payload)
+    const root = join(workspace, PROTOTYPE_FOLDER)
+    const token = scopeToken(workspace)
+    scopes.set(token, workspace)
     try {
       switch (method) {
         case 'status':
-          return json(res, 200, { ok: true, workspace, root, folder: PROTOTYPE_FOLDER, exists: existsSync(root) })
+          return json(res, 200, { ok: true, workspace, root, token, folder: PROTOTYPE_FOLDER, exists: existsSync(root) })
         case 'create_folder_root': {
           if (existsSync(root)) return json(res, 200, { ok: true, root, existed: true })
           await mkdir(root, { recursive: true })
@@ -395,9 +410,18 @@ export function apply(ctx) {
   const fileHandler = async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { ok: false, error: 'GET only' })
     const url = new URL(req.url ?? '/', 'http://local')
-    const root = prototypeRoot(ctx, payload)
+    // `/prototype/file/<scope token>/<path>`: the token pins the request to the
+    // workspace the tab is showing, and rides along on relative navigation.
+    const rest = url.pathname.slice('/prototype/file/'.length)
+    const cut = rest.indexOf('/')
+    const workspace = scopes.get(cut === -1 ? rest : rest.slice(0, cut))
+    if (!workspace) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+      return res.end('unknown workspace — reload the Prototype tab')
+    }
+    const root = join(workspace, PROTOTYPE_FOLDER)
     try {
-      const target = guardRel(root, decodeURIComponent(url.pathname.slice('/prototype/file/'.length)))
+      const target = guardRel(root, decodeURIComponent(cut === -1 ? '' : rest.slice(cut + 1)))
       const st = await stat(target).catch(() => null)
       if (!st || st.isDirectory()) {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })

@@ -10,7 +10,7 @@ A simple live browser for workspace prototypes: renders the workspace `prototype
 
 ## How it works
 
-- **File server**: `GET /prototype/file/<path>` serves the folder with correct MIME; every `.html` response gets `<script src="/prototype/shim.js">` injected before `</body>`.
+- **File server**: `GET /prototype/file/<token>/<path>` serves the folder with correct MIME; every `.html` response gets `<script src="/prototype/shim.js">` injected before `</body>`. The token is the workspace handle returned by `status`: a `GET` carries no JSON scope, so the workspace travels in the path, where the page's relative links keep it. Only workspaces the tab has reported resolve — anything else is `404`.
 - **Shim** (injected): exposes click (selector or visible text), fill (native setter + input/change events), read, eval, wait_for and console_dump to the tab over `postMessage`; hooks `console.error/warn`, `window.onerror` and `unhandledrejection` (200-entry buffer).
 - **Automation queue (host)**: one command in flight, 12 s TTL.
   - `POST /prototype/api/automation/submit` `{cmd:{op,...}}` → `{id}` (409 when busy)

@@ -75,6 +75,9 @@ function ProtoIcon(size) {
 function PrototypeView(props) {
   const h = React.createElement
   SCOPE = props?.scope ? { sessionId: props.scope.sessionId, cwd: props.scope.cwd } : null
+  // Identity of the workspace being shown: everything below is reloaded when it
+  // changes, so switching session never leaves another workspace's files on screen.
+  const scopeKey = (props?.scope?.cwd ?? '') + '\u0000' + (props?.scope?.sessionId ?? '')
   const [status, setStatus] = React.useState(null)
   const [entries, setEntries] = React.useState(null)
   const [currentPath, setCurrentPath] = React.useState(null)
@@ -111,7 +114,13 @@ function PrototypeView(props) {
     }).catch(() => {})
   }, [])
 
-  React.useEffect(() => { loadStatus(); loadList() }, [loadStatus, loadList])
+  React.useEffect(() => {
+    setStatus(null)
+    setEntries(null)
+    setCurrentPath(null)
+    loadStatus()
+    loadList()
+  }, [scopeKey, loadStatus, loadList])
 
   const htmlFiles = React.useMemo(
     () => (entries ?? []).filter((e) => e.type === 'file' && e.html).map((e) => e.path),
@@ -256,9 +265,14 @@ function PrototypeView(props) {
     return () => clearInterval(timer)
   }, [])
 
+  // Served URL for the workspace this tab is scoped to. The token is minted by
+  // `status`; relative links inside the page keep it, so navigation stays in
+  // the same workspace.
+  const fileBase = status?.token ? FILE_BASE + status.token + '/' : null
+
   const reload = () => {
-    if (iframeRef.current && currentPath) {
-      iframeRef.current.src = FILE_BASE + currentPath + '?t=' + Date.now()
+    if (iframeRef.current && currentPath && fileBase) {
+      iframeRef.current.src = fileBase + currentPath + '?t=' + Date.now()
     }
   }
 
@@ -295,8 +309,8 @@ function PrototypeView(props) {
       h('button', { className: 'pt-btn', onClick: () => setConsoleOpen(!consoleOpen), title: 'Console errors/warnings' },
         'Console ' + (consoleEntries.length ? '(' + consoleEntries.length + ')' : ''))),
     h('div', { className: 'pt-view' },
-      currentPath
-        ? h('iframe', { ref: iframeRef, src: FILE_BASE + currentPath, title: 'prototype' })
+      currentPath && fileBase
+        ? h('iframe', { ref: iframeRef, src: fileBase + currentPath, title: 'prototype' })
         : h('div', { className: 'pt-hint' },
           entries !== null && htmlFiles.length === 0
             ? h('div', null, 'No .html files yet.', h('br'), 'Ask the agent to create ', h('code', null, 'prototype/index.html'), ' or add one yourself.')
