@@ -42,3 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# O .gitignore da raiz ignora `lib/` por causa dos builds do harness, e o padrão
+# alcança `src/lib/` daqui — que é código-fonte. Sem esta reinclusão, um arquivo
+# novo em src/lib fica de fora do commit em silêncio e a aplicação quebra para
+# todo mundo que clona.
+!/src/lib/

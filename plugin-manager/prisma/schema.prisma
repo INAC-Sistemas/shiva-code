@@ -100,6 +100,41 @@ model PrototypeConsoleEntry {
   @@map("prototype_console_entries")
 }
 
+/// Biblioteca compartilhada de skills, servida ao provider remoto do `dsh`.
+///
+/// Não há coluna de dono, ao contrário dos modelos `Prototype*`: a biblioteca é
+/// uma só para toda a instalação, e todo usuário autenticado lê tudo. Quem é
+/// filtrado é a escrita, restrita a `ADMIN` pelas actions do painel.
+///
+/// As colunas SÃO o frontmatter de um `SKILL.md` — `content` guarda só o
+/// Markdown que vem depois dele. Assim o cliente recebe campos já tipados e não
+/// precisa carregar um parser de YAML para ler uma skill.
+model LibrarySkill {
+  id             String   @id @default(uuid())
+  /// Identificador que o modelo escreve em `skill({ name })`: kebab-case,
+  /// `^[a-z0-9]+(?:-[a-z0-9]+)*$`, único em toda a biblioteca.
+  name           String   @unique
+  /// Frase de roteamento que entra no catálogo do modelo. É por ela que o
+  /// modelo decide carregar a skill, então nunca fica vazia.
+  description    String
+  whenToUse      String?
+  /// Corpo Markdown das instruções, sem o bloco de frontmatter.
+  content        String
+  modelInvocable Boolean  @default(true)
+  userInvocable  Boolean  @default(true)
+  /// Despublicar tira a skill de circulação sem apagá-la: a API responde 404,
+  /// e o painel continua mostrando a linha como rascunho.
+  published      Boolean  @default(true)
+  /// Incrementa a cada escrita de conteúdo; o cliente usa para detectar
+  /// mudança sem baixar corpo.
+  revision       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([published, name])
+  @@map("library_skills")
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Blocks, KeyRound, LogOut, Menu, Users, X } from "lucide-react";
+import { Blocks, KeyRound, LogOut, Menu, Sparkles, Users, X } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/actions/auth";
@@ -18,6 +18,12 @@ const items = [
     label: "Usuários",
     hint: "Contas cadastradas",
     icon: Users,
+  },
+  {
+    href: "/dashboard/skills",
+    label: "Skills",
+    hint: "Biblioteca compartilhada",
+    icon: Sparkles,
   },
   {
     href: "/dashboard/token",

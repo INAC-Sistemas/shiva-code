@@ -33,6 +33,7 @@ Os dois usuários guest são apenas dados de demonstração — remova o bloco m
 | `/`          | Redireciona para `/login` (ou `/dashboard`, se já houver sessão)  |
 | `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado   |
 | `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado     |
+| `/dashboard/skills` | Biblioteca de skills: lista para todos, cadastro para admin |
 | `/dashboard/token` | Gera um token de API para o usuário logado                  |
 
 O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenção
@@ -54,6 +55,44 @@ Botão **Novo usuário** no dashboard (visível só para admin). Valida nome, fo
 do e-mail, senha com no mínimo 8 caracteres e papel, e recusa e-mail duplicado —
 tanto por consulta prévia quanto pelo índice único do Postgres, que é a garantia
 real contra corrida.
+
+## Biblioteca de skills
+
+Uma skill é o bloco de instruções que dirige um agente do `dsh`. O menu
+**Skills** é onde elas são cadastradas, e a biblioteca é **uma só para toda a
+instalação**: não há dono por linha, e o que separa os papéis é a escrita.
+
+- **ADMIN** cria, edita, publica, despublica e remove.
+- **GUEST** vê a lista — e, com um token de API válido, consome as publicadas.
+
+O guard de escrita está no início de
+[src/app/actions/skills.ts](src/app/actions/skills.ts), no servidor: esconder o
+formulário no cliente não é controle de acesso.
+
+Uma skill despublicada continua no painel como rascunho e some da API. É a saída
+para tirar de circulação sem perder o texto.
+
+### Cadastro
+
+O formulário aceita os campos separados ou um `SKILL.md` inteiro colado — o
+frontmatter vira as colunas e o resto vira o corpo. As chaves aceitas são
+exatamente as que o `dsh` lê em disco (`name`, `description`, `whenToUse`,
+`disable-model-invocation`, `user-invocable`), porque uma skill que valesse aqui
+e não lá seria pior que uma recusada.
+
+O nome é kebab-case (`^[a-z0-9]+(?:-[a-z0-9]+)*$`): é o identificador que o
+modelo escreve em `skill({ name })`, e um nome fora dessa regra é inendereçável.
+
+### Seed e fonte da verdade
+
+`prisma/skills/<nome>/SKILL.md` guarda o conteúdo inicial, semeado por
+`npm run db:seed`. O seed **cria e nunca atualiza**: ele roda a cada start do
+container, e atualizar reverteria em silêncio toda edição feita no painel.
+
+Depois da primeira execução **o Postgres é a fonte da verdade** — editar o
+markdown do repositório não muda o que está no ar. Para sobrescrever o que está
+gravado a partir dos arquivos, `npx tsx prisma/seed.ts --force-skills`, que é um
+gesto explícito justamente porque descarta o que foi editado.
 
 ## API
 
