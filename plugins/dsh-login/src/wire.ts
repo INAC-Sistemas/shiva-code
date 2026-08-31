@@ -18,6 +18,21 @@ export const AUTHENTICATE_ROUTE = '/login/api/authenticate'
 /** `POST` route that ends the session at the login service. */
 export const LOGOUT_ROUTE = '/login/api/logout'
 
+/** `GET` route that asks the login service whether a token is still good. */
+export const VALIDATE_ROUTE = '/login/api/validate'
+
+/**
+ * The validate route's answer.
+ *
+ * The two failures are kept apart because only one of them may end a session:
+ * `rejected` is the login service saying the token is dead, and `unreachable`
+ * is everything else. Collapsing them into a bare boolean would turn an outage
+ * of the login service into a mass sign-out.
+ */
+export type ValidateResult =
+  | { ok: true }
+  | { ok: false, reason: 'rejected' | 'unreachable', message?: string }
+
 /**
  * The logout route's answer.
  *
@@ -87,6 +102,13 @@ export type LoginErrorCode =
   | 'bad-request'
   /** The request did not come from this app's own page. */
   | 'forbidden'
+  /**
+   * The credentials were accepted but the host's own copy of the session could
+   * not be stored. Reported as a failure rather than ignored: a browser signed
+   * in against a host that holds no grant would report success and then fail
+   * every host-side request.
+   */
+  | 'grant-storage'
 
 /** A failed attempt: the code drives the UI, the message is shown to the user. */
 export interface LoginError {

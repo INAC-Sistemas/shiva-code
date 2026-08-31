@@ -67,6 +67,16 @@ export default [
     clean: false,
   },
   {
+    entry: { 'vps-auth': 'src/vps-auth.ts' },
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+  },
+  {
     entry: { client: 'src/client/index.tsx' },
     outDir: 'lib',
     format: 'cjs',

@@ -21,14 +21,15 @@
 # `new URL` rather than string concatenation: it normalizes a trailing slash on
 # the base, and an unset `$VPS_URL` throws at composition instead of silently
 # producing the string `undefined/api/...`. A `.env` file may not set
-# `DSH_`/`XDG_`-prefixed or other bootstrap names — `VPS_URL` and `VPS_TOKEN`
-# are deliberately outside that space.
+# `DSH_`/`XDG_`-prefixed or other bootstrap names — `VPS_URL` is deliberately
+# outside that space.
 #
-# `$VPS_TOKEN` is the same shared credential: every plugin backed by this VPS
-# copies the `authorization` row below, so the token is written once and
-# rotated once. The throwing fallback keeps an unset variable from reaching the
-# endpoint as `Bearer undefined`, which would surface as a 401 on the model's
-# first call instead of at load.
+# There is no token to configure. The request is authenticated as whoever
+# signed in through dsh-login, which records the granted session as a
+# credential record this plugin reads once per call — so dsh-login must be
+# mounted in the same profile, and with nobody signed in the tool refuses and
+# says so rather than asking the endpoint anonymously. An `authorization` row
+# under `headers` is rejected at load: that header has one source now.
 #
 # One entry watches one host. To watch several, add a row per host with its own
 # `id`, base variable, and `toolName` (two tools cannot share a name):
@@ -49,5 +50,3 @@
       name: "dsh-vps-status"
       config:
         endpoint: !!js "new URL('/api/plugins/host-info', process.env.VPS_URL).href"
-        headers:
-          authorization: !!js "'Bearer ' + (process.env.VPS_TOKEN ?? (() => { throw new Error('VPS_TOKEN is not set in .env') })())"

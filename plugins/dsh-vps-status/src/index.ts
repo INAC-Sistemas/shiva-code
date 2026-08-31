@@ -7,13 +7,22 @@
  * model sees the tool name, its description and its result; the endpoint's
  * implementation stays wherever it is deployed.
  *
+ * The request is authenticated as the signed-in user: dsh-login records the
+ * granted session as a credential record, and this plugin reads it once per
+ * call. There is no machine credential to configure, and no session of its own
+ * to keep — with nobody signed in the tool refuses and says so, rather than
+ * asking the endpoint anonymously.
+ *
  * One entry serves one host: mount the plugin once per machine to watch, each
  * row carrying its own `id` and `endpoint`.
  * @module dsh-vps-status
  */
 import type { Context } from '@deepseek-ai/cordis'
+// Type-only: pulls the credential seam's Context merge (ctx.credentials).
+import type {} from '@deepseek-ai/dsh-credentials'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { resolveLoginAuthorization } from 'dsh-login/vps-auth'
 import { formatVpsStatus, parseVpsStatus, VpsStatusFormatError } from './status.ts'
 
 export type { Usage, UsageBytes, VpsStatus } from './status.ts'
@@ -37,8 +46,9 @@ export interface Config {
   /** Text the model reads to decide when to call the tool. */
   description?: string
   /**
-   * Static headers added to the request (`authorization`, a gateway key, a
-   * tenant id). The plugin's own `accept` is applied last and cannot be
+   * Static headers added to the request (a gateway key, a tenant id).
+   * `authorization` is rejected: it carries the signed-in user's session and
+   * has one source. The plugin's own `accept` is applied last and cannot be
    * overridden — the endpoint answers JSON or the result is rejected anyway.
    */
   headers?: Record<string, string>
@@ -98,18 +108,40 @@ const FIELD_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
  * Reject unusable static headers at load. `fetch` would otherwise throw an
  * opaque TypeError on the model's first call, and a blank credential would
  * reach the endpoint as an anonymous request answered 401.
+ *
+ * A configured `authorization` is rejected too: the request is authenticated
+ * with the signed-in user's session, and a leftover static token would sit in
+ * front of it and silently shadow whoever is signed in.
  * @param headers - the configured static headers.
- * @throws Error when a name is not a field name or a value is blank.
+ * @throws Error when a name is not a field name, a value is blank, or the name is `authorization`.
  */
 function assertHeaders(headers: Record<string, string>): void {
   for (const [name, value] of Object.entries(headers)) {
     if (!FIELD_NAME.test(name)) {
       throw new Error(`dsh-vps-status: "${name}" is not a valid header name`)
     }
+    if (name.toLowerCase() === 'authorization') {
+      throw new Error(
+        'dsh-vps-status: config.headers must not set "authorization"; the request is authenticated '
+        + "with the signed-in user's session from dsh-login",
+      )
+    }
     if (value.trim() === '') {
       throw new Error(`dsh-vps-status: header "${name}" has a blank value`)
     }
   }
+}
+
+/** What the model is told when there is no session to authenticate with. */
+const NO_SESSION_TEXT: Record<'no-store' | 'absent' | 'expired' | 'malformed', string> = {
+  'absent': 'No one is signed in, so there is no credential for the server. '
+    + 'Tell the user to sign in in the app, then call this tool again. Do not retry until they have.',
+  'expired': 'The signed-in session expired. '
+    + 'Tell the user to sign in again, then call this tool again. Do not retry until they have.',
+  'no-store': 'This harness mounts no credential store, so a sign-in has nowhere to be recorded. '
+    + 'Tell the user to mount dsh-credentials-local and do not retry.',
+  'malformed': 'The stored session record could not be read. '
+    + 'Tell the user to sign out and in again and do not retry.',
 }
 
 /**
@@ -127,9 +159,6 @@ export function apply(ctx: Context, config: Config): void {
   const endpoint = resolveEndpoint(resolved.endpoint)
   assertTimeout(resolved.timeoutMs)
   assertHeaders(resolved.headers)
-  // The plugin's own `accept` is applied last: config may authenticate the
-  // request, not change the format the result parser depends on.
-  const headers = { ...resolved.headers, accept: 'application/json' }
 
   ctx.tools.register(defineTool({
     name: resolved.toolName,
@@ -166,6 +195,18 @@ export function apply(ctx: Context, config: Config): void {
       render: (_args, value) => [{ type: 'text', text: formatVpsStatus(value) }],
     },
     async execute(_args, exec) {
+      // Resolved per call, never cached: that is what makes a sign-in, a
+      // sign-out, or a re-login reach the next call without a restart.
+      const authorization = await resolveLoginAuthorization(ctx.get('credentials'), Date.now())
+      if (!authorization.ok) throw new Error(NO_SESSION_TEXT[authorization.reason])
+      // Config first, the session credential next (config may add headers,
+      // never the credential), and the plugin's own `accept` last: config may
+      // not change the format the result parser depends on.
+      const headers = {
+        ...resolved.headers,
+        authorization: authorization.authorization,
+        accept: 'application/json',
+      }
       // The caller's signal carries stop and cancellation; the deadline is
       // this plugin's own. Dropping either would hang the turn or leak a
       // request the harness already abandoned.
@@ -178,6 +219,15 @@ export function apply(ctx: Context, config: Config): void {
         throw new Error(
           `Could not reach the status endpoint (${(error as Error).message}). `
           + 'Tell the user the server is unreachable and do not retry.',
+        )
+      }
+      if (response.status === 401 || response.status === 403) {
+        // The session is dead at the endpoint, but a tool call is the wrong
+        // place to act on that: a transient upstream fault would then wipe a
+        // good session. The browser's own revalidation retires it.
+        throw new Error(
+          `The status endpoint rejected the signed-in session (${response.status}). `
+          + 'Tell the user to sign in again and do not retry.',
         )
       }
       if (!response.ok) {

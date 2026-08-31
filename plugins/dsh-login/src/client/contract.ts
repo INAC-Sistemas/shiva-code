@@ -30,6 +30,27 @@ export interface LoginSessionContract {
    */
   token(): string | null
   /**
+   * Call an API that authenticates with this session, and return to the gate
+   * when it says the session is over.
+   *
+   * This is the path a consumer plugin should use for every such call. Building
+   * the request by hand from {@link token} works and is exactly what loses the
+   * `401` handling below, leaving the app looking signed in with a token
+   * nothing accepts.
+   *
+   * The bearer is attached here and overrides any `authorization` in `init` —
+   * this method owns that header. A `401` or `403` ends the session (here, in
+   * storage, in every other tab, and on the host) and the response is still
+   * returned, so the caller decides what to render. Every other status,
+   * including a network failure, leaves the session alone: a service that
+   * cannot be reached must not sign anyone out.
+   * @param input - the request, as `fetch` takes it.
+   * @param init - request options; any `authorization` header is replaced.
+   * @returns the response, whatever its status.
+   * @throws whatever `fetch` throws, unchanged.
+   */
+  authorizedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+  /**
    * End the session here, in storage, in every other tab, and at the login
    * service.
    *

@@ -3,8 +3,8 @@
  * against this plugin's own routes; the login service is the host's business.
  * @module dsh-login/client/api
  */
-import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from '../wire.ts'
-import type { AuthenticateResult, Credentials, LoginForm, LogoutResult } from '../wire.ts'
+import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE, VALIDATE_ROUTE } from '../wire.ts'
+import type { AuthenticateResult, Credentials, LoginForm, LogoutResult, ValidateResult } from '../wire.ts'
 
 /**
  * Fetch the form descriptor.
@@ -58,6 +58,30 @@ export async function submitCredentials(credentials: Credentials, signal: AbortS
  * @param token - the token being retired.
  * @returns whether the login service acknowledged it.
  */
+/**
+ * Ask the host whether the stored token is still good.
+ *
+ * Never throws, and every failure it cannot attribute to the login service is
+ * reported as `unreachable`: only a refusal may end a session, so an outage
+ * between here and the service must not read as one.
+ * @param token - the token to check.
+ * @returns whether the session still holds, and why it does not.
+ */
+export async function submitValidate(token: string): Promise<ValidateResult> {
+  try {
+    const response = await fetch(VALIDATE_ROUTE, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+    })
+    const parsed = await response.json().catch(() => undefined) as ValidateResult | undefined
+    if (parsed === undefined || typeof parsed.ok !== 'boolean') {
+      return { ok: false, reason: 'unreachable', message: `Unexpected answer from the app (${response.status}).` }
+    }
+    return parsed
+  } catch {
+    return { ok: false, reason: 'unreachable', message: 'The app could not be reached.' }
+  }
+}
+
 export async function submitLogout(token: string): Promise<LogoutResult> {
   try {
     const response = await fetch(LOGOUT_ROUTE, {

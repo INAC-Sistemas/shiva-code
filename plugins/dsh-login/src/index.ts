@@ -18,21 +18,42 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the webserver plugin's Context merge (ctx.webServer).
 import type {} from '@deepseek-ai/dsh-host-webserver'
+// Type-only: pulls the credential seam's Context merge (ctx.credentials).
+import type {} from '@deepseek-ai/dsh-credentials'
 import z from '@deepseek-ai/schemastery'
 import { buildUpstreamPayload, interpretUpstream, LoginRequestError, parseCredentials } from './auth.ts'
-import { assertSessionTtl, assertTimeout, resolveEndpoint, resolveLogoutEndpoint, sessionLifetime } from './config.ts'
+import {
+  assertRevalidateInterval,
+  assertSessionTtl,
+  assertTimeout,
+  resolveEndpoint,
+  resolveLogoutEndpoint,
+  resolveValidateEndpoint,
+  sessionLifetime,
+} from './config.ts'
 import { isSameOriginRequest } from './fence.ts'
 import { readJsonBody, writeJson } from './http.ts'
-import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from './wire.ts'
-import type { AuthenticateResult, LoginError, LoginForm, LogoutResult } from './wire.ts'
+import { publishGrant, revokeGrant } from './vps-auth.ts'
+import type { LoginCredentialStore } from './vps-auth.ts'
+import { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE, VALIDATE_ROUTE } from './wire.ts'
+import type { AuthenticateResult, LoginError, LoginForm, LogoutResult, ValidateResult } from './wire.ts'
 
 export type { CredentialFields, AnswerReading, UpstreamAnswer } from './auth.ts'
 export { buildUpstreamPayload, interpretUpstream, LoginRequestError, parseCredentials, pickToken, withoutPath } from './auth.ts'
-export { assertSessionTtl, assertTimeout, resolveEndpoint, resolveLogoutEndpoint, sessionLifetime } from './config.ts'
+export {
+  assertRevalidateInterval, assertSessionTtl, assertTimeout,
+  resolveEndpoint, resolveLogoutEndpoint, resolveValidateEndpoint, sessionLifetime,
+} from './config.ts'
 export { isSameOriginRequest } from './fence.ts'
-export { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE } from './wire.ts'
+export type { LoginAuthorization, LoginCredentialStore, LoginGrantPayload } from './vps-auth.ts'
+export {
+  LOGIN_RECORD_ID, LOGIN_RECORD_SCOPE, loginRecordKey, publishGrant,
+  readGrantPayload, resolveLoginAuthorization, revokeGrant, toGrantRecord,
+} from './vps-auth.ts'
+export { AUTHENTICATE_ROUTE, FORM_ROUTE, LOGOUT_ROUTE, VALIDATE_ROUTE } from './wire.ts'
 export type {
   AuthenticatedSession, AuthenticateResult, Credentials, LoginError, LoginErrorCode, LoginForm, LogoutResult,
+  ValidateResult,
 } from './wire.ts'
 
 /** Loader-visible plugin name; the entry `id` in cordis.patch.yml stays independent. */
@@ -58,6 +79,17 @@ export interface Config {
    * service has no such route: signing out then clears the browser alone.
    */
   logoutEndpoint?: string
+  /**
+   * Full URL that answers whether a token is still good, requested verbatim
+   * with the browser's own bearer token. Empty — the default — means the
+   * service has no such route and a stored session is never revalidated.
+   */
+  validateEndpoint?: string
+  /**
+   * Shortest gap between two focus-driven revalidations, in milliseconds. `0`
+   * revalidates on every focus, which is a request per tab switch.
+   */
+  revalidateIntervalMs?: number
   /** JSON field the endpoint expects the identifier in. */
   identifierField?: string
   /** JSON field the endpoint expects the secret in. */
@@ -90,6 +122,8 @@ export const Config: z<Config> = z.object({
   endpoint: z.string().default('http://localhost:3000/api/auth/login'),
   endpointEnv: z.string().default('DSH_LOGIN_ENDPOINT'),
   logoutEndpoint: z.string().default(''),
+  validateEndpoint: z.string().default(''),
+  revalidateIntervalMs: z.number().default(60_000),
   identifierField: z.string().default('email'),
   passwordField: z.string().default('password'),
   tokenPath: z.string().default('token'),
@@ -114,6 +148,20 @@ const FAILURE_STATUS: Record<LoginError['code'], number> = {
   'malformed': 502,
   'bad-request': 400,
   'forbidden': 403,
+  'grant-storage': 500,
+}
+
+/**
+ * The credential store, if this composition mounts one.
+ *
+ * Resolved per request rather than captured at `apply`: the credential seam is
+ * optional and may mount after this plugin, and its own rule is that consumers
+ * re-resolve per operation instead of holding a provider that may be disposed.
+ * @param ctx - the host cordis context.
+ * @returns the store, or undefined where no credential service is mounted.
+ */
+function credentialStore(ctx: Context): LoginCredentialStore | undefined {
+  return ctx.get('credentials')
 }
 
 /**
@@ -172,7 +220,7 @@ async function authenticate(
  * @param config - the resolved plugin config.
  * @returns the route handler.
  */
-function formHandler(config: ResolvedConfig): (req: IncomingMessage, res: ServerResponse) => void {
+export function formHandler(config: ResolvedConfig): (req: IncomingMessage, res: ServerResponse) => void {
   const form: LoginForm = {
     title: config.title,
     subtitle: config.subtitle,
@@ -195,11 +243,18 @@ function formHandler(config: ResolvedConfig): (req: IncomingMessage, res: Server
 
 /**
  * Serve the credential exchange.
+ *
+ * A granted session is written to the credential store BEFORE the browser is
+ * told, and a store that refuses fails the login: a browser holding a session
+ * the host has no record of would report success and then fail every host-side
+ * request, which is the silent half-state this ordering exists to prevent.
+ * @param ctx - the host cordis context, for the per-request credential store.
  * @param endpoint - the resolved endpoint URL.
  * @param config - the resolved plugin config.
  * @returns the route handler.
  */
-function authenticateHandler(
+export function authenticateHandler(
+  ctx: Context,
   endpoint: URL,
   config: ResolvedConfig,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
@@ -223,11 +278,29 @@ function authenticateHandler(
       throw error
     }
     const result = await authenticate(endpoint, payload, config)
-    if (result.ok) {
-      writeJson(response, 200, result)
+    if (!result.ok) {
+      writeFailure(response, result.error)
       return
     }
-    writeFailure(response, result.error)
+    const store = credentialStore(ctx)
+    if (store === undefined) {
+      writeFailure(response, {
+        code: 'grant-storage',
+        message: 'This app mounts no credential store, so a sign-in has nowhere to be recorded.',
+      })
+      return
+    }
+    try {
+      await publishGrant(store, result.session, Date.now())
+    } catch (error) {
+      ctx.logger.error(`dsh-login: could not store the granted session: ${(error as Error).message}`)
+      writeFailure(response, {
+        code: 'grant-storage',
+        message: 'The session could not be stored on this machine. Try again.',
+      })
+      return
+    }
+    writeJson(response, 200, result)
   }
 }
 
@@ -241,7 +314,8 @@ function authenticateHandler(
  * @param config - the resolved plugin config.
  * @returns the route handler.
  */
-function logoutHandler(
+export function logoutHandler(
+  ctx: Context,
   endpoint: URL | undefined,
   config: ResolvedConfig,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
@@ -254,15 +328,26 @@ function logoutHandler(
       writeJson(response, 405, { ok: false, message: 'method not allowed' } satisfies LogoutResult)
       return
     }
+    const bearer = request.headers.authorization
+    if (bearer === undefined) {
+      writeJson(response, 400, { ok: false, message: 'no bearer token' } satisfies LogoutResult)
+      return
+    }
+    // The host copy goes first and unconditionally, before either answer
+    // below: a login service that refuses or has no logout route must never
+    // leave this machine holding a session the user has ended.
+    const store = credentialStore(ctx)
+    if (store !== undefined) {
+      try {
+        await revokeGrant(store, bearer)
+      } catch (error) {
+        ctx.logger.warn(`dsh-login: could not clear the stored session: ${(error as Error).message}`)
+      }
+    }
     if (endpoint === undefined) {
       // Configured without an upstream route: the browser has already signed
       // itself out, and there is nothing to tell.
       writeJson(response, 200, { ok: true } satisfies LogoutResult)
-      return
-    }
-    const bearer = request.headers.authorization
-    if (bearer === undefined) {
-      writeJson(response, 400, { ok: false, message: 'no bearer token' } satisfies LogoutResult)
       return
     }
     let upstream: Response
@@ -285,6 +370,88 @@ function logoutHandler(
 }
 
 /**
+ * Serve the token check the browser runs on boot and on focus.
+ *
+ * The bearer comes from the incoming header; no session is stored here. The
+ * answer separates a refusal from an outage because only the first may end a
+ * session.
+ *
+ * `revalidateIntervalMs` is enforced here rather than in the browser because
+ * the client bundle receives no plugin config. The browser may ask on every tab
+ * switch; a repeat check of the same token inside that window is answered from
+ * the last positive result instead of calling the login service again.
+ *
+ * The cost, stated plainly: a token revoked at the login service keeps passing
+ * revalidation until the window elapses. That is what the rate limit buys, and
+ * it bounds how stale an answer can be — it does not make one authoritative.
+ * The memo only ever caches a pass, never a refusal, and holds one token at a
+ * time.
+ * @param endpoint - the resolved validation URL, or undefined when the service has none.
+ * @param config - the resolved plugin config.
+ * @param now - reads the current instant; injected so the window is testable.
+ * @returns the route handler.
+ */
+export function validateHandler(
+  endpoint: URL | undefined,
+  config: ResolvedConfig,
+  now: () => number = Date.now,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  let lastPass: { token: string, at: number } | undefined
+  return async (request, response) => {
+    if (!isSameOriginRequest(request)) {
+      writeJson(response, 403, { ok: false, reason: 'rejected', message: 'cross-site request' } satisfies ValidateResult)
+      return
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      writeJson(response, 405, { ok: false, reason: 'unreachable', message: 'method not allowed' } satisfies ValidateResult)
+      return
+    }
+    const bearer = request.headers.authorization
+    if (bearer === undefined) {
+      writeJson(response, 400, { ok: false, reason: 'unreachable', message: 'no bearer token' } satisfies ValidateResult)
+      return
+    }
+    if (endpoint === undefined) {
+      // No route to ask: a session cannot be disproved, and answering
+      // "rejected" here would sign out every user of a service that simply
+      // does not offer this check.
+      writeJson(response, 200, { ok: true } satisfies ValidateResult)
+      return
+    }
+    if (lastPass !== undefined && lastPass.token === bearer && now() - lastPass.at < config.revalidateIntervalMs) {
+      writeJson(response, 200, { ok: true } satisfies ValidateResult)
+      return
+    }
+    let upstream: Response
+    try {
+      upstream = await fetch(endpoint, {
+        signal: AbortSignal.timeout(config.timeoutMs),
+        headers: { ...config.headers, authorization: bearer, accept: 'application/json' },
+      })
+    } catch {
+      writeJson(response, 200, {
+        ok: false,
+        reason: 'unreachable',
+        message: 'the login service could not be reached',
+      } satisfies ValidateResult)
+      return
+    }
+    if (upstream.ok) {
+      lastPass = { token: bearer, at: now() }
+      writeJson(response, 200, { ok: true } satisfies ValidateResult)
+      return
+    }
+    const rejected = upstream.status === 401 || upstream.status === 403
+    if (rejected && lastPass?.token === bearer) lastPass = undefined
+    writeJson(response, 200, {
+      ok: false,
+      reason: rejected ? 'rejected' : 'unreachable',
+      message: `the login service answered ${upstream.status}`,
+    } satisfies ValidateResult)
+  }
+}
+
+/**
  * Register the routes.
  *
  * The endpoint is resolved and validated here so a gate pointed at a malformed
@@ -298,12 +465,22 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = config as ResolvedConfig
   const { url: endpoint, from } = resolveEndpoint(process.env, resolved)
   const logoutEndpoint = resolveLogoutEndpoint(resolved.logoutEndpoint)
+  const validateEndpoint = resolveValidateEndpoint(resolved.validateEndpoint)
   assertTimeout(resolved.timeoutMs)
   assertSessionTtl(resolved.sessionTtlMs)
+  assertRevalidateInterval(resolved.revalidateIntervalMs)
   ctx.logger.info(
     `login gate posts credentials to ${endpoint.href} `
     + `(from ${from === 'env' ? `$${resolved.endpointEnv}` : 'config.endpoint'})`,
   )
+  if (credentialStore(ctx) === undefined) {
+    // A diagnostic, not a gate: the seam may still mount after this plugin,
+    // and the login attempt itself is the earliest point that can decide.
+    ctx.logger.warn(
+      'dsh-login: no credentials service is mounted yet; host-side plugins cannot use the signed-in session '
+      + 'until one is (mount @deepseek-ai/dsh-credentials-local)',
+    )
+  }
 
   ctx.effect(
     () => ctx.webServer.register({ kind: 'exact', path: FORM_ROUTE, handler: formHandler(resolved) }),
@@ -313,7 +490,7 @@ export function apply(ctx: Context, config: Config): void {
     () => ctx.webServer.register({
       kind: 'exact',
       path: AUTHENTICATE_ROUTE,
-      handler: authenticateHandler(endpoint, resolved),
+      handler: authenticateHandler(ctx, endpoint, resolved),
     }),
     `dsh-login: ${AUTHENTICATE_ROUTE} route`,
   )
@@ -321,8 +498,16 @@ export function apply(ctx: Context, config: Config): void {
     () => ctx.webServer.register({
       kind: 'exact',
       path: LOGOUT_ROUTE,
-      handler: logoutHandler(logoutEndpoint, resolved),
+      handler: logoutHandler(ctx, logoutEndpoint, resolved),
     }),
     `dsh-login: ${LOGOUT_ROUTE} route`,
+  )
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: VALIDATE_ROUTE,
+      handler: validateHandler(validateEndpoint, resolved),
+    }),
+    `dsh-login: ${VALIDATE_ROUTE} route`,
   )
 }

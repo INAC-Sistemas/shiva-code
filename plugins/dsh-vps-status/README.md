@@ -41,7 +41,7 @@ The answer is a network boundary, so it is validated rather than trusted: a miss
 | `endpoint` | *(required)* | Full URL of the status resource, **not a base** — it is requested verbatim, so a path is preserved. |
 | `toolName` | `vps_status` | Tool name registered on `ctx.tools`; rename it when several hosts are mounted. |
 | `description` | *(see source)* | Text the model reads to decide when to call the tool. |
-| `headers` | `{}` | Static headers added to the request (`authorization`, a gateway key, a tenant id). |
+| `headers` | `{}` | Static headers added to the request (a gateway key, a tenant id). `authorization` is rejected — it carries the signed-in session. |
 | `timeoutMs` | `5000` | Request deadline in milliseconds. |
 
 `endpoint` has no default on purpose: a status tool pointed at the wrong host is worse than one that refuses to load. An entry without it fails at composition.
@@ -66,27 +66,31 @@ VPS_URL=https://vps1.example.com
 
 The boot loads `.env` before the Loader interpolates the entry's `config`, layering inherited environment > invoking directory > `$DSH_HOME`.
 
-### The credential is shared the same way
-
-`$VPS_TOKEN` sits beside `$VPS_URL`: one credential for every plugin backed by that VPS, written once and rotated once. Each such plugin copies this row into its own entry.
-
-```yaml
-config:
-  headers:
-    authorization: !!js "'Bearer ' + (process.env.VPS_TOKEN ?? (() => { throw new Error('VPS_TOKEN is not set in .env') })())"
-```
-
-The throwing fallback matters: `'Bearer ' + undefined` is a valid string, so without it an unset variable reaches the endpoint as `Bearer undefined` and comes back 401 on the model's first call rather than failing at load. A plugin that needs a different identity overrides `authorization` on its own row instead of introducing a second variable.
-
-Anything a deployment puts in `headers` is sent verbatim. The plugin applies its own `accept: application/json` **last**, so config can authenticate the request but cannot change the format the result parser depends on. A blank value and a name `fetch` could not send are both rejected at load — a blank credential would otherwise go out as an anonymous request and come back 401.
-
-The token never reaches the model or the browser: this package declares no `dsh.client`, and no failure message repeats a request header.
-
 Three constraints come with the mechanism:
 
 - **Fail-loud survives.** `new URL` is deliberate: it normalizes a trailing slash on the base, and an unset `$VPS_URL` throws at composition rather than yielding the string `undefined/api/plugins/host-info`, which would fail later with a worse message. Do not write a `?? 'http://localhost:3000'` fallback into the expression — that is exactly the silent wrong host the required field exists to prevent.
 - **A `.env` file may not set bootstrap names** — anything prefixed `DSH_`, `XDG_`, `DYLD_`, `BASH_FUNC_`, plus `DEEPSEEK_BASE_URL`, the proxy and TLS variables, and the runtime/VCS hooks. The boot rejects the file with a named error; export those instead. `VPS_URL` is deliberately outside that space.
 - **An overlay that replaces the whole `config` drops the expression.** Patches target an entry by `id` and replace its `config` entirely, so a `$DSH_HOME/cordis.patch.yml` override must repeat the `!!js` line to keep reading the environment. `dsh --dump-config` prints expressions unevaluated alongside the file that supplied each row.
+
+### Authentication comes from the signed-in user
+
+There is no token to configure and no machine credential. The request is authenticated as whoever signed in through **dsh-login**, which records the granted session as a credential record (`dsh-login/session`) that this plugin reads once per call — so dsh-login must be mounted in the same profile, and this plugin declares it as a peer dependency.
+
+Reading per call, never caching, is what makes a sign-in, a sign-out, or a re-login reach the next call without restarting the harness.
+
+With nobody signed in, the tool refuses and says so instead of asking the endpoint anonymously — no request leaves the machine. See [Failure behaviour](#failure-behaviour).
+
+```yaml
+config:
+  headers:
+    x-tenant: acme        # a gateway key, a tenant id — never `authorization`
+```
+
+A configured `authorization` is **rejected at load**: that header has one source now, and a leftover static token would sit in front of the session and silently shadow whoever is signed in. Anything else a deployment puts in `headers` is sent verbatim, with the plugin's own `accept: application/json` applied **last**, so config cannot change the format the result parser depends on. A blank value and a name `fetch` could not send are both rejected at load.
+
+The token never reaches the model or the browser: this package declares no `dsh.client`, and no failure message repeats a request header.
+
+One consequence worth stating: the credential is scoped to the harness home, not to a browser tab. A `dsh --profile headless` run sharing the same `$DSH_HOME` acts as whoever signed in last, and with nobody signed in it has no way to obtain a token of its own.
 
 ### One host per entry
 
@@ -113,7 +117,12 @@ Every failure message is written for its actual reader — the model — and ter
 | situation | what the model is told |
 |---|---|
 | host unreachable, DNS failure, deadline hit | *Could not reach the status endpoint (…). Tell the user the server is unreachable and do not retry.* |
-| non-2xx answer | *The status endpoint answered `<status>`. Tell the user and do not retry.* |
+| nobody signed in | *No one is signed in, so there is no credential for the server. Tell the user to sign in in the app… Do not retry until they have.* |
+| the signed-in session expired | *The signed-in session expired. Tell the user to sign in again… Do not retry until they have.* |
+| no credential store mounted | *This harness mounts no credential store, so a sign-in has nowhere to be recorded. …* |
+| the stored record is unreadable | *The stored session record could not be read. Tell the user to sign out and in again…* |
+| endpoint answers 401/403 | *The status endpoint rejected the signed-in session (`<status>`). Tell the user to sign in again and do not retry.* |
+| other non-2xx answer | *The status endpoint answered `<status>`. Tell the user and do not retry.* |
 | body is not JSON | *The status endpoint did not answer JSON. …* |
 | body breaks the contract | *… invalid `disk.totalBytes`: expected a number, got string. …* |
 
@@ -122,9 +131,12 @@ Caller cancellation (the user pressing stop) propagates unchanged instead of bei
 ## Install
 
 ```sh
+pnpm --filter dsh-login build          # this plugin reads dsh-login/vps-auth
 pnpm --filter dsh-vps-status build
 dsh plugin --profile web add link:/absolute/path/to/plugins/dsh-vps-status
 ```
+
+The profile must also mount **dsh-login** (for the session) and a credentials provider such as `@deepseek-ai/dsh-credentials-local` (for somewhere to record it — `@deepseek-ai/dsh-base` already mounts one).
 
 Then set `VPS_URL` in the `.env` the run will see. Rebuild after any source change.
 

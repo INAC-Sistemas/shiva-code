@@ -26,6 +26,14 @@
 # the channel for the ordinary case and the exported variable stays the
 # one-off override.
 #
+# `validateEndpoint` is what returns a user to the sign-in screen when their
+# token died while the browser was closed: the client checks it on boot and
+# whenever the tab regains focus, and only an explicit 401/403 ends the session
+# — an unreachable service leaves everyone signed in. Leave it empty and a
+# stored session is never revalidated. `revalidateIntervalMs` is the floor
+# between two focus-driven checks, enforced on the host because the client
+# bundle receives no config.
+#
 # Point the plugin at an endpoint whose JSON body uses other field names, or
 # whose token sits deeper in the answer, by config alone:
 #
@@ -42,6 +50,7 @@
       config:
         endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
         logoutEndpoint: !!js "new URL('/api/auth/logout', process.env.VPS_URL).href"
+        validateEndpoint: !!js "new URL('/api/auth/me', process.env.VPS_URL).href"
         title: Entrar
         subtitle: Faça login para usar o Shiva Code.
         identifierLabel: E-mail

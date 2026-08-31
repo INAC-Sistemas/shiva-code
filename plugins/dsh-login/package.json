@@ -15,6 +15,10 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./vps-auth": {
+      "types": "./lib/types/vps-auth.d.ts",
+      "default": "./lib/vps-auth.js"
+    },
     "./package.json": "./package.json"
   },
   "engines": {
@@ -36,6 +40,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/vps-auth.js",
     "lib/types/**/*.d.ts",
     "src",
     "cordis.patch.yml",
@@ -51,16 +56,19 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "react": "^18.2.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
+    "jsdom": "29.1.1",
     "react": "^18.2.0",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",

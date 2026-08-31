@@ -72,6 +72,43 @@ export function resolveLogoutEndpoint(logoutEndpoint: string): URL | undefined {
 }
 
 /**
+ * Resolve the optional validation endpoint. Empty means the login service has
+ * no such route, and a session is then never revalidated — never invalidated
+ * either, which is the safe direction: inventing a refusal would sign everyone
+ * out.
+ * @param validateEndpoint - the configured URL, or the empty string.
+ * @returns the parsed URL, or undefined when none is configured.
+ * @throws Error when a non-empty value is not an absolute http(s) URL.
+ */
+export function resolveValidateEndpoint(validateEndpoint: string): URL | undefined {
+  const value = validateEndpoint.trim()
+  if (value === '') return undefined
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`dsh-login: config.validateEndpoint is not an absolute URL: ${value}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`dsh-login: config.validateEndpoint must be http(s), got ${url.protocol}`)
+  }
+  return url
+}
+
+/**
+ * Reject a negative revalidation floor; `0` means every focus revalidates.
+ * @param revalidateIntervalMs - the configured floor between focus-driven revalidations.
+ * @throws Error when the floor is negative or not finite.
+ */
+export function assertRevalidateInterval(revalidateIntervalMs: number): void {
+  if (!Number.isFinite(revalidateIntervalMs) || revalidateIntervalMs < 0) {
+    throw new Error(
+      `dsh-login: revalidateIntervalMs must be zero or a positive finite number, got ${revalidateIntervalMs}`,
+    )
+  }
+}
+
+/**
  * Reject a non-positive deadline: a zero or negative timeout aborts every
  * request before it is sent, which reads as "the server is down" forever.
  * @param timeoutMs - the configured deadline.
