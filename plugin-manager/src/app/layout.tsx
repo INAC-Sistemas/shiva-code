@@ -23,7 +23,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* Extensões de navegador (ColorZilla, Grammarly e afins) injetam
+          atributos no <body> antes do React hidratar. suppressHydrationWarning
+          vale só para este elemento, então divergências reais dentro da árvore
+          continuam sendo reportadas. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
