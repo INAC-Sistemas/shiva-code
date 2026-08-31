@@ -48,4 +48,20 @@ export interface SlotRegistry {
 /** The browser cordis context after the client runtime provides its services. */
 export interface ClientContext {
   slots: SlotRegistry
+  /**
+   * Register a service under `name`, reachable by any plugin that declares it
+   * in `inject`. The registration is an effect on this plugin's fiber, so
+   * unloading the plugin withdraws the service.
+   * @param name - the service name.
+   * @param value - the published implementation.
+   * @returns disposer unregistering the service.
+   */
+  provide(name: string, value: unknown): () => void
+  /**
+   * Install an effect for this plugin's lifetime.
+   * @param callback - runs now and returns its disposer.
+   * @param label - diagnostic name for the effect.
+   * @returns disposer running the callback's own.
+   */
+  effect(callback: () => () => void, label?: string): () => void
 }

@@ -36,6 +36,12 @@ export interface Config {
   toolName?: string
   /** Text the model reads to decide when to call the tool. */
   description?: string
+  /**
+   * Static headers added to the request (`authorization`, a gateway key, a
+   * tenant id). The plugin's own `accept` is applied last and cannot be
+   * overridden — the endpoint answers JSON or the result is rejected anyway.
+   */
+  headers?: Record<string, string>
   /** Request deadline in milliseconds. */
   timeoutMs?: number
 }
@@ -47,6 +53,7 @@ export const Config: z<Config> = z.object({
     'Read the current disk and memory usage of the server. Takes no arguments. '
     + 'Use it when the user asks how the server is doing, or before an operation that needs free space or memory.',
   ),
+  headers: z.dict(z.string()).default({}),
   timeoutMs: z.number().default(5_000),
 })
 
@@ -84,6 +91,27 @@ function assertTimeout(timeoutMs: number): void {
   }
 }
 
+/** Characters RFC 9110 allows in a field name. */
+const FIELD_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/**
+ * Reject unusable static headers at load. `fetch` would otherwise throw an
+ * opaque TypeError on the model's first call, and a blank credential would
+ * reach the endpoint as an anonymous request answered 401.
+ * @param headers - the configured static headers.
+ * @throws Error when a name is not a field name or a value is blank.
+ */
+function assertHeaders(headers: Record<string, string>): void {
+  for (const [name, value] of Object.entries(headers)) {
+    if (!FIELD_NAME.test(name)) {
+      throw new Error(`dsh-vps-status: "${name}" is not a valid header name`)
+    }
+    if (value.trim() === '') {
+      throw new Error(`dsh-vps-status: header "${name}" has a blank value`)
+    }
+  }
+}
+
 /**
  * Register the tool.
  *
@@ -98,6 +126,10 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = config as ResolvedConfig
   const endpoint = resolveEndpoint(resolved.endpoint)
   assertTimeout(resolved.timeoutMs)
+  assertHeaders(resolved.headers)
+  // The plugin's own `accept` is applied last: config may authenticate the
+  // request, not change the format the result parser depends on.
+  const headers = { ...resolved.headers, accept: 'application/json' }
 
   ctx.tools.register(defineTool({
     name: resolved.toolName,
@@ -140,7 +172,7 @@ export function apply(ctx: Context, config: Config): void {
       const signal = AbortSignal.any([exec.signal, AbortSignal.timeout(resolved.timeoutMs)])
       let response: Response
       try {
-        response = await fetch(endpoint, { signal, headers: { accept: 'application/json' } })
+        response = await fetch(endpoint, { signal, headers })
       } catch (error) {
         if (exec.signal.aborted) throw error
         throw new Error(

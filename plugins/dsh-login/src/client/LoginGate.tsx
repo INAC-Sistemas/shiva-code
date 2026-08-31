@@ -13,11 +13,10 @@
  * theme. `data-dsh-login` is the stable hook for a profile's own CSS.
  * @module dsh-login/client/LoginGate
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
 import { fetchForm, submitCredentials } from './api.ts'
-import { browserStorage, readSession, writeSession } from './session.ts'
-import type { StoredSession } from './session.ts'
+import type { SessionStore } from './store.ts'
 import type { LoginError, LoginForm } from '../wire.ts'
 
 /** Full-frame cover. The overlay layer grants pointer events to its children, so the app underneath is unreachable. */
@@ -111,13 +110,22 @@ type FormState =
   | { kind: 'ready'; form: LoginForm }
   | { kind: 'failed'; message: string }
 
+/** What the gate needs from the shared session: read it, and grant one. */
+export interface LoginGateProps {
+  /** The live session the whole app shares. */
+  store: SessionStore
+}
+
 /**
  * Render the gate.
+ * @param props - the shared session store.
  * @returns the sign-in screen, or null once a live session exists.
  */
-export function LoginGate(): ReactNode {
-  const storage = useMemo(browserStorage, [])
-  const [session, setSession] = useState<StoredSession | null>(() => readSession(storage, Date.now()))
+export function LoginGate({ store }: LoginGateProps): ReactNode {
+  const session = useSyncExternalStore(
+    listener => store.subscribe(listener),
+    () => store.getSnapshot(),
+  )
   const [state, setState] = useState<FormState>({ kind: 'loading' })
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -144,14 +152,6 @@ export function LoginGate(): ReactNode {
     return () => { controller.abort() }
   }, [gated])
 
-  // A session with a lifetime brings the gate back when it runs out, without
-  // waiting for the next page load.
-  useEffect(() => {
-    if (session?.expiresAt == null) return
-    const timer = setTimeout(() => { setSession(null) }, Math.max(0, session.expiresAt - Date.now()))
-    return () => { clearTimeout(timer) }
-  }, [session])
-
   // Covering the app is not enough on its own: Tab from the page underneath
   // would still reach it. Focus that escapes the card is pulled back in.
   useEffect(() => {
@@ -172,7 +172,7 @@ export function LoginGate(): ReactNode {
     setPending(true)
     setError(null)
     // The attempt outlives no unmount: the gate unmounts only on success, and
-    // the component's own state is what closes it.
+    // granting the session is what closes it.
     submitCredentials({ identifier, password }, new AbortController().signal).then(
       (result) => {
         setPending(false)
@@ -181,14 +181,14 @@ export function LoginGate(): ReactNode {
           setPassword('')
           return
         }
-        setSession(writeSession(storage, result.session, Date.now()))
+        store.grant(result.session)
       },
       (cause: unknown) => {
         setPending(false)
         setError({ code: 'unreachable', message: cause instanceof Error ? cause.message : String(cause) })
       },
     )
-  }, [identifier, password, pending, storage])
+  }, [identifier, password, pending, store])
 
   if (!gated) return null
 

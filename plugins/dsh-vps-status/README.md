@@ -41,6 +41,7 @@ The answer is a network boundary, so it is validated rather than trusted: a miss
 | `endpoint` | *(required)* | Full URL of the status resource, **not a base** — it is requested verbatim, so a path is preserved. |
 | `toolName` | `vps_status` | Tool name registered on `ctx.tools`; rename it when several hosts are mounted. |
 | `description` | *(see source)* | Text the model reads to decide when to call the tool. |
+| `headers` | `{}` | Static headers added to the request (`authorization`, a gateway key, a tenant id). |
 | `timeoutMs` | `5000` | Request deadline in milliseconds. |
 
 `endpoint` has no default on purpose: a status tool pointed at the wrong host is worse than one that refuses to load. An entry without it fails at composition.
@@ -64,6 +65,22 @@ VPS_URL=https://vps1.example.com
 `VPS_URL` carries the origin only — scheme, host, port, no path. Moving the deployment is one line; which path this plugin calls stays with the plugin, where it belongs. Watching a second host means a second row with its own base variable (`APP_VPS_URL`, `DB_VPS_URL`) and its own `toolName`.
 
 The boot loads `.env` before the Loader interpolates the entry's `config`, layering inherited environment > invoking directory > `$DSH_HOME`.
+
+### The credential is shared the same way
+
+`$VPS_TOKEN` sits beside `$VPS_URL`: one credential for every plugin backed by that VPS, written once and rotated once. Each such plugin copies this row into its own entry.
+
+```yaml
+config:
+  headers:
+    authorization: !!js "'Bearer ' + (process.env.VPS_TOKEN ?? (() => { throw new Error('VPS_TOKEN is not set in .env') })())"
+```
+
+The throwing fallback matters: `'Bearer ' + undefined` is a valid string, so without it an unset variable reaches the endpoint as `Bearer undefined` and comes back 401 on the model's first call rather than failing at load. A plugin that needs a different identity overrides `authorization` on its own row instead of introducing a second variable.
+
+Anything a deployment puts in `headers` is sent verbatim. The plugin applies its own `accept: application/json` **last**, so config can authenticate the request but cannot change the format the result parser depends on. A blank value and a name `fetch` could not send are both rejected at load — a blank credential would otherwise go out as an anonymous request and come back 401.
+
+The token never reaches the model or the browser: this package declares no `dsh.client`, and no failure message repeats a request header.
 
 Three constraints come with the mechanism:
 

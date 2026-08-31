@@ -59,6 +59,62 @@ The forwarded body carries the two typed values under the configured field names
 | 2xx without a token | "…returned no token at `token`." |
 | anything else, or unreachable | the status, or "The login service could not be reached." |
 
+## The shared session (`ctx.loginSession`)
+
+The granted token is not private to the gate. It lives in one store the plugin publishes as a browser cordis service, so any other client plugin can read it, react to it, and end it.
+
+```ts
+// another plugin's client half
+import type { LoginSessionContract, StoredSession } from 'dsh-login/client'
+
+export const inject = ['loginSession']
+
+interface ClientContext {
+  loginSession: LoginSessionContract
+  effect(callback: () => () => void, label?: string): () => void
+}
+
+export function apply(ctx: ClientContext): void {
+  const token = ctx.loginSession.token()          // null while signed out
+  ctx.effect(() => ctx.loginSession.subscribe(() => {
+    // sign-in, sign-out, expiry, or another tab
+  }))
+}
+```
+
+In a component, the store is shaped for React's own external-store hook:
+
+```tsx
+const session = useSyncExternalStore(
+  listener => ctx.loginSession.subscribe(listener),
+  () => ctx.loginSession.getSnapshot(),
+)
+```
+
+`getSnapshot` returns the **same reference** until the session actually changes, which `useSyncExternalStore` requires — a fresh object per call re-renders forever.
+
+The face is mirrored structurally, the same way this plugin mirrors `slots`: a plugin outside the monorepo never receives the upstream `declare module` augmentations, so it declares the members it touches and imports the contract type for them. The service is registered with `ctx.provide` rather than as a `Service` subclass for the same reason — the client bundle purity gate rejects cordis value imports from a plugin, and collaboration goes through services instead. Consumers inject it identically either way.
+
+### What the contract carries
+
+| Member | Meaning |
+|---|---|
+| `subscribe(listener)` | Sign-in, sign-out, expiry, and another tab. Returns the disposer. |
+| `getSnapshot()` | The live `StoredSession`, or `null`. Stable reference between changes. |
+| `token()` | The token alone, or `null`. |
+| `signOut()` | Ends the session here, in storage, and in every other tab. |
+
+**Granting a session is not on the contract.** That authority stays with the gate, which holds the store object itself — a consumer plugin can end a session but cannot forge one.
+
+### The transitions nobody asks for
+
+The store owns both, so a subscriber never polls or re-reads storage:
+
+- **A lifetime running out.** `config.sessionTtlMs` becomes an instant on the browser clock; a timer fires at it, clears the row, and the gate comes back — no page reload needed.
+- **Another tab.** The `storage` event fires only in the *other* tabs, so signing out anywhere signs out everywhere, and signing in adopts the session without a reload.
+
+Both are released when the plugin unloads: the listener is an `ctx.effect`, and its disposer also disposes the store's timer.
+
 ## Behavior
 
 - The granted session is stored in `localStorage` under `dsh-login.session` (token plus whatever else the answer carried, never the password), so a reload does not ask again and never flashes the screen: the first render reads that row synchronously.
@@ -72,6 +128,8 @@ The forwarded body carries the two typed values under the configured field names
 The browser UI, and only that. Every other DSH route stays reachable by anything that can reach the port, and the plugin's own routes accept non-browser callers (the fence refuses cross-site *browser* requests, which is a CSRF defense, not authentication). Bind the harness to loopback, or put a real proxy in front of it, where that matters.
 
 ## How it attaches
+
+The plugin mounts two things: the shared session service (`ctx.loginSession`, above) and one overlay entry, the gate itself.
 
 `shell.overlay` is the frame-wide floating layer declared by `@deepseek-ai/dsh-client-ui-layout`. This plugin registers a fresh cell id (`dsh-login`) at `order: 10000`, so the gate sits above every other overlay entry; the layer grants pointer events to each entry, so the cover really does take the clicks. Nothing is replaced — remove the plugin and the app is exactly as before.
 
