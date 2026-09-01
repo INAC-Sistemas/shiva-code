@@ -49,6 +49,7 @@ import {
   gpuFallbackStateEquals,
   gpuFallbackSwitches,
   isGpuLossFatal,
+  isRendererGpuFallbackCandidate,
   parseGpuFallbackState,
   planGpuFallbackResponse,
   planStableLaunch,
@@ -334,6 +335,19 @@ function installMainWindowRendererRecovery(window: BrowserWindow): void {
     const reason = details?.reason ?? 'unknown'
     const exitCode = details?.exitCode ?? -1
     recordMainWindowRendererLoss('render-process-gone', `reason=${reason} exitCode=${exitCode}`)
+    // `did-finish-load` can win the race by milliseconds before a broken
+    // graphics stack takes the renderer down. The first post-render crash is
+    // allowed the normal bounded reload; if that freshly reloaded renderer
+    // dies with the same native signature, the launch is still unusable and
+    // must take the same immediate relaunch path as a pre-render GPU loss.
+    const unusableLaunch = !harnessRendered || mainWindowRecoveryReloadCount > 0
+    if (
+      isRendererGpuFallbackCandidate({ platform: process.platform, reason, exitCode }) &&
+      respondToGpuFallbackSignal(
+        `renderer native crash: reason=${reason} exitCode=${exitCode}`,
+        { unusableLaunch }
+      )
+    ) return
     reloadMainWindowAfterRendererLoss(window)
   })
   webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -666,26 +680,45 @@ function installGpuFallbackWatch(): void {
     // Chromium tears the GPU process down on shutdown and Electron reports it
     // here like any other loss; degrading on that would degrade everyone.
     if (!isGpuLossFatal(details.reason)) return
-    if (gpuStableLaunchTimer) {
-      clearTimeout(gpuStableLaunchTimer)
-      gpuStableLaunchTimer = undefined
-    }
-    runtime?.note(
-      `[desktop] GPU process gone: reason=${details.reason} exitCode=${details.exitCode} ` +
-        `fallback=${gpuFallbackState.level} failures=${gpuFallbackState.failures}`
+    respondToGpuFallbackSignal(
+      `GPU process gone: reason=${details.reason} exitCode=${details.exitCode}`
     )
-    const plan = planGpuFallbackResponse({ state: gpuFallbackState, harnessRendered })
-    const escalated = plan.state.level !== gpuFallbackState.level
-    if (!gpuFallbackStateEquals(plan.state, gpuFallbackState)) {
-      gpuFallbackState = plan.state
-      writeGpuFallbackState(plan.state)
-    }
-    if (escalated) runtime?.note(`[desktop] GPU fallback raised to ${plan.state.level}`)
-    if (!plan.relaunch) return
-    gpuFallbackRelaunching = true
-    app.relaunch()
-    app.exit(0)
   })
+}
+
+/**
+ * Feed one high-confidence graphics failure into the shared fallback ladder.
+ * Returning true tells a renderer-loss caller that a relaunch is already in
+ * progress, so it must not also reload the dying WebContents.
+ */
+function respondToGpuFallbackSignal(
+  details: string,
+  options: { unusableLaunch?: boolean } = {}
+): boolean {
+  if (gpuFallbackRelaunching || quitting) return false
+  if (gpuStableLaunchTimer) {
+    clearTimeout(gpuStableLaunchTimer)
+    gpuStableLaunchTimer = undefined
+  }
+  runtime?.note(
+    `[desktop] ${details} fallback=${gpuFallbackState.level} ` +
+      `failures=${gpuFallbackState.failures}`
+  )
+  const plan = planGpuFallbackResponse({
+    state: gpuFallbackState,
+    harnessRendered: options.unusableLaunch === true ? false : harnessRendered
+  })
+  const escalated = plan.state.level !== gpuFallbackState.level
+  if (!gpuFallbackStateEquals(plan.state, gpuFallbackState)) {
+    gpuFallbackState = plan.state
+    writeGpuFallbackState(plan.state)
+  }
+  if (escalated) runtime?.note(`[desktop] GPU fallback raised to ${plan.state.level}`)
+  if (!plan.relaunch) return false
+  gpuFallbackRelaunching = true
+  app.relaunch()
+  app.exit(0)
+  return true
 }
 
 function configureApplicationLocale(): void {
