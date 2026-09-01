@@ -1555,15 +1555,26 @@ async function showPluginRecovery(options?: {
         // the process before quarantine so both platforms use the same path.
         await runtime.stop()
         const failedPlugins: string[] = []
+        const pendingPlugins: string[] = []
         for (const plugin of detection.plugins) {
           const removal = await removeProfilePluginCompletely(dshHome, plugin, 'plugin-recovery')
-          if (removal.disabled) {
+          if (removal.removed) {
             if (!removedPlugins.includes(plugin)) removedPlugins.push(plugin)
+          } else if (removal.pending) {
+            pendingPlugins.push(plugin)
           } else {
             failedPlugins.push(plugin)
           }
         }
 
+        if (pendingPlugins.length > 0) {
+          notice = isChinese
+            ? `已禁用以下插件，但 Profile 依赖清理失败，尚未恢复正常模式：` +
+              `${pendingPlugins.join('、')}。请重试卸载或进入安全模式。`
+            : `These plugins are disabled, but profile dependency cleanup failed, so normal mode ` +
+              `was not restarted: ${pendingPlugins.join(', ')}. Retry removal or enter Safe Mode.`
+          continue
+        }
         if (failedPlugins.length === detection.plugins.length) {
           notice = isChinese
             ? '未能修改插件配置。请打开 Harness 日志查看详情，或选择其他恢复方式。'
@@ -1574,6 +1585,24 @@ async function showPluginRecovery(options?: {
           notice = isChinese
             ? `以下插件未能移除：${failedPlugins.join('、')}`
             : `These plugins could not be removed: ${failedPlugins.join(', ')}`
+        }
+        const compatibility = await inspectProfileCompatibility(
+          dshHome,
+          join(app.getAppPath(), 'node_modules')
+        )
+        const blockingIssues = compatibility.issues.filter((issue) => issue.severity === 'blocking')
+        if (blockingIssues.length > 0) {
+          runtime.note(
+            `[plugin-recovery] normal mode remains blocked by ${blockingIssues.length} ` +
+            `profile compatibility issue${blockingIssues.length === 1 ? '' : 's'}`
+          )
+          notice = isChinese
+            ? `插件已移除，但 Profile 仍有 ${blockingIssues.length} 项兼容问题。` +
+              '为避免再次进入空白界面，请进入安全模式继续处理。'
+            : `The plugin was removed, but ${blockingIssues.length} blocking profile compatibility ` +
+              `issue${blockingIssues.length === 1 ? ' remains' : 's remain'}. ` +
+              'Continue in Safe Mode to avoid another blank normal window.'
+          continue
         }
         await launchHarness()
         if (applyPendingFrontendEvidence()) continue
@@ -1773,6 +1802,7 @@ async function removeProfilePluginCompletely(
   pluginName: string,
   logPrefix: string
 ): Promise<PluginRemovalResult> {
+  runtime.note(`[${logPrefix}] removing ${pluginName} from the web profile`)
   const result = await removePluginSafely({
     dshHome,
     pluginName,
@@ -1788,6 +1818,34 @@ async function removeProfilePluginCompletely(
       pluginName,
       (line) => runtime.note(line)
     ),
+    reconcileLegacyProfile: async () => {
+      runtime.note(`[${logPrefix}] rebuilding the web profile after removing ${pluginName}`)
+      await clearProfileInstallMarker(dshHome)
+      const rebuild = await installProfileDependenciesWithDsh({
+        dshHome,
+        dshEntryPath: dshEntryPath(),
+        nodeExecutablePath: bundledNodePath(),
+        pnpmEntryPath: bundledPnpmEntryPath(),
+        pnpmRunnerPath: bundledPnpmRunnerPath()
+      })
+      if (!rebuild.ok) {
+        runtime.note(
+          `[${logPrefix}] web profile rebuild failed after removing ${pluginName}: ` +
+          `${rebuild.detail ?? 'unknown error'}`
+        )
+        return rebuild
+      }
+      await markProfileInstallComplete(dshHome)
+      const compatibility = await inspectProfileCompatibility(
+        dshHome,
+        join(app.getAppPath(), 'node_modules')
+      )
+      runtime.note(
+        `[${logPrefix}] rebuilt the web profile after removing ${pluginName}; ` +
+        `${compatibility.issues.length} compatibility issue${compatibility.issues.length === 1 ? '' : 's'} remain`
+      )
+      return rebuild
+    },
     note: (line) => runtime.note(`[${logPrefix}] ${line}`)
   })
   for (const failure of result.failures) {
@@ -2079,8 +2137,8 @@ async function showSafeModeManager(initial?: {
       const failed = repairFailures + failedPlugins.length
       notice = pendingPlugins.length > 0
         ? isChinese
-          ? `已禁用 ${pendingPlugins.length} 个插件；物理清理待重试。插件不会在后续启动中重新启用。`
-          : `Disabled ${pendingPlugins.length} plugin${pendingPlugins.length === 1 ? '' : 's'}; physical cleanup is pending. They will stay disabled on later launches.`
+          ? `已禁用 ${pendingPlugins.length} 个插件；Profile 依赖清理待重试。插件不会在后续启动中重新启用。`
+          : `Disabled ${pendingPlugins.length} plugin${pendingPlugins.length === 1 ? '' : 's'}; profile dependency cleanup is pending. They will stay disabled on later launches.`
         : failed === 0
         ? isChinese
           ? `处理完成：修复 ${repaired} 项，卸载 ${selectedPlugins.length} 个插件。`

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildPnpmShimCommand,
+  buildProfilePluginCommandEnvironment,
   buildProfilePluginRemoveArguments,
   diagnosticLine,
   removeProfilePluginWithDsh
@@ -140,5 +141,26 @@ describe('profile pnpm shim and failure reporting', () => {
     ).toContain('EPERM')
     expect(diagnosticLine('a\nb\nlast line')).toBe('last line')
     expect(diagnosticLine('   ')).toBeUndefined()
+  })
+})
+
+describe('buildProfilePluginCommandEnvironment', () => {
+  it('keeps the user PATH when the environment block stores it lowercase', () => {
+    // Spreading `process.env` keeps only the casing the OS block stores, so
+    // on a machine whose registry PATH value name is lowercase the previous
+    // exact-case read produced an empty base PATH — plugin commands then ran
+    // with just the shim and bundled-node directories (issue #232).
+    const userPath = 'C:\\Windows\\System32;C:\\Users\\tester\\bin'
+    const result = buildProfilePluginCommandEnvironment(
+      { path: userPath },
+      'C:\\shim',
+      'C:\\bundled\\node.exe'
+    )
+    if (process.platform === 'win32') {
+      expect(result.PATH).toContain(userPath)
+    } else {
+      // POSIX: `path` is a different variable and must stay out of PATH.
+      expect(result.PATH).not.toContain(userPath)
+    }
   })
 })
