@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -7,7 +9,8 @@ import {
   blockedTargets,
   lockedRenameTarget,
   runWithLockRecovery,
-  sidelinePath
+  sidelinePath,
+  suspendGenerationProjectionForPnpm
 } from '../packages/dsh-desktop-market-installer/pnpm-runner.mjs'
 
 const WINDOWS_LOCK_FAILURE = [
@@ -43,6 +46,105 @@ function fakePnpm(runs) {
 }
 
 describe('packaged pnpm runner', () => {
+  it('temporarily removes only generation-owned dependency fields and restores them', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'dsh-pnpm-projection-'))
+    const manifestPath = join(profile, 'package.json')
+    try {
+      await writeFile(manifestPath, JSON.stringify({
+        name: 'dsh-profile-web',
+        dependencies: {
+          'generation-plugin': '1.0.0',
+          'shared-plugin': '2.0.0'
+        },
+        pnpm: {
+          overrides: {
+            'generation-plugin': 'link:../.generations/live/generation+1+x/node_modules/generation-plugin',
+            'shared-plugin': '2.0.1'
+          }
+        },
+        dsh: {
+          desktop: {
+            generationProjection: {
+              version: 1,
+              plugins: {
+                'generation-plugin': {
+                  generationId: 'generation+1+x',
+                  visibleVersion: '1.0.0'
+                }
+              }
+            }
+          }
+        }
+      }))
+
+      const isolation = await suspendGenerationProjectionForPnpm(profile)
+      expect(isolation.plugins).toEqual(['generation-plugin'])
+      const suspended = JSON.parse(await readFile(manifestPath, 'utf8'))
+      expect(suspended.dependencies).toEqual({ 'shared-plugin': '2.0.0' })
+      expect(suspended.pnpm.overrides).toEqual({ 'shared-plugin': '2.0.1' })
+      expect(suspended.dsh.desktop.generationProjection.plugins).toHaveProperty('generation-plugin')
+
+      suspended.dependencies['new-shared-plugin'] = '3.0.0'
+      await writeFile(manifestPath, JSON.stringify(suspended))
+      await isolation.restore()
+      await isolation.restore()
+
+      const restored = JSON.parse(await readFile(manifestPath, 'utf8'))
+      expect(restored.dependencies).toEqual({
+        'shared-plugin': '2.0.0',
+        'new-shared-plugin': '3.0.0',
+        'generation-plugin': '1.0.0'
+      })
+      expect(restored.pnpm.overrides).toEqual({
+        'shared-plugin': '2.0.1',
+        'generation-plugin': 'link:../.generations/live/generation+1+x/node_modules/generation-plugin'
+      })
+    } finally {
+      await rm(profile, { recursive: true, force: true })
+    }
+  })
+
+  it('restores generation-owned fields after pnpm fails', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'dsh-pnpm-projection-failure-'))
+    const manifestPath = join(profile, 'package.json')
+    try {
+      await writeFile(manifestPath, JSON.stringify({
+        dependencies: { 'generation-plugin': '1.0.0' },
+        pnpm: {
+          overrides: {
+            'generation-plugin': 'link:../.generations/live/generation+1+x/node_modules/generation-plugin'
+          }
+        },
+        dsh: {
+          desktop: {
+            generationProjection: {
+              version: 1,
+              plugins: { 'generation-plugin': { visibleVersion: '1.0.0' } }
+            }
+          }
+        }
+      }))
+      const { spawnProcess, calls } = fakePnpm([
+        { code: 1, output: 'ERR_PNPM_NO_MATCHING_VERSION' }
+      ])
+
+      const result = await runWithLockRecovery('/node', ['/pnpm.cjs', 'install'], {
+        profileDirectory: profile,
+        spawnProcess,
+        wait: async () => undefined,
+        report: () => undefined
+      })
+
+      expect(result.code).toBe(1)
+      expect(calls).toHaveLength(1)
+      const restored = JSON.parse(await readFile(manifestPath, 'utf8'))
+      expect(restored.dependencies['generation-plugin']).toBe('1.0.0')
+      expect(restored.pnpm.overrides['generation-plugin']).toMatch(/^link:/u)
+    } finally {
+      await rm(profile, { recursive: true, force: true })
+    }
+  })
+
   it('recognizes a Windows locked rename inside a profile', () => {
     expect(lockedRenameTarget(WINDOWS_LOCK_FAILURE)).toBe(BLOCKED_TARGET)
     expect(

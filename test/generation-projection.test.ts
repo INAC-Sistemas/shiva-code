@@ -4,9 +4,11 @@ import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:f
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectGenerations } from '../packages/dsh-desktop-market-installer/generations/projection'
+import { suspendGenerationProjectionForPnpm } from '../packages/dsh-desktop-market-installer/pnpm-runner.mjs'
 import {
   ensureRegistryDirectories,
   registryLayout,
@@ -41,6 +43,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 describe('generation projection onto the app-boot contract', () => {
   const execFileAsync = promisify(execFile)
   const pnpmEntry = join(dirname(createRequire(import.meta.url).resolve('pnpm')), 'bin', 'pnpm.cjs')
+  const pnpmRunner = fileURLToPath(
+    new URL('../packages/dsh-desktop-market-installer/pnpm-runner.mjs', import.meta.url)
+  )
   const homes: string[] = []
 
   async function freshHome(): Promise<string> {
@@ -178,7 +183,7 @@ describe('generation projection onto the app-boot contract', () => {
     expect(projected.pnpm.overrides.unrelated).toBe('3.0.0')
   })
 
-  it('keeps pnpm installs on the local generation while the manifest exposes a version', async () => {
+  it('keeps projected generations outside pnpm while the manifest exposes a version', async () => {
     const home = await freshHome()
     await ensureRegistryDirectories(home)
     const dir = join(home, 'profiles', 'web')
@@ -190,18 +195,48 @@ describe('generation projection onto the app-boot contract', () => {
     await fakeGeneration(home, 'a+1+x', 'plugin-a', '1.0.0')
     await writeDesired(home, ['a+1+x'])
     await projectGenerations(home)
+    const link = join(dir, 'node_modules', 'plugin-a')
+    const targetBefore = await readlink(link)
 
-    await execFileAsync(
+    const result = await execFileAsync(
       process.execPath,
-      [pnpmEntry, 'install', '--ignore-scripts', '--no-frozen-lockfile', '--offline'],
+      [pnpmRunner, pnpmEntry, 'install', '--ignore-scripts', '--no-frozen-lockfile', '--offline'],
       { cwd: dir }
     )
 
+    expect(result.stderr).toContain('excluded 1 generation projection(s) from pnpm')
+    expect(result.stderr).toContain('restored 1 generation projection(s) after pnpm')
     const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
     expect(manifest.dependencies['plugin-a']).toBe('1.0.0')
-    const installed = JSON.parse(await readFile(join(dir, 'node_modules', 'plugin-a', 'package.json'), 'utf8'))
+    expect(await readlink(link)).toBe(targetBefore)
+    const installed = JSON.parse(await readFile(join(link, 'package.json'), 'utf8'))
     expect(installed.version).toBe('1.0.0')
-    expect(await readFile(join(dir, 'pnpm-lock.yaml'), 'utf8')).toContain('link:../.generations/live/a+1+x')
+    expect(await readFile(join(dir, 'pnpm-lock.yaml'), 'utf8')).not.toContain('plugin-a')
+  })
+
+  it('reconstructs market-facing fields at cold start after an interrupted pnpm run', async () => {
+    const home = await freshHome()
+    await ensureRegistryDirectories(home)
+    const dir = join(home, 'profiles', 'web')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'dsh-profile-web', dependencies: {}, dsh: { profile: { bundles: [] } } })
+    )
+    await fakeGeneration(home, 'a+1+x', 'plugin-a', '1.0.0')
+    await writeDesired(home, ['a+1+x'])
+    await projectGenerations(home)
+
+    const isolation = await suspendGenerationProjectionForPnpm(dir)
+    expect(isolation.plugins).toEqual(['plugin-a'])
+    const interrupted = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
+    expect(interrupted.dependencies['plugin-a']).toBeUndefined()
+    expect(interrupted.dsh.desktop.generationProjection.plugins).toHaveProperty('plugin-a')
+
+    await projectGenerations(home)
+    const repaired = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
+    expect(repaired.dependencies['plugin-a']).toBe('1.0.0')
+    expect(repaired.pnpm.overrides['plugin-a']).toMatch(/^link:/u)
   })
 
   it('never touches a real pnpm-managed directory in node_modules', async () => {
