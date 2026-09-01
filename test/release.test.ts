@@ -302,7 +302,8 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('runs-on: windows-2022')
     expect(workflow).toContain('npm run package:dev:win')
     expect(workflow).toContain('Smoke test packaged Windows Harness')
-    expect(workflow).toContain("$executable = 'dist-dev\\win-unpacked\\DSH Desktop Dev.exe'")
+    expect(workflow).toContain('$executable = $env:SMOKE_EXE')
+    expect(workflow).toContain("'dist-dev\\win-unpacked\\DSH Desktop Dev.exe'")
     expect(workflow).toContain('if (-not [string]::IsNullOrEmpty($log))')
     expect(workflow).toContain("dsh web: (http://127\\.0\\.0\\.1:\\d+/\\?token=[^\\s]+)")
     expect(workflow).toContain('-SessionVariable harnessSession')
@@ -312,9 +313,7 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain("Invoke-HarnessRpc 'workspace/create'")
     expect(workflow).toContain("Invoke-HarnessRpc 'session/create'")
     expect(workflow).toContain('Harness process exited after workspace and session creation.')
-    expect(workflow).toContain('windows_prerelease_tag:')
-    expect(workflow).toContain('Publish validated Windows development pre-release')
-    expect(workflow).toContain('gh release create $env:PRERELEASE_TAG')
+    expect(workflow).toContain('prerelease_tag:')
     expect(workflow).toContain('--prerelease')
     expect(workflow).toContain('name: windows-x64-dev')
     expect(workflow).toContain('dist-dev/dsh-desktop-dev-windows-x64-setup.exe')
@@ -401,5 +400,76 @@ describe('GitHub release contract', () => {
         expect(readme).not.toContain(`releases/latest/download/${asset}`)
       }
     }
+  })
+})
+
+describe('prerelease parity workflow', () => {
+  const load = () =>
+    readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+
+  it('replaces the windows-only prerelease input with a general one', async () => {
+    const yml = await load()
+    expect(yml).toContain('prerelease_tag:')
+    expect(yml).not.toContain('windows_prerelease_tag')
+    expect(yml).not.toContain('Publish validated Windows development pre-release')
+  })
+
+  it('gates signing and both publish jobs so prerelease and release never overlap', async () => {
+    const yml = await load()
+    expect(yml).toContain('publish-prerelease:')
+    expect(yml).toMatch(/publish:[\s\S]*inputs\.prerelease_tag == ''/)
+    expect(yml).toMatch(/publish-prerelease:[\s\S]*inputs\.prerelease_tag != ''/)
+    expect(yml).toMatch(/sign-windows:[\s\S]*inputs\.prerelease_tag != ''/)
+  })
+
+  it('mirrors a prerelease to an isolated ModelScope directory', async () => {
+    const yml = await load()
+    expect(yml).toContain('releases/prerelease/')
+  })
+
+  it('parametrises the Windows smoke test executable', async () => {
+    const yml = await load()
+    expect(yml).toContain('SMOKE_EXE')
+    expect(yml).toContain('SMOKE_USERDATA')
+  })
+})
+
+describe('rollback catalog publication', () => {
+  it('archives each release and rebuilds the version index', async () => {
+    const yml = await readFile(
+      path.join(projectRoot, '.github/workflows/release.yml'),
+      'utf8'
+    )
+    expect(yml).toContain('releases/archive/')
+    expect(yml).toContain('scripts/build-version-index.mjs')
+    expect(yml).toContain('releases/versions.json')
+  })
+})
+
+describe('AI-organized GitHub release body', () => {
+  const load = () =>
+    readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+
+  it('drops --generate-notes for the real release and uses a notes file', async () => {
+    const yml = await load()
+    const publishJob = yml.slice(
+      yml.indexOf('\n  publish:'),
+      yml.indexOf('\n  publish-prerelease:')
+    )
+    expect(publishJob).not.toContain('--generate-notes')
+    expect(publishJob).toContain('--notes-file')
+    expect(publishJob).toContain('github_release_notes.py')
+    expect(publishJob).toContain('github-release-notes.md')
+  })
+
+  it('still lets the prerelease job use --generate-notes', async () => {
+    const yml = await load()
+    const preJob = yml.slice(yml.indexOf('\n  publish-prerelease:'))
+    expect(preJob).toContain('--generate-notes')
+  })
+
+  it('ships a RELEASE_NOTES.md style reference', async () => {
+    const notes = await readFile(path.join(projectRoot, 'RELEASE_NOTES.md'), 'utf8')
+    expect(notes.startsWith('# ')).toBe(true)
   })
 })
