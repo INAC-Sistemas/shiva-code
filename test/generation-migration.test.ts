@@ -134,8 +134,11 @@ describe('one-time profile migration to generations', () => {
     const manifest = JSON.parse(
       await readFile(join(home, 'profiles', 'web', 'package.json'), 'utf8')
     )
-    // dependencies keep only the shared-tree package
-    expect(manifest.dependencies.dshmarket).toBe('^1.35.0'); expect(manifest.dependencies['dsh-vision-router']).toMatch(/^link:/u)
+    // generation dependencies expose installed versions while pnpm resolves
+    // them through private local overrides.
+    expect(manifest.dependencies.dshmarket).toBe('^1.35.0')
+    expect(manifest.dependencies['dsh-vision-router']).toBe('2.0.1')
+    expect(manifest.pnpm.overrides['dsh-vision-router']).toMatch(/^link:/u)
     // bundles carry the in-box set plus the migrated plugin names
     expect(manifest.dsh.profile.bundles).toEqual([
       '@deepseek-ai/dsh-base',

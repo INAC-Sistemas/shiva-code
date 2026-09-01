@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs'
+import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectGenerations } from '../packages/dsh-desktop-market-installer/generations/projection'
 import {
@@ -36,6 +39,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 describe('generation projection onto the app-boot contract', () => {
+  const execFileAsync = promisify(execFile)
+  const pnpmEntry = join(dirname(createRequire(import.meta.url).resolve('pnpm')), 'bin', 'pnpm.cjs')
   const homes: string[] = []
 
   async function freshHome(): Promise<string> {
@@ -116,7 +121,12 @@ describe('generation projection onto the app-boot contract', () => {
       '@linxin666/dsh-pet',
       'dsh-better-sidebar'
     ])
-    expect(manifest.dependencies['dsh-better-sidebar']).toMatch(/^link:/u) // generations are link: deps
+    expect(manifest.dependencies['dsh-better-sidebar']).toBe('0.17.1')
+    expect(manifest.pnpm.overrides['dsh-better-sidebar']).toMatch(/^link:/u)
+    expect(manifest.dsh.desktop.generationProjection.plugins['dsh-better-sidebar']).toMatchObject({
+      generationId: 'sidebar+0.17.1+aaaa',
+      visibleVersion: '0.17.1'
+    })
     expect(manifest.dependencies.dshmarket).toBe('^1.35.0')
   })
 
@@ -140,7 +150,58 @@ describe('generation projection onto the app-boot contract', () => {
       await readFile(join(home, 'profiles', 'web', 'package.json'), 'utf8')
     )
     expect(manifest.dsh.profile.bundles).not.toContain('plugin-b')
-    expect(manifest.dependencies['plugin-b']).toBeUndefined() // unlinked plugin dropped from deps
+    expect(manifest.dependencies['plugin-b']).toBeUndefined()
+    expect(manifest.pnpm?.overrides?.['plugin-b']).toBeUndefined()
+    expect(manifest.dsh.desktop?.generationProjection?.plugins?.['plugin-b']).toBeUndefined()
+  })
+
+  it('restores a profile-owned pnpm override after the generation is disabled', async () => {
+    const home = await freshHome()
+    await ensureRegistryDirectories(home)
+    await initProfile(home)
+    const manifestPath = join(home, 'profiles', 'web', 'package.json')
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    manifest.pnpm = { overrides: { 'plugin-a': '1.0.1', unrelated: '3.0.0' } }
+    await writeFile(manifestPath, JSON.stringify(manifest))
+    await fakeGeneration(home, 'a+1+x', 'plugin-a', '1.0.0')
+
+    await writeDesired(home, ['a+1+x'])
+    await projectGenerations(home)
+    let projected = JSON.parse(await readFile(manifestPath, 'utf8'))
+    expect(projected.pnpm.overrides['plugin-a']).toMatch(/^link:/u)
+    expect(projected.pnpm.overrides.unrelated).toBe('3.0.0')
+
+    await writeDesired(home, [])
+    await projectGenerations(home)
+    projected = JSON.parse(await readFile(manifestPath, 'utf8'))
+    expect(projected.pnpm.overrides['plugin-a']).toBe('1.0.1')
+    expect(projected.pnpm.overrides.unrelated).toBe('3.0.0')
+  })
+
+  it('keeps pnpm installs on the local generation while the manifest exposes a version', async () => {
+    const home = await freshHome()
+    await ensureRegistryDirectories(home)
+    const dir = join(home, 'profiles', 'web')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'dsh-profile-web', private: true, dependencies: {}, dsh: { profile: { bundles: [] } } })
+    )
+    await fakeGeneration(home, 'a+1+x', 'plugin-a', '1.0.0')
+    await writeDesired(home, ['a+1+x'])
+    await projectGenerations(home)
+
+    await execFileAsync(
+      process.execPath,
+      [pnpmEntry, 'install', '--ignore-scripts', '--no-frozen-lockfile', '--offline'],
+      { cwd: dir }
+    )
+
+    const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
+    expect(manifest.dependencies['plugin-a']).toBe('1.0.0')
+    const installed = JSON.parse(await readFile(join(dir, 'node_modules', 'plugin-a', 'package.json'), 'utf8'))
+    expect(installed.version).toBe('1.0.0')
+    expect(await readFile(join(dir, 'pnpm-lock.yaml'), 'utf8')).toContain('link:../.generations/live/a+1+x')
   })
 
   it('never touches a real pnpm-managed directory in node_modules', async () => {
