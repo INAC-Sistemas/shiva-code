@@ -587,7 +587,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocaleDefinition',
-    declaration: 'export interface LocaleDefinition {\n    id: LocaleId;\n    label: string;\n}',
+    declaration: 'export interface LocaleDefinition {\n    id: string;\n    label: string;\n    documentLanguage: string;\n}',
   },
   {
     name: 'LocaleDict',
@@ -611,7 +611,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LocaleSnapshot',
-    declaration: 'export interface LocaleSnapshot {\n    active: LocaleId;\n    locales: readonly LocaleDefinition[];\n    revision: number;\n}',
+    declaration: 'export interface LocaleSnapshot {\n    active: string;\n    locales: readonly LocaleDefinition[];\n    revision: number;\n}',
   },
   {
     name: 'MatchedShare',

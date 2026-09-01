@@ -275,8 +275,81 @@ describe('LocaleRuntime', () => {
   it('exposes the two shipped locales with self-described labels', () => {
     const { svc } = make()
     expect(svc.getLocale().locales).toEqual([
-      { id: 'zh', label: '中文' },
-      { id: 'en', label: 'English' },
+      { id: 'zh', label: '中文', documentLanguage: 'zh-CN' },
+      { id: 'en', label: 'English', documentLanguage: 'en' },
     ])
+  })
+})
+
+describe('LocaleRuntime.registerLocale', () => {
+  const ptBR = { id: 'pt-BR', label: 'Português (Brasil)', documentLanguage: 'pt-BR' }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('adds a plugin locale to the selectable set and lets it be chosen', () => {
+    stubLanguages('zh-CN')
+    const { svc } = make()
+    svc.registerLocale(ptBR)
+    expect(svc.getLocale().locales.map(l => l.id)).toEqual(['zh', 'en', 'pt-BR'])
+    // Registering does not move the reader off the language they are on.
+    expect(svc.getLocale().active).toBe('zh')
+    svc.register('ns', 'pt-BR', { hello: 'Olá' })
+    svc.setLocale('pt-BR')
+    expect(svc.getLocale().active).toBe('pt-BR')
+    expect(svc.bind('ns')('hello')).toBe('Olá')
+  })
+
+  it('refuses a locale id that is already registered', () => {
+    stubLanguages('en')
+    const { svc } = make()
+    svc.registerLocale(ptBR)
+    expect(() => svc.registerLocale(ptBR)).toThrow(/already registered/)
+    expect(() => svc.registerLocale({ id: 'en', label: 'x', documentLanguage: 'en' }))
+      .toThrow(/already registered/)
+  })
+
+  it('removes the locale on dispose, idempotently, and falls back off it', () => {
+    stubLanguages('en')
+    const { svc, events } = make()
+    const dispose = svc.registerLocale(ptBR)
+    svc.setLocale('pt-BR')
+    expect(svc.getLocale().active).toBe('pt-BR')
+    dispose()
+    expect(svc.getLocale().locales.map(l => l.id)).toEqual(['zh', 'en'])
+    // The language it was showing is gone, so the active locale re-resolves.
+    expect(svc.getLocale().active).toBe(FALLBACK_LOCALE)
+    const settled = events.length
+    dispose()
+    expect(events.length).toBe(settled)
+  })
+
+  it('adopts a stored preference naming a locale registered later', () => {
+    stubLanguages('en')
+    const host = stubSettingsScope<LocaleSettings>()
+    const { svc } = make(host)
+    host.publish({ status: 'ready', value: { preference: 'pt-BR' }, revision: 1, writable: true })
+    // The plugin owning pt-BR has not activated yet: the preference stands
+    // aside rather than collapsing to a shipped locale.
+    expect(svc.getLocale().active).toBe('en')
+    svc.registerLocale(ptBR)
+    expect(svc.getLocale().active).toBe('pt-BR')
+  })
+
+  it('follows a browser asking for the plugin locale by full tag', () => {
+    stubLanguages('pt-BR')
+    const { svc } = make()
+    expect(svc.getLocale().active).toBe(FALLBACK_LOCALE)
+    svc.registerLocale(ptBR)
+    expect(svc.getLocale().active).toBe('pt-BR')
+  })
+
+  it('points <html lang> at the registered locale document language', () => {
+    stubLanguages('en')
+    const { svc } = make()
+    svc.registerLocale(ptBR)
+    svc.setLocale('pt-BR')
+    expect(svc.getLocale().locales.find(l => l.id === 'pt-BR')?.documentLanguage).toBe('pt-BR')
   })
 })

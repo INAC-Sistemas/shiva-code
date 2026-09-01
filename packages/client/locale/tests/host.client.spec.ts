@@ -23,7 +23,14 @@ describe('locale host', () => {
     expect(ctx.settings.get(ns)).toEqual({})
     await ctx.settings.update(ns, { preference: 'en' })
     expect(ctx.settings.get(ns)).toEqual({ preference: 'en' })
-    await expect(ctx.settings.update(ns, { preference: 'fr' })).rejects.toThrow()
+    // A locale a plugin ships is storable: the Host writes this document
+    // without knowing which plugins the browser composition loaded, so the
+    // durable field cannot be a union of the client's own locales. Standing
+    // aside from an id nothing registers is the browser runtime's job.
+    await ctx.settings.update(ns, { preference: 'pt-BR' })
+    expect(ctx.settings.get(ns)).toEqual({ preference: 'pt-BR' })
+    // The field is still typed: only its value set opened up.
+    await expect(ctx.settings.update(ns, { preference: 7 } as never)).rejects.toThrow()
     await fiber.dispose()
     expect(ctx.settings.describe().map(row => row.ns)).not.toContain(ns)
   })
