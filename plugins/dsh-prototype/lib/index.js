@@ -61,20 +61,34 @@ function log(msg) {
 
 /**
  * The workspace for one request. The tab sends the ACTIVE session's scope
- * ({sessionId, cwd}); explicit cwd wins, then a session matching the id,
+ * ({sessionId, cwd}); explicit cwd wins, then the session's own `header.cwd`,
  * then the process cwd.
+ *
+ * The session is resolved by direct lookup, the same way the rest of the app
+ * resolves it. Scanning `list()` for a matching id resolved nothing here, and
+ * the fallback then served the SERVER's cwd — a different workspace than the
+ * one the tab is showing whenever `dsh web` was started outside it, which shows
+ * up as an existing prototype folder reported as missing.
+ *
+ * `process.cwd()` is reached only when the request carries no session at all;
+ * an unresolvable session id is logged rather than silently answered with
+ * another directory's files.
  */
 function workspaceOf(ctx, payload) {
   const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
   if (cwd && resolve(cwd) === cwd) return cwd
-  try {
-    const sessions = ctx.get('sessions')
-    for (const s of sessions?.list() ?? []) {
-      const sid = s?.id ?? s?.header?.id ?? s?.sessionId
-      const scwd = s?.header?.cwd
-      if (payload?.sessionId && sid === payload.sessionId && typeof scwd === 'string' && scwd) return scwd
+  const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : ''
+  if (sessionId) {
+    let headerCwd
+    try {
+      headerCwd = ctx.sessions?.get?.(sessionId)?.header?.cwd
+    } catch {
+      // `ctx.sessions` throws when no sessions service is mounted at all (a
+      // harness assembled without one); every other outcome is `undefined`.
     }
-  } catch { /* sessions unavailable */ }
+    if (typeof headerCwd === 'string' && headerCwd) return headerCwd
+    log(`session "${sessionId}" has no cwd - falling back to ${process.cwd()}`)
+  }
   return process.cwd()
 }
 
