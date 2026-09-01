@@ -24,8 +24,10 @@ export interface SafeModeIssueGroupViewModel {
 export interface SafeModePluginViewModel {
   name: string
   statusLabel?: string
+  statusTone?: 'warning' | 'danger'
   actionLabel: string
   incompatible: boolean
+  suspected: boolean
 }
 
 export interface SafeModeBackupViewModel {
@@ -80,6 +82,7 @@ export function shouldStartInSafeMode(argv: readonly string[]): boolean {
 export function buildSafeModeViewModel(options: {
   locale: SafeModeLocale
   plugins: readonly string[]
+  suspectedPlugins?: readonly string[]
   issues?: readonly ProfileCompatibilityIssue[]
   backups?: readonly {
     removalId: string
@@ -141,19 +144,34 @@ export function buildSafeModeViewModel(options: {
   })
   const pluginIssues = issues.filter((issue) => issue.resolution === 'disable-plugin')
   const incompatiblePlugins = new Set(pluginIssues.map((issue) => issue.target))
+  const suspectedPlugins = new Set(options.suspectedPlugins ?? [])
   const plugins = [...new Set([
     ...options.plugins,
-    ...incompatiblePlugins
-  ])]
+    ...incompatiblePlugins,
+    ...suspectedPlugins
+  ])].sort((left, right) => Number(suspectedPlugins.has(right)) - Number(suspectedPlugins.has(left)))
   const pluginItems = plugins.map((name): SafeModePluginViewModel => {
     const incompatible = incompatiblePlugins.has(name)
+    const suspected = suspectedPlugins.has(name)
+    const labels = [
+      ...(suspected
+        ? [options.locale === 'zh' ? '本次启动日志推断' : 'inferred from this startup log']
+        : []),
+      ...(incompatible
+        ? [options.locale === 'zh' ? '版本不兼容' : 'version incompatible']
+        : [])
+    ]
     return {
       name,
-      statusLabel: incompatible
-        ? options.locale === 'zh' ? '（版本不兼容）' : '(version incompatible)'
+      statusLabel: labels.length > 0
+        ? options.locale === 'zh'
+          ? `（${labels.join('，')}）`
+          : `(${labels.join(', ')})`
         : undefined,
+      statusTone: incompatible ? 'danger' : suspected ? 'warning' : undefined,
       actionLabel: options.locale === 'zh' ? '卸载插件' : 'Remove plugin',
-      incompatible
+      incompatible,
+      suspected
     }
   })
   const groups = new Map<string, SafeModeIssueViewModel[]>()

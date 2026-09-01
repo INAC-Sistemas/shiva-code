@@ -678,9 +678,10 @@ export async function migrateProfileToGenerations(deps: MigrationDeps): Promise<
 
     await snapshotProfile(dshHome, note, previousDesired, plan.fingerprint)
     // Trim the manifest to the shared-tree packages and drop the lockfile, then
-    // let projection add the generations back as `link:` deps + bundles and
-    // write the symlinks — all before the rebuild, so `pnpm install` sees the
-    // final manifest and its `.install-complete` fingerprint matches.
+    // let projection add the generations back as visible version deps, private
+    // pnpm overrides, bundles, and symlinks — all before the rebuild, so
+    // `pnpm install` sees the final manifest and its `.install-complete`
+    // fingerprint matches.
     await rewriteManifest(dshHome)
     const existingDesired = await readDesired(dshHome)
     await writeDesired(dshHome, [...new Set([...existingDesired, ...generationIds])])

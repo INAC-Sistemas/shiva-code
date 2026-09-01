@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
@@ -11,6 +11,7 @@ import { PassThrough } from 'node:stream'
 import { installGeneration } from './generations/installer.mjs'
 import { projectGenerations } from './generations/projection.mjs'
 import {
+  disableGeneration,
   listGenerations,
   readDesired,
   withRegistryLock,
@@ -376,6 +377,34 @@ function validatePluginOperation(args, invokingDir) {
   }
 }
 
+function removalTarget(args) {
+  if (args[0] !== 'remove') return undefined
+  return args.slice(1).find((argument) => !argument.startsWith('-'))
+}
+
+/**
+ * dsh-market routes ordinary removals through `runPlugin`. Generation plugins
+ * must instead update desired.json, otherwise the next projection resurrects
+ * the dependency the CLI just removed. The marker is written by the projector
+ * into an otherwise market-transparent manifest field.
+ */
+export function projectedGenerationRemoval(args, home = dshHome()) {
+  const target = removalTarget(args)
+  if (target === undefined) return undefined
+  try {
+    const manifest = JSON.parse(readFileSync(join(profileDirectory(home), 'package.json'), 'utf8'))
+    const plugins = manifest.dsh?.desktop?.generationProjection?.plugins
+    if (typeof plugins === 'object' && plugins !== null && Object.hasOwn(plugins, target)) {
+      return target
+    }
+    // Compatibility with profiles projected by an earlier Desktop build.
+    const spec = manifest.dependencies?.[target]
+    return typeof spec === 'string' && spec.includes('.generations/live/') ? target : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function createDesktopPnpmService(options) {
   const {
     binDirectory,
@@ -482,6 +511,27 @@ export function createDesktopPnpmService(options) {
     if (closed) throw new Error('The DSH Desktop pnpm service has been disposed.')
     if (signal?.aborted) throw signal.reason ?? new Error('The package operation was aborted.')
     if (active) throw new Error('Another desktop pnpm operation is already running.')
+
+    const generationRemoval = projectedGenerationRemoval(args, home)
+    if (generationRemoval !== undefined) {
+      const handle = asHandle(async ({ write, isCancelled }) =>
+        withRegistryLock(home, async () => {
+          if (isCancelled()) return { exitCode: 1, message: 'The package operation was aborted.' }
+          write(`Disabling ${generationRemoval} generation…`)
+          await disableGeneration(home, generationRemoval)
+          const projection = await projectGenerations(home)
+          write(`enabled: ${projection.linked.join(', ')}`)
+          return { exitCode: 0 }
+        })
+      )
+      active = handle
+      signal?.addEventListener('abort', handle.cancel, { once: true })
+      void handle.done.finally(() => {
+        signal?.removeEventListener('abort', handle.cancel)
+        if (active === handle) active = undefined
+      })
+      return handle
+    }
 
     void cleanStaleTemporaryDirectories(home).catch(() => undefined)
 

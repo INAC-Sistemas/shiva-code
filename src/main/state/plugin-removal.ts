@@ -2067,7 +2067,7 @@ export async function removePluginSafely(options: PluginRemovalOptions): Promise
     }))
     if (!reconciliation.ok) {
       const detail = `profile rebuild failed: ${reconciliation.detail ?? 'unknown error'}`
-      entry = await markPending(options.dshHome, entry, [detail]).catch(() => entry)
+      entry = await markFailure(options.dshHome, entry, 'cleanup-pending', [detail]).catch(() => entry)
       return {
         pluginName: options.pluginName,
         disabled: true,

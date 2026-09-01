@@ -174,6 +174,7 @@ let profileBootConfirmationTimer: NodeJS.Timeout | undefined
 let profileRendererHealthAt = 0
 let profileBootNavigationVersion = 0
 let profileBootConfirmationComplete = false
+let safeModeSuspectedPlugins: string[] = []
 // A renderer that crashes (render-process-gone) and reloads that fails the
 // same way produces a permanent black window the user has to close by hand.
 // The cooldown keeps reloads from stacking up when the underlying crash
@@ -1187,6 +1188,7 @@ function launchHarness(): Promise<void> {
         }
       }
     }
+    if (runtime.snapshot().phase === 'ready') safeModeSuspectedPlugins = []
   })().finally(() => {
     harnessLaunchOperation = undefined
   })
@@ -1623,6 +1625,7 @@ async function showPluginRecovery(options?: {
         shell.showItemInFolder(join(app.getPath('logs'), 'harness.log'))
         continue
       } else if (action === 'safe-mode') {
+        safeModeSuspectedPlugins = [...new Set(detection.plugins)]
         takePendingFrontendPluginRecovery()
         queueMicrotask(() => void showSafeMode().catch(showUnexpectedError))
         return
@@ -1654,6 +1657,7 @@ async function showRuntimeFailure(snapshot: RuntimeSnapshot): Promise<void> {
 
 async function waitForSafeModeAction(options: {
   plugins: readonly string[]
+  suspectedPlugins: readonly string[]
   issues: readonly ProfileCompatibilityIssue[]
   backups: Awaited<ReturnType<typeof snapshotPluginRemovalLedger>>['backups']
   recoveryLocked: boolean
@@ -1704,6 +1708,7 @@ async function waitForSafeModeAction(options: {
   const model = buildSafeModeViewModel({
     locale: harnessLocale(),
     plugins: options.plugins,
+    suspectedPlugins: options.suspectedPlugins,
     issues: options.issues,
     backups: options.backups,
     recoveryLocked: options.recoveryLocked,
@@ -1943,6 +1948,7 @@ async function showSafeModeManager(initial?: {
       const backupRestoreLocked = recoveryLocked || !removalLedgerReadable
       const action = await waitForSafeModeAction({
         plugins: installed,
+        suspectedPlugins: safeModeSuspectedPlugins,
         issues: compatibility.issues,
         backups: removalBackups.backups,
         recoveryLocked,
@@ -2134,6 +2140,8 @@ async function showSafeModeManager(initial?: {
         if (!removal.disabled) failedPlugins.push(plugin)
         else if (removal.pending) pendingPlugins.push(plugin)
       }
+      const disabledPlugins = new Set(selectedPlugins.filter((plugin) => !failedPlugins.includes(plugin)))
+      safeModeSuspectedPlugins = safeModeSuspectedPlugins.filter((plugin) => !disabledPlugins.has(plugin))
       const failed = repairFailures + failedPlugins.length
       notice = pendingPlugins.length > 0
         ? isChinese

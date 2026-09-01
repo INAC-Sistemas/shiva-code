@@ -105,7 +105,30 @@ describe('the market install boundary', () => {
 
     const manifest = JSON.parse(await readFile(join(home, 'profiles', 'web', 'package.json'), 'utf8'))
     expect(manifest.dsh.profile.bundles).toContain('demo-plugin')
-    expect(manifest.dependencies['demo-plugin']).toMatch(/^link:/u) // generation is a link: dep
+    expect(manifest.dependencies['demo-plugin']).toBe('9.9.9')
+    expect(manifest.pnpm.overrides['demo-plugin']).toMatch(/^link:/u)
+  })
+
+  it('routes a market removal through desired.json instead of the shared profile CLI', async () => {
+    const home = await freshHome()
+    const svc = service(home, stubGenerationInstall('demo-plugin', '9.9.9'))
+    await drainHandle(
+      svc.runExternalMarketPluginInstall(
+        ['add', 'demo-plugin@9.9.9'],
+        join(home, 'profiles', 'web')
+      )
+    )
+
+    const result = await drainHandle(
+      svc.runPlugin(['remove', '--workspace-root', 'demo-plugin'], join(home, 'profiles', 'web'))
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Disabling demo-plugin generation')
+    expect(await readDesired(home)).toEqual([])
+    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'web', 'package.json'), 'utf8'))
+    expect(manifest.dependencies['demo-plugin']).toBeUndefined()
+    expect(manifest.pnpm?.overrides?.['demo-plugin']).toBeUndefined()
   })
 
   it('replaces an earlier generation of the same plugin', async () => {

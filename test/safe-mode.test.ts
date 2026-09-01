@@ -26,8 +26,8 @@ describe('Safe Mode', () => {
     expect(model.summary).toContain('但不会删除插件')
     expect(model.plugins).toEqual(['plugin-a', '@example/plugin-b'])
     expect(model.pluginItems).toEqual([
-      { name: 'plugin-a', actionLabel: '卸载插件', incompatible: false },
-      { name: '@example/plugin-b', actionLabel: '卸载插件', incompatible: false }
+      { name: 'plugin-a', actionLabel: '卸载插件', incompatible: false, suspected: false },
+      { name: '@example/plugin-b', actionLabel: '卸载插件', incompatible: false, suspected: false }
     ])
     expect(model.safetyNote).toBe('工作区、会话、模型配置和未选中的插件不会被删除。')
   })
@@ -80,8 +80,10 @@ describe('Safe Mode', () => {
     expect(model.pluginItems[0]).toEqual({
       name: 'dsh-dream-skin',
       statusLabel: '（版本不兼容）',
+      statusTone: 'danger',
       actionLabel: '卸载插件',
-      incompatible: true
+      incompatible: true,
+      suspected: false
     })
     expect(model.issueGroups).toEqual([])
     expect(model.restartLabel).toBe('退出安全模式并重启')
@@ -108,7 +110,7 @@ describe('Safe Mode', () => {
       }]
     })
     expect(model.pluginItems).toEqual([
-      { name: 'plugin-a', actionLabel: '卸载插件', incompatible: false }
+      { name: 'plugin-a', actionLabel: '卸载插件', incompatible: false, suspected: false }
     ])
     expect(model.issueGroups[0]).toMatchObject({
       name: 'Profile 核心依赖',
@@ -215,6 +217,23 @@ describe('Safe Mode', () => {
     expect(model.backupSummary).toContain('只允许重试')
   })
 
+  it('puts harness-log suspects first and marks them without preselecting removal', () => {
+    const model = buildSafeModeViewModel({
+      locale: 'zh',
+      plugins: ['plugin-a', 'plugin-b'],
+      suspectedPlugins: ['plugin-b']
+    })
+    expect(model.plugins).toEqual(['plugin-b', 'plugin-a'])
+    expect(model.pluginItems[0]).toEqual({
+      name: 'plugin-b',
+      statusLabel: '（本次启动日志推断）',
+      statusTone: 'warning',
+      actionLabel: '卸载插件',
+      incompatible: false,
+      suspected: true
+    })
+  })
+
   it('ships a selectable management page with no remote content', async () => {
     const html = await readFile('build/safe-mode.html', 'utf8')
     expect(html).toContain('id="items"')
@@ -223,6 +242,7 @@ describe('Safe Mode', () => {
     expect(html).toContain('model.issueGroups')
     expect(html).toContain('model.pluginItems')
     expect(html).toContain('plugin.statusLabel')
+    expect(html).toContain("plugin.statusTone === 'warning'")
     expect(html.match(/<section class="list-card"/g)).toHaveLength(1)
     expect(html).toContain('checkbox.dataset.issueIds')
     expect(html).toContain("document.createElement('details')")
@@ -284,6 +304,7 @@ describe('Safe Mode', () => {
     expect(main).toContain("ipcMain.handle('safe-mode:exit', async")
     expect(main).toContain("return { ok: false, blocked: true }")
     expect(main).toContain('safeModeManagerWindow')
+    expect(main).toContain('safeModeSuspectedPlugins = [...new Set(detection.plugins)]')
     expect(main).toContain('modal: true')
     expect(main).toContain('assertTrustedSafeModeManagerEvent(event)')
     expect(main).toContain('`处理完成：修复 ${repaired} 项，卸载 ${selectedPlugins.length} 个插件。`')
