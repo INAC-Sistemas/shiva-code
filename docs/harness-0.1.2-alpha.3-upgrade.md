@@ -94,7 +94,7 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 `CORE_BUNDLES`（`@deepseek-ai/dsh-base` / `@deepseek-ai/dsh-web-app` / `dshmarket`）
 名称路径不变，`harness-runtime.ts` 无需改动。
 
-## 会话持久化（alpha.3 breaking change，桌面端近乎零影响）
+## 会话持久化（alpha.3 breaking change）
 
 上游 `refactor(session)!: remove SQLite persistence backend`：
 
@@ -104,6 +104,12 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 - 桌面端 profile 用 `dsh-session-persistence-jsonl` 作为唯一权威存储，
   历史会话可见性完全不受影响。
 - 上游那句「请用旧版本导出」仅针对手动把后端配成 sqlite 的上游 CLI 用户，与桌面端无关。
+
+桌面端原有的“永久删除会话、保留工作区文件”补丁也已迁移到 alpha.3 的新会话架构：
+删除 RPC 现在由 `dsh-api-session-controller` 统一承载，经
+`dsh-session-persistence` / `dsh-session-persistence-jsonl` 删除权威 JSONL 记录，再由
+`dsh-workspace` 清理会话索引。UI 在删除前明确提示工作区文件会保留且操作不可撤销；普通
+会话的活动 Agent 会由 controller 自己释放，子 Agent 或其他 capability 持有的会话仍拒绝删除。
 
 ## 主机 API / 移动端桥接（复核结论：无契约变化）
 
@@ -127,9 +133,9 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 
 `src/main/**` 一行未改，测试未改。
 
-## 补丁清单（16 → 16）
+## 补丁清单（16 → 19）
 
-全部 16 个补丁已适配 alpha.3，无 alpha.1 残留；`npm ci` 的 patch-package 0 error。
+全部 19 个补丁已适配 alpha.3，无 alpha.1 残留；`npm ci` 的 patch-package 0 error。
 
 ### 仅改名 / 行号漂移 / blob-index 偏移（内容逐字不变）
 
@@ -138,7 +144,7 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 | `cordis-plugin-loader`（`1.0.2` → `1.0.3`） | 文件名版本号也变，补丁体不变 |
 | `@deepseek-ai+dsh`（依赖闭包 manifest 注入） | 纯 rename + blob index 更新，`@@` hunk 头未变 |
 | `dsh-client-modules`、`dsh-client-ui-deliverables`、`dsh-client-ui-directory-picker-native`、`dsh-client-ui-layout`、`dsh-client-ui-sidebar`、`dsh-llm-deepseek`、`dsh-llm-pi-ai` | 纯改名，补丁体 0 改动（上下文未漂移） |
-| `dsh-api-session-controller`、`dsh-client-ui-chat`、`dsh-client-ui-trajectory` | 仅行号漂移，provider 错误分类 / JSON-safe projection 逐字不变（alpha.3 pristine 仍只处理 AUTH、仍发原始 summary） |
+| `dsh-client-ui-chat`、`dsh-client-ui-trajectory` | 仅行号漂移，provider 错误分类逐字不变（alpha.3 pristine 仍只处理 AUTH） |
 
 `test/session-create-remote-event-patch.test.ts` 的 `isJsonValue` import 从
 `@deepseek-ai/dsh-session` 迁到 `@deepseek-ai/dsh-util-values`（上游把该导出移出包入口）。
@@ -148,7 +154,7 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 | 补丁 | 旧 hash → 新 hash | 附带 |
 | --- | --- | --- |
 | `dsh-client-ui-model-selection` | `_2WBGbq_` → `Ydf5zq_` | 13 hunk 保持；纯机械 hash swap |
-| `dsh-client-ui-workspace` | `koIWyW_` → `_zvJpq_` | 27 hunk 保持；上游 workspace 行新增 schedule indicator 功能 |
+| `dsh-client-ui-workspace` | `koIWyW_` → `_zvJpq_` | 保留原有未读 / Finder 能力，并接入永久删除确认与错误展示；上游 workspace 行新增 schedule indicator 功能 |
 | `dsh-client-ui-settings-models` | `uVX9wq_` → `A_4Mua_`（ModelsSection）、`oGvYtW_` → `_2CJT8a_`（Onboarding） | 顺带修掉 alpha.1 补丁自身的 dual-hash bug（手写 CSS 串混用 stale `zGbnIq_`）；`test/model-settings-catalog-ux-patch.test.ts` 1 行断言更新 |
 | `dsh-client-ui-agent-preset` | Seat `_4FiJda_` → `YgMYBq_` | 顺带修正 alpha.1 误把 picker/search 类挂到 `AgentPresetLabel` 模块（Seat 组件读的是 `AgentPresetSeat` 模块，alpha.1 那份样式大概率静默失效）；hunk 19 → 18 |
 
@@ -165,6 +171,8 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 - provider 错误分类（QUOTA / FORBIDDEN，chat + trajectory，中英 i18n）
 - `dsh-api-session-controller` 的 JSON-safe projection 剥离
 - `dsh-client-ui-workspace` 的未读会话标记（`unreadSessionIds`）
+- 永久删除会话记录与执行轨迹（保留工作区文件；`dsh-api-session-controller`、JSONL
+  persistence、workspace registry 与 `dsh-client-ui-workspace` 协同）
 - 可搜索模型 / 服务商网格（`dsh-client-ui-model-selection` + `dsh-client-ui-settings-models`）
 - 预设导入导出 UI + 可搜索/分组列表 + Awesome Presets 链接（`dsh-client-ui-agent-preset`）
 
