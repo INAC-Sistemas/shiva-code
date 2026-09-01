@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { PassThrough } from 'node:stream'
 
 import { installGeneration } from './generations/installer.mjs'
-import { projectGenerations } from './generations/projection.mjs'
+import { publishGenerationManifest } from './generations/projection.mjs'
 import {
   disableGeneration,
   listGenerations,
@@ -223,6 +223,9 @@ export async function ensurePnpmShim(home = dshHome()) {
   // has to say so rather than leaving a stale shim to be mistaken for a fresh
   // one.
   const runnerPath = await stagePnpmRunner(directory)
+  if (runnerPath === undefined && hasGenerationProjection(home)) {
+    throw new Error('The generation-aware pnpm runner is unavailable; refusing to mutate the projected Profile.')
+  }
   const pnpmCommand = runnerPath === undefined ? [pnpmEntry] : [runnerPath, pnpmEntry]
   process.stdout.write(
     runnerPath === undefined
@@ -405,6 +408,16 @@ export function projectedGenerationRemoval(args, home = dshHome()) {
   }
 }
 
+function hasGenerationProjection(home) {
+  try {
+    const manifest = JSON.parse(readFileSync(join(profileDirectory(home), 'package.json'), 'utf8'))
+    const plugins = manifest.dsh?.desktop?.generationProjection?.plugins
+    return typeof plugins === 'object' && plugins !== null && Object.keys(plugins).length > 0
+  } catch {
+    return false
+  }
+}
+
 export function createDesktopPnpmService(options) {
   const {
     binDirectory,
@@ -457,8 +470,8 @@ export function createDesktopPnpmService(options) {
    *
    * The plugin is installed as its own immutable generation rather than into
    * the shared hoisted tree: a fresh directory, promoted by one rename, never
-   * replaced. On Windows that is the whole fix — the shared tree's in-place
-   * package replacement is the operation pnpm cannot do there.
+   * replaced. Only manifest inventory is published while Harness is live; the
+   * node_modules junction changes on the next cold start.
    */
   const runExternalMarketPluginInstall = (args, invokingDir, signal) => {
     validatePluginOperation(args, invokingDir)
@@ -491,9 +504,9 @@ export function createDesktopPnpmService(options) {
           return generation === undefined || generation.pluginName !== install.generation.pluginName
         })
         await writeDesired(home, [...kept, install.generation.id])
-        const projection = await projectGenerations(home)
-        write(`enabled: ${projection.linked.join(', ')}`)
-        write(`bundles: ${JSON.stringify(projection.bundles)}`)
+        const published = await publishGenerationManifest(home)
+        write(`staged for next restart: ${published.plugins.join(', ')}`)
+        write(`bundles: ${JSON.stringify(published.bundles)}`)
         return { exitCode: 0 }
       })
     )
@@ -517,10 +530,10 @@ export function createDesktopPnpmService(options) {
       const handle = asHandle(async ({ write, isCancelled }) =>
         withRegistryLock(home, async () => {
           if (isCancelled()) return { exitCode: 1, message: 'The package operation was aborted.' }
-          write(`Disabling ${generationRemoval} generation…`)
+          write(`Disabling ${generationRemoval} generation for the next restart…`)
           await disableGeneration(home, generationRemoval)
-          const projection = await projectGenerations(home)
-          write(`enabled: ${projection.linked.join(', ')}`)
+          const published = await publishGenerationManifest(home)
+          write(`staged for next restart: ${published.plugins.join(', ')}`)
           return { exitCode: 0 }
         })
       )

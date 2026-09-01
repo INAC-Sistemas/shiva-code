@@ -24,10 +24,10 @@ import { resolveEnabledGenerations } from './registry.mjs'
  *     contract — agree with what is actually linked.
  *
  * Generation plugins appear in `dependencies` at their installed version so
- * dsh-market can present them as ordinary installed releases. pnpm is kept on
- * the immutable local generation by a root override under `pnpm.overrides`;
- * the internal `link:` path therefore never leaks into the market-facing
- * dependency map.
+ * dsh-market can present them as ordinary installed releases. A root override
+ * records the immutable local source, but Desktop's pnpm runner temporarily
+ * removes both generated fields before every Profile package operation. pnpm
+ * therefore never owns the projected node_modules path.
  *
  * The projection is derived, never authored. Losing it costs a reprojection,
  * not a repair.
@@ -220,6 +220,44 @@ async function ensureDirLink(linkPath, target) {
  * in-box bundles are left untouched.
  */
 export async function projectGenerations(dshHome, profile = 'web') {
+  const { dir, manifestState, enabled, targets, linkSpecs } =
+    await prepareGenerationProjection(dshHome, profile)
+  const modulesDir = join(dir, 'node_modules')
+  await mkdir(modulesDir, { recursive: true })
+
+  const linked = []
+  const projected = new Map()
+  for (const [pluginName, generation] of enabled) {
+    const target = targets.get(pluginName)
+    if (target === undefined) throw new Error(`Enabled generation target was not prevalidated: ${pluginName}`)
+    await ensureDirLink(join(modulesDir, pluginName), target)
+    linked.push(pluginName)
+    projected.set(pluginName, generation)
+  }
+
+  const unlinked = await pruneStaleGenerationLinks(modulesDir, projected)
+  const bundles = await syncProfileManifest(dir, projected, linkSpecs, manifestState)
+
+  return { linked, unlinked, bundles }
+}
+
+/**
+ * Publish the desired generation set for inventory and the next launch without
+ * touching the active Profile's node_modules. Market operations run inside the
+ * live Harness, so replacing even a junction there recreates the Windows
+ * rename conflict generations are meant to avoid. The cold-start projector
+ * materializes these links after Harness has stopped.
+ */
+export async function publishGenerationManifest(dshHome, profile = 'web') {
+  const { dir, manifestState, enabled, linkSpecs } =
+    await prepareGenerationProjection(dshHome, profile)
+  const bundles = await syncProfileManifest(dir, enabled, linkSpecs, manifestState, {
+    syncBundles: false
+  })
+  return { plugins: [...enabled.keys()], bundles }
+}
+
+async function prepareGenerationProjection(dshHome, profile) {
   const dir = profileDir(dshHome, profile)
   // Validate the authoritative Profile manifest before touching links. A
   // malformed or temporarily unreadable existing file must never be mistaken
@@ -230,27 +268,15 @@ export async function projectGenerations(dshHome, profile = 'web') {
   for (const [pluginName, generation] of enabled) {
     targets.set(pluginName, await validateEnabledGenerationTarget(pluginName, generation))
   }
-  const modulesDir = join(dir, 'node_modules')
-  await mkdir(modulesDir, { recursive: true })
-
-  const linked = []
   const linkSpecs = new Map()
-  const projected = new Map()
   for (const [pluginName, generation] of enabled) {
     const target = targets.get(pluginName)
     if (target === undefined) throw new Error(`Enabled generation target was not prevalidated: ${pluginName}`)
-    await ensureDirLink(join(modulesDir, pluginName), target)
-    linked.push(pluginName)
-    projected.set(pluginName, generation)
     // This path belongs only to pnpm's root override. The market reads the
     // ordinary dependency version written below and never sees it.
     linkSpecs.set(pluginName, `link:${relative(dir, target).split('\\').join('/')}`)
   }
-
-  const unlinked = await pruneStaleGenerationLinks(modulesDir, projected)
-  const bundles = await syncProfileManifest(dir, projected, linkSpecs, manifestState)
-
-  return { linked, unlinked, bundles }
+  return { dir, manifestState, enabled, targets, linkSpecs }
 }
 
 /**
@@ -295,7 +321,13 @@ async function pruneStaleGenerationLinks(modulesDir, enabled) {
  * Desktop owns so a disabled generation can be removed after a crash without
  * guessing whether an ordinary version dependency belongs to the user.
  */
-async function syncProfileManifest(dir, enabled, linkSpecs, manifestState) {
+async function syncProfileManifest(
+  dir,
+  enabled,
+  linkSpecs,
+  manifestState,
+  { syncBundles = true } = {}
+) {
   const manifestPath = join(dir, 'package.json')
   const { current, manifest } = manifestState
 
@@ -355,15 +387,16 @@ async function syncProfileManifest(dir, enabled, linkSpecs, manifestState) {
   // left out of `bundles` makes the consistency check report "installed and
   // declares a bundle, but is not composed", which the app surfaces as a
   // restart prompt on every launch.
-  const declaredBundles = (manifest.dsh?.profile?.bundles ?? []).filter((name) =>
-    IN_BOX_BUNDLES.has(name)
-  )
-  for (const name of Object.keys(dependencies)) {
-    if (declaredBundles.includes(name) || enabled.has(name)) continue
-    if (await declaresBundle(join(dir, 'node_modules', name))) declaredBundles.push(name)
+  let bundles = [...(manifest.dsh?.profile?.bundles ?? [])]
+  if (syncBundles) {
+    const declaredBundles = bundles.filter((name) => IN_BOX_BUNDLES.has(name))
+    for (const name of Object.keys(dependencies)) {
+      if (declaredBundles.includes(name) || enabled.has(name)) continue
+      if (await declaresBundle(join(dir, 'node_modules', name))) declaredBundles.push(name)
+    }
+    const pluginNames = [...enabled.keys()].sort()
+    bundles = [...declaredBundles, ...pluginNames]
   }
-  const pluginNames = [...enabled.keys()].sort()
-  const bundles = [...declaredBundles, ...pluginNames]
 
   const desktop = {
     ...(manifest.dsh?.desktop ?? {})

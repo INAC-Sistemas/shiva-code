@@ -6,6 +6,7 @@ import {
   buildProfilePluginCommandEnvironment,
   buildProfilePluginRemoveArguments,
   diagnosticLine,
+  ensureProfilePnpmShim,
   removeProfilePluginWithDsh
 } from '../src/main/runtime/profile-plugin-command'
 
@@ -125,6 +126,36 @@ describe('profile pnpm shim and failure reporting', () => {
     expect(
       buildPnpmShimCommand({ ...base, pnpmRunnerPath: existingRunnerPath })
     ).toEqual([existingRunnerPath, '/app/pnpm.cjs'])
+  })
+
+  it('fails closed when a projected profile would bypass the generation-aware runner', async () => {
+    const home = join(__dirname, '.temp-profile-plugin-command-runner-test')
+    try {
+      await mkdir(join(home, 'profiles', 'web'), { recursive: true })
+      await writeFile(
+        join(home, 'profiles', 'web', 'package.json'),
+        JSON.stringify({
+          dsh: {
+            desktop: {
+              generationProjection: {
+                version: 1,
+                plugins: { 'generation-plugin': { visibleVersion: '1.0.0' } }
+              }
+            }
+          }
+        })
+      )
+
+      await expect(ensureProfilePnpmShim({
+        dshHome: home,
+        dshEntryPath: '/app/dsh/bin.js',
+        nodeExecutablePath: '/app/node',
+        pnpmEntryPath: '/app/pnpm.cjs',
+        pnpmRunnerPath: '/app/missing-runner.mjs'
+      })).rejects.toThrow(/generation-aware pnpm runner is unavailable/u)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   it('reports the failure that names a cause, not dsh’s wrapper line', () => {
