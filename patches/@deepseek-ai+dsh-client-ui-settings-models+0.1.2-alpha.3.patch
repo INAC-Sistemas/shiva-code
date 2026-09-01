@@ -1,5 +1,4 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.js
-index a7689db..ee4304f 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.js
 @@ -64,6 +64,38 @@ window.__ModuleLoader__.load({
@@ -19,7 +18,7 @@ index a7689db..ee4304f 100644
 +			const tag = document.createElement("style");
 +			tag.dataset.plugin = "@deepseek-ai/dsh-client-ui-settings-models";
 +			tag.dataset.pluginCss = modelModalityTagId;
-+			tag.textContent = ".dshModelModalityToggle{grid-column:1/-1;align-items:flex-start;gap:9px;min-height:36px;padding:4px;display:flex;cursor:pointer}.dshModelModalityToggle[aria-disabled=true]{cursor:default;opacity:.6}.dshModelModalityToggle input{accent-color:var(--dsw-alias-brand-primary);flex:none;width:16px;height:16px;margin:2px 0 0}.dshModelModalityCopy{flex-direction:column;gap:1px;display:flex}.dshModelModalityTitle{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:18px}.dshModelModalityHint{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.dshModelModalityToggleCompact{grid-column:auto;align-items:center;gap:5px;min-height:28px;white-space:nowrap;border-radius:6px;padding:0 4px;position:relative}.dshModelModalityToggleCompact:hover{background:var(--dsw-alias-interactive-bg-hover)}.dshModelModalityToggleCompact input{width:14px;height:14px;margin:0}.dshModelModalityToggleCompact .dshModelModalityCopy{display:block}.dshModelModalityToggleCompact .dshModelModalityTitle{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.dshModelModalityToggleCompact:after{content:attr(data-tooltip);z-index:12;pointer-events:none;box-sizing:border-box;width:max-content;max-width:260px;color:var(--dsw-alias-label-primary-foreground);background:var(--dsw-alias-label-primary);border-radius:6px;padding:6px 8px;font-size:11px;font-weight:400;line-height:16px;white-space:normal;visibility:hidden;opacity:0;position:absolute;top:calc(100% + 5px);right:0}.dshModelModalityToggleCompact:hover:after,.dshModelModalityToggleCompact:focus-within:after{visibility:visible;opacity:1}.uVX9wq_modelRow{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto auto}";
++			tag.textContent = ".dshModelModalityToggle{grid-column:1/-1;align-items:flex-start;gap:9px;min-height:36px;padding:4px;display:flex;cursor:pointer}.dshModelModalityToggle[aria-disabled=true]{cursor:default;opacity:.6}.dshModelModalityToggle input{accent-color:var(--dsw-alias-brand-primary);flex:none;width:16px;height:16px;margin:2px 0 0}.dshModelModalityCopy{flex-direction:column;gap:1px;display:flex}.dshModelModalityTitle{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:18px}.dshModelModalityHint{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.dshModelModalityToggleCompact{grid-column:auto;align-items:center;gap:5px;min-height:28px;white-space:nowrap;border-radius:6px;padding:0 4px;position:relative}.dshModelModalityToggleCompact:hover{background:var(--dsw-alias-interactive-bg-hover)}.dshModelModalityToggleCompact input{width:14px;height:14px;margin:0}.dshModelModalityToggleCompact .dshModelModalityCopy{display:block}.dshModelModalityToggleCompact .dshModelModalityTitle{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.dshModelModalityToggleCompact:after{content:attr(data-tooltip);z-index:12;pointer-events:none;box-sizing:border-box;width:max-content;max-width:260px;color:var(--dsw-alias-label-primary-foreground);background:var(--dsw-alias-label-primary);border-radius:6px;padding:6px 8px;font-size:11px;font-weight:400;line-height:16px;white-space:normal;visibility:hidden;opacity:0;position:absolute;top:calc(100% + 5px);right:0}.dshModelModalityToggleCompact:hover:after,.dshModelModalityToggleCompact:focus-within:after{visibility:visible;opacity:1}.A_4Mua_modelRow{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto auto}";
 +			document.head.appendChild(tag);
 +		}
 +		const modelCatalogUxTagId = "@deepseek-ai/dsh-client-ui-settings-models/ModelCatalogUx";
@@ -27,7 +26,7 @@ index a7689db..ee4304f 100644
 +			const tag = document.createElement("style");
 +			tag.dataset.plugin = "@deepseek-ai/dsh-client-ui-settings-models";
 +			tag.dataset.pluginCss = modelCatalogUxTagId;
-+			tag.textContent = ".dshModelCatalogSearch{box-sizing:border-box;position:relative;align-items:center;display:flex}.dshModelCatalogSearchIcon{position:absolute;left:10px;color:var(--dsw-alias-label-tertiary);pointer-events:none}.dshModelCatalogSearch input{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);width:100%;height:34px;font:inherit;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:8px;padding:0 11px 0 34px;font-size:13px;line-height:20px}.dshModelCatalogSearch input:focus{border-color:var(--dsw-alias-brand-primary);outline:none}.dshModelCatalogSearch input::placeholder{color:var(--dsw-alias-label-dimmed)}.dshProviderEditorExpanded .zGbnIq_customizedBody{padding-bottom:72px}.dshProviderEditorStickyFooter{z-index:4;position:sticky;bottom:-24px;background:var(--dsw-alias-bg-module-platform);border-top:1px solid var(--dsw-alias-border-l2);box-shadow:0 -10px 18px -18px #0009;align-items:center;justify-content:space-between;gap:12px;margin:0 -16px -14px;padding:12px 16px 14px;display:flex}.dshProviderEditorStickyFooter .zGbnIq_editorActions{margin-left:auto}@media (width<=620px){.dshProviderEditorStickyFooter{align-items:stretch;flex-wrap:wrap}.dshProviderEditorStickyFooter .zGbnIq_editorActions{margin-left:auto}}";
++			tag.textContent = ".dshModelCatalogSearch{box-sizing:border-box;position:relative;align-items:center;display:flex}.dshModelCatalogSearchIcon{position:absolute;left:10px;color:var(--dsw-alias-label-tertiary);pointer-events:none}.dshModelCatalogSearch input{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);width:100%;height:34px;font:inherit;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:8px;padding:0 11px 0 34px;font-size:13px;line-height:20px}.dshModelCatalogSearch input:focus{border-color:var(--dsw-alias-brand-primary);outline:none}.dshModelCatalogSearch input::placeholder{color:var(--dsw-alias-label-dimmed)}.dshProviderEditorExpanded .A_4Mua_customizedBody{padding-bottom:72px}.dshProviderEditorStickyFooter{z-index:4;position:sticky;bottom:-24px;background:var(--dsw-alias-bg-module-platform);border-top:1px solid var(--dsw-alias-border-l2);box-shadow:0 -10px 18px -18px #0009;align-items:center;justify-content:space-between;gap:12px;margin:0 -16px -14px;padding:12px 16px 14px;display:flex}.dshProviderEditorStickyFooter .A_4Mua_editorActions{margin-left:auto}@media (width<=620px){.dshProviderEditorStickyFooter{align-items:stretch;flex-wrap:wrap}.dshProviderEditorStickyFooter .A_4Mua_editorActions{margin-left:auto}}";
 +			document.head.appendChild(tag);
 +		}
 +		const modelReasoningTagId = "@deepseek-ai/dsh-client-ui-settings-models/ModelReasoningEffortsField";
@@ -39,28 +38,28 @@ index a7689db..ee4304f 100644
 +			document.head.appendChild(tag);
 +		}
  		var ModelsSection_module_css_default = {
- 			"addActions": "uVX9wq_addActions",
- 			"addBlock": "uVX9wq_addBlock",
+ 			"addActions": "A_4Mua_addActions",
+ 			"addBlock": "A_4Mua_addBlock",
 @@ -114,6 +146,11 @@ window.__ModuleLoader__.load({
- 			"modelRow": "uVX9wq_modelRow",
- 			"notice": "uVX9wq_notice",
- 			"primaryButton": "uVX9wq_primaryButton",
-+			"providerButton": "uVX9wq_providerButton",
-+			"providerButtonSelected": "uVX9wq_providerButtonSelected",
-+			"providerKind": "uVX9wq_providerKind",
-+			"providerList": "uVX9wq_providerList",
-+			"providerName": "uVX9wq_providerName",
- 			"rowActions": "uVX9wq_rowActions",
- 			"rowCard": "uVX9wq_rowCard",
- 			"rowHead": "uVX9wq_rowHead",
+ 			"modelRow": "A_4Mua_modelRow",
+ 			"notice": "A_4Mua_notice",
+ 			"primaryButton": "A_4Mua_primaryButton",
++			"providerButton": "A_4Mua_providerButton",
++			"providerButtonSelected": "A_4Mua_providerButtonSelected",
++			"providerKind": "A_4Mua_providerKind",
++			"providerList": "A_4Mua_providerList",
++			"providerName": "A_4Mua_providerName",
+ 			"rowActions": "A_4Mua_rowActions",
+ 			"rowCard": "A_4Mua_rowCard",
+ 			"rowHead": "A_4Mua_rowHead",
 @@ -125,6 +162,7 @@ window.__ModuleLoader__.load({
- 			"secondaryButton": "uVX9wq_secondaryButton",
- 			"section": "uVX9wq_section",
- 			"selectInput": "uVX9wq_selectInput",
-+			"selectionLabel": "uVX9wq_selectionLabel",
- 			"setupCard": "uVX9wq_setupCard",
- 			"switchThumb": "uVX9wq_switchThumb",
- 			"title": "uVX9wq_title"
+ 			"secondaryButton": "A_4Mua_secondaryButton",
+ 			"section": "A_4Mua_section",
+ 			"selectInput": "A_4Mua_selectInput",
++			"selectionLabel": "A_4Mua_selectionLabel",
+ 			"setupCard": "A_4Mua_setupCard",
+ 			"switchThumb": "A_4Mua_switchThumb",
+ 			"title": "A_4Mua_title"
 @@ -156,6 +194,186 @@ window.__ModuleLoader__.load({
  			});
  		}
@@ -328,7 +327,7 @@ index a7689db..ee4304f 100644
  					})
  				]
  			});
-@@ -800,6 +1029,7 @@ window.__ModuleLoader__.load({
+@@ -554,6 +783,7 @@ window.__ModuleLoader__.load({
  			const [picked, setPicked] = (0, react.useState)(/* @__PURE__ */ new Set());
  			const [expanded, setExpanded] = (0, react.useState)(/* @__PURE__ */ new Set());
  			const [editing, setEditing] = (0, react.useState)(/* @__PURE__ */ new Map());
@@ -336,7 +335,7 @@ index a7689db..ee4304f 100644
  			/** Buffer key for one capacity field; the row half moves when rows do. */
  			const bufferKey = (index, field) => `${String(index)}:${field}`;
  			const editCapacity = (index, field, text) => {
-@@ -929,11 +1159,19 @@ window.__ModuleLoader__.load({
+@@ -681,11 +911,19 @@ window.__ModuleLoader__.load({
  							})
  						]
  					}),
@@ -357,7 +356,7 @@ index a7689db..ee4304f 100644
  						className: ModelsSection_module_css_default["modelEntry"],
  						children: [(0, react_jsx_runtime.jsxs)("div", {
  							className: ModelsSection_module_css_default["modelRow"],
-@@ -955,12 +1193,23 @@ window.__ModuleLoader__.load({
+@@ -707,12 +945,23 @@ window.__ModuleLoader__.load({
  									value: textOf(model, "name"),
  									placeholder: t("modelName"),
  									"aria-label": `${t("modelName")} ${index + 1}`,
@@ -387,7 +386,7 @@ index a7689db..ee4304f 100644
  									type: "button",
  									className: ModelsSection_module_css_default["iconButton"],
  									"aria-label": `${t("modelAdvanced")} ${index + 1}`,
-@@ -1026,18 +1275,17 @@ window.__ModuleLoader__.load({
+@@ -778,18 +1027,17 @@ window.__ModuleLoader__.load({
  										editCapacity(index, "maxTokens", event.target.value);
  									}
  								})]
@@ -414,7 +413,7 @@ index a7689db..ee4304f 100644
  					failure !== void 0 ? (0, react_jsx_runtime.jsx)("p", {
  						className: ModelsSection_module_css_default["error"],
  						children: failure
-@@ -1138,6 +1386,7 @@ window.__ModuleLoader__.load({
+@@ -1131,6 +1379,7 @@ window.__ModuleLoader__.load({
  			const [protocol, setProtocol] = (0, react.useState)(protocols[0] ?? "");
  			const [keyDraft, setKeyDraft] = (0, react.useState)("");
  			const [models, setModels] = (0, react.useState)([]);
@@ -422,7 +421,7 @@ index a7689db..ee4304f 100644
  			const [busy, setBusy] = (0, react.useState)(false);
  			const [failure, setFailure] = (0, react.useState)(void 0);
  			/**
-@@ -1197,6 +1446,11 @@ window.__ModuleLoader__.load({
+@@ -1188,6 +1437,11 @@ window.__ModuleLoader__.load({
  					setBusy(false);
  				}
  			};
@@ -434,7 +433,7 @@ index a7689db..ee4304f 100644
  			return (0, react_jsx_runtime.jsxs)("div", {
  				className: ModelsSection_module_css_default["editor"],
  				children: [
-@@ -1312,6 +1566,8 @@ window.__ModuleLoader__.load({
+@@ -1303,6 +1557,8 @@ window.__ModuleLoader__.load({
  					(0, react_jsx_runtime.jsx)(ModelListEditor, {
  						models,
  						onChange: setModels,
@@ -443,7 +442,7 @@ index a7689db..ee4304f 100644
  						probe: {
  							settingsNs: NS$1,
  							baseURL,
-@@ -1331,18 +1587,27 @@ window.__ModuleLoader__.load({
+@@ -1322,18 +1578,27 @@ window.__ModuleLoader__.load({
  						className: ModelsSection_module_css_default["advancedHint"],
  						children: hint
  					}),
@@ -483,7 +482,7 @@ index a7689db..ee4304f 100644
  					})
  				]
  			});
-@@ -1430,6 +1695,8 @@ window.__ModuleLoader__.load({
+@@ -1421,6 +1686,8 @@ window.__ModuleLoader__.load({
  			const [keyState, setKeyState] = (0, react.useState)(void 0);
  			const [busy, setBusy] = (0, react.useState)(false);
  			const [failure, setFailure] = (0, react.useState)(void 0);
@@ -492,7 +491,7 @@ index a7689db..ee4304f 100644
  			const [committedOriginal, setCommittedOriginal] = (0, react.useState)(() => schema.getPath(namespace.user, settingsPath));
  			const [expectedRevision, setExpectedRevision] = (0, react.useState)(() => namespace.revision);
  			const root = (0, react.useMemo)(() => schema.rehydrate(namespace.schema), [namespace.schema, schema]);
-@@ -1552,6 +1819,15 @@ window.__ModuleLoader__.load({
+@@ -1541,6 +1808,15 @@ window.__ModuleLoader__.load({
  			const inheritedModels = () => {
  				return schema.getPath(namespace.base, [...settingsPath, "models"]) ?? schema.nodeAtPath(root, [...settingsPath, "models"])?.meta.default;
  			};
@@ -508,7 +507,7 @@ index a7689db..ee4304f 100644
  			/**
  			* The curated fields of one known adapter family. The family arrives
  			* narrowed so the per-family branches below are total: an unknown namespace
-@@ -1569,6 +1845,8 @@ window.__ModuleLoader__.load({
+@@ -1558,6 +1834,8 @@ window.__ModuleLoader__.load({
  				const catalogProps = {
  					models,
  					overridden: modelsOverridden,
@@ -517,7 +516,7 @@ index a7689db..ee4304f 100644
  					t,
  					disabled,
  					onChange: (next) => {
-@@ -1607,6 +1885,10 @@ window.__ModuleLoader__.load({
+@@ -1596,6 +1874,10 @@ window.__ModuleLoader__.load({
  					]
  				}), props.credentialOnly === true ? null : (0, react_jsx_runtime.jsxs)("details", {
  					className: ModelsSection_module_css_default["customized"],
@@ -528,7 +527,7 @@ index a7689db..ee4304f 100644
  					children: [(0, react_jsx_runtime.jsx)("summary", {
  						className: ModelsSection_module_css_default["customizedSummary"],
  						children: t("customized")
-@@ -1683,8 +1965,22 @@ window.__ModuleLoader__.load({
+@@ -1672,8 +1954,22 @@ window.__ModuleLoader__.load({
  					})]
  				})] });
  			};
@@ -552,7 +551,7 @@ index a7689db..ee4304f 100644
  				children: [
  					props.hideTitle === true ? null : (0, react_jsx_runtime.jsxs)("div", {
  						className: ModelsSection_module_css_default["editorHeader"],
-@@ -1708,19 +2004,15 @@ window.__ModuleLoader__.load({
+@@ -1697,19 +1993,15 @@ window.__ModuleLoader__.load({
  						className: ModelsSection_module_css_default["advancedHint"],
  						children: `${t("model")} ${String(modelFailure.index + 1)}: ${t(modelFailure.key)}`
  					}),
@@ -581,7 +580,7 @@ index a7689db..ee4304f 100644
  					})
  				]
  			});
-@@ -1821,6 +2113,26 @@ window.__ModuleLoader__.load({
+@@ -1806,6 +2098,26 @@ window.__ModuleLoader__.load({
  		function providerCopy(template, target) {
  			return template.replace("{provider}", () => providerTargetLabel(target));
  		}
@@ -608,7 +607,7 @@ index a7689db..ee4304f 100644
  		/**
  		* Render the Models section content column.
  		* @param props - slot-delivered injected dependencies.
-@@ -1850,6 +2162,8 @@ window.__ModuleLoader__.load({
+@@ -1835,6 +2147,8 @@ window.__ModuleLoader__.load({
  			const [deleteFailure, setDeleteFailure] = (0, react.useState)(void 0);
  			const [savedTarget, setSavedTarget] = (0, react.useState)(void 0);
  			const [declaring, setDeclaring] = (0, react.useState)(false);
@@ -617,7 +616,7 @@ index a7689db..ee4304f 100644
  			const [dismissedSetup, setDismissedSetup] = (0, react.useState)(() => /* @__PURE__ */ new Set());
  			const announceSaved = (target) => {
  				controller.load().then(() => {
-@@ -1919,11 +2233,17 @@ window.__ModuleLoader__.load({
+@@ -1904,11 +2218,17 @@ window.__ModuleLoader__.load({
  			};
  			const anyUsable = state.rows.some(providerUsable);
  			const configured = state.rows.filter((row) => row.configured);
@@ -636,7 +635,7 @@ index a7689db..ee4304f 100644
  			return (0, react_jsx_runtime.jsxs)("div", {
  				className: ModelsSection_module_css_default["section"],
  				children: [
-@@ -2058,20 +2378,62 @@ window.__ModuleLoader__.load({
+@@ -2043,20 +2363,62 @@ window.__ModuleLoader__.load({
  									children: [(0, react_jsx_runtime.jsx)("span", {
  										className: ModelsSection_module_css_default["fieldLabel"],
  										children: t("provider")
@@ -713,7 +712,7 @@ index a7689db..ee4304f 100644
  									})]
  								}),
  								(0, react_jsx_runtime.jsx)(ProviderEditor, {
-@@ -2123,6 +2485,8 @@ window.__ModuleLoader__.load({
+@@ -2108,6 +2470,8 @@ window.__ModuleLoader__.load({
  									setDeclaring(false);
  									setAdding(true);
  									setEditing(targetOf(first));
@@ -722,16 +721,16 @@ index a7689db..ee4304f 100644
  								},
  								children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutline16, { size: 14 }), t("add")]
  							}), (0, react_jsx_runtime.jsxs)("button", {
-@@ -2232,7 +2596,7 @@ window.__ModuleLoader__.load({
+@@ -2217,7 +2581,7 @@ window.__ModuleLoader__.load({
  		}
  		//#endregion
- 		//#region \0dsh-css:/private/tmp/claude-501/-Users-alex-Documents-Code-dataelem-dsh-desktop/8cafdb41-dc87-41ba-bba5-9afd99a08420/scratchpad/harness/packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.module.css.mjs
--		const css$1 = ".oGvYtW_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}.oGvYtW_editor{margin-top:24px}@media (width<=560px){.oGvYtW_editor{margin-top:20px}}";
-+		const css$1 = ".oGvYtW_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}.oGvYtW_selectionLabel{color:var(--dsw-alias-label-primary);margin:20px 0 10px;font-size:13px;font-weight:500}.oGvYtW_providerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.oGvYtW_providerButton{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;flex-direction:column;align-items:flex-start;min-height:58px;padding:10px 12px;display:flex;cursor:pointer;text-align:left}.oGvYtW_providerButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.oGvYtW_providerButtonSelected{border-color:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary)}.oGvYtW_providerName{font-size:14px;font-weight:500;line-height:20px}.oGvYtW_providerKind{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.oGvYtW_editor{margin-top:24px}@media (width<=560px){.oGvYtW_editor{margin-top:18px;padding-top:1820px}}";
+ 		//#region \0dsh-css:/Users/alex/Documents/Code/AI/deepseek-harness/packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.module.css.mjs
+-		const css$1 = "._2CJT8a_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}._2CJT8a_editor{margin-top:24px}@media (width<=560px){._2CJT8a_editor{margin-top:20px}}";
++		const css$1 = "._2CJT8a_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}._2CJT8a_selectionLabel{color:var(--dsw-alias-label-primary);margin:20px 0 10px;font-size:13px;font-weight:500}._2CJT8a_providerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}._2CJT8a_providerButton{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;flex-direction:column;align-items:flex-start;min-height:58px;padding:10px 12px;display:flex;cursor:pointer;text-align:left}._2CJT8a_providerButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._2CJT8a_providerButtonSelected{border-color:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary)}._2CJT8a_providerName{font-size:14px;font-weight:500;line-height:20px}._2CJT8a_providerKind{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}._2CJT8a_editor{margin-top:24px}@media (width<=560px){._2CJT8a_editor{margin-top:18px}}";
  		const tagId$1 = "@deepseek-ai/dsh-client-ui-settings-models/DeepSeekOnboardingDialog.module.css";
  		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$1) + "]") === null) {
  			const tag = document.createElement("style");
-@@ -2258,35 +2622,50 @@ window.__ModuleLoader__.load({
+@@ -2243,35 +2607,50 @@ window.__ModuleLoader__.load({
  		function assertNever$1(_value) {
  			throw new Error("unexpected DeepSeek onboarding state");
  		}
@@ -759,7 +758,7 @@ index a7689db..ee4304f 100644
  		* @returns the onboarding modal or null when onboarding needs no intervention.
  		*/
  		function DeepSeekOnboardingDialog(props) {
- 			const { complete, controller, useModels, api, schema, t } = props;
+ 			const { complete, controller, useModels, operations, schema, t } = props;
  			const state = useModels((snapshot) => snapshot);
 -			const readiness = onboardingReadiness(state);
 +			const [selectedProvider, setSelectedProvider] = (0, react.useState)("deepseek-official");
@@ -800,7 +799,7 @@ index a7689db..ee4304f 100644
  			const finishCredential = (changed) => {
  				if (!changed) {
  					complete();
-@@ -2569,6 +2948,8 @@ window.__ModuleLoader__.load({
+@@ -2609,6 +2988,8 @@ window.__ModuleLoader__.load({
  			deleting: "Deleting {provider}…",
  			add: "Add provider",
  			provider: "Provider",
@@ -809,7 +808,7 @@ index a7689db..ee4304f 100644
  			close: "Close",
  			cancel: "Cancel",
  			apply: "Apply",
-@@ -2600,7 +2981,16 @@ window.__ModuleLoader__.load({
+@@ -2640,7 +3021,16 @@ window.__ModuleLoader__.load({
  			contextWindowPlaceholder: "Uses the provider default",
  			maxTokens: "Max output tokens",
  			maxTokensPlaceholder: "Uses the provider default",
@@ -827,7 +826,7 @@ index a7689db..ee4304f 100644
  			addModel: "Add model",
  			removeModel: "Delete model",
  			modelsEmpty: "No models will be shown in the selector. Unlisted IDs can still be sent directly.",
-@@ -2646,10 +3036,14 @@ window.__ModuleLoader__.load({
+@@ -2686,10 +3076,14 @@ window.__ModuleLoader__.load({
  			welcomeBody: "DeepSeek Harness 0.1 remains in testing for Harness developers. Many areas need further improvement, and we welcome feedback from the developer community. DeepSeek Harness's core plugins and foundational APIs will continue to evolve rapidly over the coming months.\n\nWe look forward to exploring the limits of intelligence with developers around the world, building on open-source, open, reusable, and composable infrastructure. We welcome Harness developers everywhere to join the DSH plugin ecosystem.",
  			welcomeContinue: "Continue",
  			welcomeError: "The acknowledgement could not be saved. Please try again.",
@@ -845,7 +844,7 @@ index a7689db..ee4304f 100644
  			onboardingSaving: "Saving…",
  			keyRequired: "Enter an API key to continue."
  		};
-@@ -2669,6 +3063,8 @@ window.__ModuleLoader__.load({
+@@ -2709,6 +3103,8 @@ window.__ModuleLoader__.load({
  			deleting: "正在删除 {provider}…",
  			add: "添加提供方",
  			provider: "提供方",
@@ -854,7 +853,7 @@ index a7689db..ee4304f 100644
  			close: "关闭",
  			cancel: "取消",
  			apply: "保存",
-@@ -2700,7 +3096,16 @@ window.__ModuleLoader__.load({
+@@ -2740,7 +3136,16 @@ window.__ModuleLoader__.load({
  			contextWindowPlaceholder: "使用提供方默认值",
  			maxTokens: "最大输出 token 数",
  			maxTokensPlaceholder: "使用提供方默认值",
@@ -872,7 +871,7 @@ index a7689db..ee4304f 100644
  			addModel: "添加模型",
  			removeModel: "删除模型",
  			modelsEmpty: "模型选择器中将不显示任何模型；目录外 ID 仍可直接发送。",
-@@ -2746,10 +3151,14 @@ window.__ModuleLoader__.load({
+@@ -2786,10 +3191,14 @@ window.__ModuleLoader__.load({
  			welcomeBody: "DeepSeek Harness 目前的 0.1 版本仍处在面向 Harness 开发者进行测试的阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者的反馈建议。预计 DeepSeek Harness 的核心插件以及基础 API 都会在接下来的一段时间内快速迭代、持续演化。\n\n我们期待与全球开发者一起，在开源、开放、可复用、可组合的基础设施之上，共同探索智能上限。欢迎全球 Harness 开发者加入 DSH 插件生态。",
  			welcomeContinue: "继续",
  			welcomeError: "暂时无法保存确认状态，请重试。",
