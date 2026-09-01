@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-trajectory/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-trajectory/lib/client.js
-index 98c9a14..cadaa48 100644
+index 798b9d3..6ef985d 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-trajectory/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-trajectory/lib/client.js
 @@ -196,6 +196,8 @@ window.__ModuleLoader__.load({
@@ -20,7 +20,7 @@ index 98c9a14..cadaa48 100644
  			"details.retry": "Retry",
  			"details.scheduled": "Scheduled",
  			"details.retryDelay": "Retry delay",
-@@ -4182,6 +4186,8 @@ window.__ModuleLoader__.load({
+@@ -4232,6 +4236,8 @@ window.__ModuleLoader__.load({
  		}
  		function requestErrorMessage(request, t) {
  			if (request.errorCode === "AUTH") return t("details.failure.auth");
