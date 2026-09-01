@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { delimiter, dirname, join } from 'node:path'
 import { resolveEnvironmentPath } from './harness-runtime'
 
@@ -103,6 +103,11 @@ export async function ensureProfilePnpmShim(options: ProfilePluginCommandOptions
   const directory = join(options.dshHome, '.desktop-bin')
   await mkdir(directory, { recursive: true })
   const command = buildPnpmShimCommand(options)
+  if (command.length === 1 && await profileHasGenerationProjection(options.dshHome)) {
+    throw new Error(
+      'The generation-aware pnpm runner is unavailable; refusing to mutate the projected Profile.'
+    )
+  }
 
   if (process.platform === 'win32') {
     await writeFile(
@@ -137,6 +142,20 @@ export async function ensureProfilePnpmShim(options: ProfilePluginCommandOptions
   }
 
   return directory
+}
+
+async function profileHasGenerationProjection(dshHome: string): Promise<boolean> {
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(dshHome, 'profiles', PROFILE, 'package.json'), 'utf8')
+    ) as {
+      dsh?: { desktop?: { generationProjection?: { plugins?: unknown } } }
+    }
+    const plugins = manifest.dsh?.desktop?.generationProjection?.plugins
+    return typeof plugins === 'object' && plugins !== null && Object.keys(plugins).length > 0
+  } catch {
+    return false
+  }
 }
 
 export function buildProfilePluginCommandEnvironment(

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { PassThrough } from 'node:stream'
 
 import { installGeneration } from './generations/installer.mjs'
-import { projectGenerations } from './generations/projection.mjs'
+import { publishGenerationManifest } from './generations/projection.mjs'
 import {
+  disableGeneration,
   listGenerations,
   readDesired,
   withRegistryLock,
@@ -222,6 +223,9 @@ export async function ensurePnpmShim(home = dshHome()) {
   // has to say so rather than leaving a stale shim to be mistaken for a fresh
   // one.
   const runnerPath = await stagePnpmRunner(directory)
+  if (runnerPath === undefined && hasGenerationProjection(home)) {
+    throw new Error('The generation-aware pnpm runner is unavailable; refusing to mutate the projected Profile.')
+  }
   const pnpmCommand = runnerPath === undefined ? [pnpmEntry] : [runnerPath, pnpmEntry]
   process.stdout.write(
     runnerPath === undefined
@@ -376,6 +380,44 @@ function validatePluginOperation(args, invokingDir) {
   }
 }
 
+function removalTarget(args) {
+  if (args[0] !== 'remove') return undefined
+  return args.slice(1).find((argument) => !argument.startsWith('-'))
+}
+
+/**
+ * dsh-market routes ordinary removals through `runPlugin`. Generation plugins
+ * must instead update desired.json, otherwise the next projection resurrects
+ * the dependency the CLI just removed. The marker is written by the projector
+ * into an otherwise market-transparent manifest field.
+ */
+export function projectedGenerationRemoval(args, home = dshHome()) {
+  const target = removalTarget(args)
+  if (target === undefined) return undefined
+  try {
+    const manifest = JSON.parse(readFileSync(join(profileDirectory(home), 'package.json'), 'utf8'))
+    const plugins = manifest.dsh?.desktop?.generationProjection?.plugins
+    if (typeof plugins === 'object' && plugins !== null && Object.hasOwn(plugins, target)) {
+      return target
+    }
+    // Compatibility with profiles projected by an earlier Desktop build.
+    const spec = manifest.dependencies?.[target]
+    return typeof spec === 'string' && spec.includes('.generations/live/') ? target : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function hasGenerationProjection(home) {
+  try {
+    const manifest = JSON.parse(readFileSync(join(profileDirectory(home), 'package.json'), 'utf8'))
+    const plugins = manifest.dsh?.desktop?.generationProjection?.plugins
+    return typeof plugins === 'object' && plugins !== null && Object.keys(plugins).length > 0
+  } catch {
+    return false
+  }
+}
+
 export function createDesktopPnpmService(options) {
   const {
     binDirectory,
@@ -428,8 +470,8 @@ export function createDesktopPnpmService(options) {
    *
    * The plugin is installed as its own immutable generation rather than into
    * the shared hoisted tree: a fresh directory, promoted by one rename, never
-   * replaced. On Windows that is the whole fix — the shared tree's in-place
-   * package replacement is the operation pnpm cannot do there.
+   * replaced. Only manifest inventory is published while Harness is live; the
+   * node_modules junction changes on the next cold start.
    */
   const runExternalMarketPluginInstall = (args, invokingDir, signal) => {
     validatePluginOperation(args, invokingDir)
@@ -462,9 +504,9 @@ export function createDesktopPnpmService(options) {
           return generation === undefined || generation.pluginName !== install.generation.pluginName
         })
         await writeDesired(home, [...kept, install.generation.id])
-        const projection = await projectGenerations(home)
-        write(`enabled: ${projection.linked.join(', ')}`)
-        write(`bundles: ${JSON.stringify(projection.bundles)}`)
+        const published = await publishGenerationManifest(home)
+        write(`staged for next restart: ${published.plugins.join(', ')}`)
+        write(`bundles: ${JSON.stringify(published.bundles)}`)
         return { exitCode: 0 }
       })
     )
@@ -482,6 +524,27 @@ export function createDesktopPnpmService(options) {
     if (closed) throw new Error('The DSH Desktop pnpm service has been disposed.')
     if (signal?.aborted) throw signal.reason ?? new Error('The package operation was aborted.')
     if (active) throw new Error('Another desktop pnpm operation is already running.')
+
+    const generationRemoval = projectedGenerationRemoval(args, home)
+    if (generationRemoval !== undefined) {
+      const handle = asHandle(async ({ write, isCancelled }) =>
+        withRegistryLock(home, async () => {
+          if (isCancelled()) return { exitCode: 1, message: 'The package operation was aborted.' }
+          write(`Disabling ${generationRemoval} generation for the next restart…`)
+          await disableGeneration(home, generationRemoval)
+          const published = await publishGenerationManifest(home)
+          write(`staged for next restart: ${published.plugins.join(', ')}`)
+          return { exitCode: 0 }
+        })
+      )
+      active = handle
+      signal?.addEventListener('abort', handle.cancel, { once: true })
+      void handle.done.finally(() => {
+        signal?.removeEventListener('abort', handle.cancel)
+        if (active === handle) active = undefined
+      })
+      return handle
+    }
 
     void cleanStaleTemporaryDirectories(home).catch(() => undefined)
 

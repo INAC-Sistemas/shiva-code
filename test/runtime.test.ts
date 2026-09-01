@@ -390,6 +390,33 @@ describe('offending plugin extraction', () => {
     expect(extractOffendingPlugin(logs)).toBe('@linxin666/dsh-web-ui-all')
   })
 
+  it('extracts a plugin from a Windows profile stack after a duplicate route failure', () => {
+    const logs = [
+      '[stderr] [harness-node] DSH entry failed: Error: webserver: duplicate prefix route "/checkpoint-diff"',
+      '[stderr]     at Proxy.register (file:///D:/Program%20Files/DSH%20Desktop/resources/app/node_modules/@deepseek-ai/dsh-host-webserver/lib/index.js:178:36)',
+      '[stderr]     at Fiber.<anonymous> (file:///C:/Users/Administrator/AppData/Roaming/dsh-desktop/harness/profiles/web/node_modules/dsh-checkpoint-diff/index.mjs:191:29)'
+    ]
+    expect(extractPluginFailureReferences(logs)).toEqual(['dsh-checkpoint-diff'])
+    expect(extractOffendingPlugins(logs)).toEqual(['dsh-checkpoint-diff'])
+  })
+
+  it('does not treat an unrelated profile stack as duplicate-route ownership evidence', () => {
+    const logs = [
+      '[stderr] [harness-node] DSH entry failed: Error: unrelated core failure',
+      '[stderr]     at run (file:///C:/Users/Administrator/AppData/Roaming/dsh-desktop/harness/profiles/web/node_modules/unrelated-plugin/index.mjs:10:2)'
+    ]
+    expect(extractPluginFailureReferences(logs)).toEqual([])
+  })
+
+  it('extracts a scoped entry waiting for a missing service', () => {
+    const logs = [
+      '[stderr] [harness-node] DSH entry failed: Error: dsh: plugin tree failed to load: dsh: 1 entry did not activate',
+      '[stderr] @xmanrui/dsh-im: pending (waiting for service: apiProxy)'
+    ]
+    expect(extractPluginFailureReferences(logs)).toEqual(['@xmanrui/dsh-im'])
+    expect(extractOffendingPlugins(logs)).toEqual(['@xmanrui/dsh-im'])
+  })
+
   it('extracts the third-party plugin nested under the internal include entry', () => {
     const logs = [
       '[stderr] [harness-node] DSH entry failed: Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): failed to apply loader entry db-connector (dsh-db-connector): cannot get property "commands" without inject'
@@ -575,10 +602,10 @@ describe('Harness window activation', () => {
 
   it('stamps Windows renderer URLs so plugins can avoid the native titlebar overlay', () => {
     expect(desktopHarnessUrl('http://127.0.0.1:43127', 'win32')).toBe(
-      'http://127.0.0.1:43127/?dsh-desktop-mode=advanced&dsh-desktop-platform=win32'
+      'http://127.0.0.1:43127/?dsh-desktop-mode=advanced&dsh-desktop-platform=win32&dsh-desktop-titlebar-inset=36'
     )
     expect(desktopHarnessUrl('http://127.0.0.1:43127/?workspace=demo', 'win32')).toBe(
-      'http://127.0.0.1:43127/?workspace=demo&dsh-desktop-mode=advanced&dsh-desktop-platform=win32'
+      'http://127.0.0.1:43127/?workspace=demo&dsh-desktop-mode=advanced&dsh-desktop-platform=win32&dsh-desktop-titlebar-inset=36'
     )
     expect(desktopHarnessUrl('http://127.0.0.1:43127', 'darwin')).toBe(
       'http://127.0.0.1:43127'

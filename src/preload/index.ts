@@ -36,9 +36,26 @@ let domSyncScheduled = false
 let bootScanSettled = false
 let bootFailureTriggered = false
 let bootFailureTimer: number | undefined
+let rendererHealthReportInFlight = false
+let rendererHealthHeartbeat: number | undefined
 const pendingBootFailureMessages: string[] = []
 
 const BOOT_FAILURE_SETTLE_MS = 400
+const RENDERER_HEALTH_HEARTBEAT_MS = 5_000
+
+function reportRendererHealthy(): void {
+  if (rendererHealthReportInFlight || !sidebarRoot?.isConnected) return
+  rendererHealthReportInFlight = true
+  void ipcRenderer.invoke('harness:renderer-healthy').catch(() => undefined).finally(() => {
+    rendererHealthReportInFlight = false
+  })
+}
+
+function startRendererHealthHeartbeat(): void {
+  reportRendererHealthy()
+  if (rendererHealthHeartbeat !== undefined) return
+  rendererHealthHeartbeat = window.setInterval(reportRendererHealthy, RENDERER_HEALTH_HEARTBEAT_MS)
+}
 
 function currentBootFailureText(): string | undefined {
   // Harness removes this root once the application starts. Scoping the check
@@ -106,8 +123,10 @@ function runDomSync(): void {
   // sidebar appearing is that moment. Past it the selector can never match
   // again, so scanning on would walk the conversation tree every frame for a
   // guaranteed miss. The window error handlers stay as the real backstop.
-  if (sidebarRoot?.isConnected) bootScanSettled = true
-  else checkBootFailureInDom()
+  if (sidebarRoot?.isConnected) {
+    bootScanSettled = true
+    startRendererHealthHeartbeat()
+  } else checkBootFailureInDom()
 }
 
 contextBridge.exposeInMainWorld('dshDesktopDirectoryPicker', {
@@ -310,6 +329,11 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 })
 
+window.addEventListener('pagehide', () => {
+  if (rendererHealthHeartbeat !== undefined) window.clearInterval(rendererHealthHeartbeat)
+  rendererHealthHeartbeat = undefined
+})
+
 contextBridge.exposeInMainWorld(
   'dshDesktop',
   Object.freeze({
@@ -331,7 +355,7 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     action: (
       action: string,
-      selection: { plugins?: string[]; issues?: string[] }
+      selection: { plugins?: string[]; issues?: string[]; removalId?: string }
     ): Promise<{ ok: boolean }> => ipcRenderer.invoke('safe-mode:action', action, selection)
   })
 )

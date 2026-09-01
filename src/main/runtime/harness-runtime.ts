@@ -653,10 +653,15 @@ function extractPluginReferences(
   accepts: (value: string) => boolean
 ): string[] {
   const plugins = new Set<string>()
+  const attemptLogs = latestHarnessAttemptLogs(logLines)
+  const hasDuplicatePrefixRoute = attemptLogs.some((line) =>
+    line.startsWith('[stderr] ') && /duplicate prefix route ["'][^"']+["']/i.test(line)
+  )
 
-  for (const line of latestHarnessAttemptLogs(logLines)) {
+  for (const line of attemptLogs) {
     if (!line.startsWith('[stderr] ')) continue
     const text = line.slice(8)
+    const bootFailureLines = text.split(/\r?\n/).map((value) => value.trim())
 
     // Loader failures are nested (for example the internal `cordis:include`
     // entry wrapping a third-party bundle). Collect every entry in the chain;
@@ -682,7 +687,28 @@ function extractPluginReferences(
       plugins.add(m5[1].trim())
     }
 
-    const bootFailureLines = text.split(/\r?\n/).map((value) => value.trim())
+    for (const candidate of bootFailureLines) {
+      const pendingEntry = candidate.match(
+        /^((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*):\s*pending\s*\(waiting for service:\s*[^)]+\)\s*$/i
+      )
+      if (pendingEntry?.[1] && accepts(pendingEntry[1])) {
+        plugins.add(pendingEntry[1].trim())
+      }
+    }
+
+    // Some Harness errors do not include the loader wrapper that normally
+    // names the bundle. For duplicate routes, the first profile stack frame is
+    // still direct ownership evidence. Restrict stack extraction to that
+    // failure class so unrelated warnings cannot turn into removal suspects.
+    if (hasDuplicatePrefixRoute) {
+      for (const match of text.matchAll(
+        /[\\/]profiles[\\/][^\\/\s]+[\\/]node_modules[\\/]((?:@[^\\/\s]+[\\/])?[^\\/\s)]+)/gi
+      )) {
+        const candidate = match[1]?.replace(/\\/g, '/')
+        if (candidate && accepts(candidate)) plugins.add(candidate.trim())
+      }
+    }
+
     const bootFailureTitle = bootFailureLines.findIndex((value) => value === 'Failed to load plugins')
     if (bootFailureTitle >= 0) {
       for (const candidate of bootFailureLines.slice(bootFailureTitle + 1)) {
