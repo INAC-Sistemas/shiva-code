@@ -52,6 +52,8 @@ corepack pnpm exec tsx scripts/release/pack.ts --family dsh    --out dist/npm-ds
 
 注意 `pnpm run release:pack -- --family dsh` 会把参数当位置参数报错，需按上面直接 `pnpm exec tsx` 调用。
 
+**注意补丁里的绝对路径 context 行**：`dsh-client-ui-{agent-preset,model-selection,settings-models,workspace}` 四个补丁（共 5 处 hunk）里有一行 `//#region \0dsh-css:<绝对路径>...module.css.mjs`——这是上游构建产物内嵌的、打包机器上的源码绝对路径，作为 context 行被 `patch-package` 逐行匹配。**用仓库里已提交的 tarball 跑 `npm ci` 对所有人可复现**；但如果换一台机器重新 clone 上游 `pack`，这个路径会变，届时这 4 个补丁需要对着新产物重新生成（其余 12 个补丁不受影响）。
+
 ## 上游结构性变更（alpha.1 → alpha.3）
 
 ### 被删除的包
