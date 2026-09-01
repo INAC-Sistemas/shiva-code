@@ -48,15 +48,19 @@ The check lives there rather than here because a plugin resolves outside the mon
 
 When a shipped package adds a string, that gate fails until both languages carry it.
 
-## Tabs other plugins own
+## The sidebar rail
 
-Two sidebar tabs carry a title their plugin hardcodes in Chinese and never routes through the locale registry: `dsh-docs-panel:docs` and `dsh-flowglass:flow`. No dictionary can reach them — there is no key to override.
+Every label in the rail resolves outside the locale registry this package feeds. `dsh-better-sidebar` keeps its own zh/en dictionaries and picks between them with a `startsWith('zh')` test, so any other language lands on English; the tabs other plugins register carry the same two-language treatment or a plain literal. No dictionary can reach any of them — there is no key to override.
 
-The sidebar resolves a tab's title by **calling it at render time**, which leaves one honest seam. This plugin replaces those descriptors' titles with a function that reads the active locale on every paint, so a switch reaches them with no re-registration, and restores the plugin's own title on unload. A locale absent from [src/tab-titles.ts](src/tab-titles.ts) falls back to what the tab shipped, which is why a Chinese reader keeps the original wording.
+The sidebar resolves a tab's title by **calling it at render time**, which leaves one honest seam. This plugin replaces those descriptors' titles with a function that reads the active locale on every paint, so a switch reaches them with no re-registration, and restores the original on unload. A locale absent from [src/tab-titles.ts](src/tab-titles.ts) falls back to what the tab shipped, which is why a Chinese reader keeps the original wording.
 
-This is an override of third-party copy and **the completeness gate does not cover it**: nothing fails when one of those plugins renames its tab or starts translating itself. The fallback is what keeps a stale entry from breaking the label — it shows the plugin's own title instead.
+The table covers the fourteen tabs the rail registers: `dsh-better-sidebar`'s six built-ins (which go through the same registry as everyone else) plus the tabs from `dsh-openviking`, `dsh-prototype`, `dsh-mds`, `dsh-ssh-tunnel`, `dsh-sidebar-qa`, `dsh-docs-panel` and `dsh-flowglass`. A test pins those ids: nothing at build time notices a plugin renaming its tab, so the pin is what turns a silent regression into a failing test.
 
-`dsh-flowglass` publishes no Latin-script name, so its package name stands in as the brand rather than an invented translation of 流镜.
+This is an override of other packages' copy and **the completeness gate does not cover it**: it asserts the dictionaries against the namespaces the shipped panel registers, and these labels belong to no namespace. The fallback is what keeps a stale entry from breaking a label — it shows the tab's own title instead.
+
+Only tab labels are reached. The panels those tabs open are rendered by their own plugins, outside anything this package can address: `dsh-flowglass` in particular is Chinese throughout its interior.
+
+Brand names stay untranslated in every language — `dsh-flowglass` publishes no Latin-script name, so its package name stands in rather than an invented translation of 流镜.
 
 ## Install
 

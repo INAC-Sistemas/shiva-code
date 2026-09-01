@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/client/index.ts'
 import { BUNDLES } from '../src/locales/index.ts'
+import { TAB_TITLES } from '../src/tab-titles.ts'
 import type {
   ClientContext, LocaleDefinition, SidebarService, SidebarTabDescriptor,
 } from '../src/context-types.ts'
@@ -218,5 +219,43 @@ describe('sidebar tab relabelling', () => {
     apply(ctx)
 
     expect(locales.map(l => l.id)).toEqual(['pt-BR', 'es'])
+  })
+})
+
+describe('the tab-title table', () => {
+  it('names the tabs the shipped rail actually registers', () => {
+    // Read out of the plugins that own them (better-sidebar's `builtinTabs`
+    // and each plugin's TAB_ID) when this table was written. Nothing verifies
+    // these ids at build time — a plugin is free to rename its tab — so they
+    // are pinned here: this test failing means the table went stale, and a
+    // stale entry silently leaves that tab in its original language.
+    expect(Object.keys(TAB_TITLES).sort()).toEqual([
+      'browser',
+      'dsh-docs-panel:docs',
+      'dsh-flowglass:flow',
+      'dsh-mds:artifacts',
+      'dsh-openviking:memory',
+      'dsh-prototype:view',
+      'dsh-sidebar-qa:ask',
+      'dsh-sidebar-qa:history',
+      'dsh-ssh-tunnel',
+      'editor',
+      'git',
+      'sidechat',
+      'subagent',
+      'terminal',
+    ])
+  })
+
+  it('covers every language this package registers', () => {
+    const shipped = BUNDLES.map(bundle => bundle.definition.id)
+
+    for (const [id, translations] of Object.entries(TAB_TITLES)) {
+      for (const locale of shipped) {
+        // A tab left out of one language falls back to the plugin's own
+        // label, so the rail would mix languages in that locale alone.
+        expect(translations[locale], `${id} has no ${locale} label`).toBeTypeOf('string')
+      }
+    }
   })
 })

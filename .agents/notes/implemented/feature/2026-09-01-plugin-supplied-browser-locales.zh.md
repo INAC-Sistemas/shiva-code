@@ -32,7 +32,7 @@ locale 集合改为运行时注册表，而完备性由仓库来证明，而不�
 
 `permission.access` 此前经由未类型化的 `register(ns, locale, dict)` 重载注册，因而不在该类型表中。现在它与 `settings.permission` 并列声明，其注册改用类型化形式，`optionsOf` 的参数也由 `(key: string) => string` 收窄为 `TranslateNS<typeof ACCESS_NS>`。
 
-**由插件硬编码单一语言的侧边栏 tab 采取改标签，而非翻译。** `dsh-docs-panel:docs` 与 `dsh-flowglass:flow` 携带的中文标题字面量从不抵达 locale 注册表，因此任何字典都无法寻址它们。侧边栏在渲染时调用 tab 的标题，于是 `dsh-i18n` 把这些描述符的标题替换为在每次绘制时读取当前 locale 的函数，并在卸载时恢复原值。该表位于 `src/tab-titles.ts`，刻意放在 `src/locales/` 之外：任何已附带的包都未声明的 namespace 会让门禁的反向断言失败。代价是这些标签成为本次工作中唯一无人校验的部分——表中缺失的 locale 会回退到插件自己的标题，因此过期条目退化为原文，而不是损坏。
+**侧边栏导航栏采取改标签，而非翻译。** 那里没有任何标签经由 locale 注册表解析：`dsh-better-sidebar` 自带 zh／en 字典，并用 `startsWith('zh')` 判断在两者间选择，因此其他任何语言都落到英文；其他插件注册的 tab 也是同样的处理或纯字面量。共覆盖十四个 tab——它的六个内置 tab 加上七个插件的——其 id 由一个测试钉住，因为构建期没有任何东西会察觉重命名。侧边栏在渲染时调用 tab 的标题，于是 `dsh-i18n` 把这些描述符的标题替换为在每次绘制时读取当前 locale 的函数，并在卸载时恢复原值。该表位于 `src/tab-titles.ts`，刻意放在 `src/locales/` 之外：任何已附带的包都未声明的 namespace 会让门禁的反向断言失败。代价是这些标签成为本次工作中唯一无人校验的部分——表中缺失的 locale 会回退到插件自己的标题，因此过期条目退化为原文，而不是损坏。
 
 ## 门禁为何指名模块而非包
 

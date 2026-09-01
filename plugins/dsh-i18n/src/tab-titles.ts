@@ -1,23 +1,27 @@
 /**
- * Sidebar tab labels this package relabels on behalf of plugins that do not
- * translate their own.
+ * Sidebar tab labels this package relabels on behalf of the plugins that own
+ * them.
+ *
+ * The sidebar rail is assembled from tab descriptors, and every label there
+ * resolves outside the locale registry this package feeds: `dsh-better-sidebar`
+ * keeps its own zh/en dictionaries and picks between them with a
+ * `startsWith('zh')` test, so every other language lands on English; the tabs
+ * other plugins register carry either that same two-language treatment or a
+ * literal string. Either way there is no key for a dictionary to override.
  *
  * These are NOT locale-namespace dictionaries, and they are deliberately kept
  * out of `src/locales/`: the completeness gate asserts the bundles against
  * exactly the namespaces the shipped panel registers, and a namespace no
- * shipped package declares would fail it. These labels belong to no namespace
- * at all — they are string literals baked into other plugins' built bundles,
- * with no key to override.
+ * shipped package declares would fail it.
  *
  * The consequence is that this table is unverified: nothing fails when a
- * plugin renames a tab or ships one of its own translations. It is a
- * deliberate override of third-party copy, so it carries the risk that goes
- * with reaching into someone else's registry — a stale entry shows the wrong
- * label rather than the right one, which is why every entry falls back to the
- * plugin's own title when the active locale is absent here.
+ * plugin renames a tab, changes its id, or starts translating itself. It is a
+ * deliberate override of other packages' copy, which is why every entry falls
+ * back to the tab's own title when the active locale is absent here — a stale
+ * entry shows the original label rather than a broken one.
  *
- * `zh` is absent on purpose: these plugins are written in Chinese, so a
- * Chinese reader is already served by the label they ship.
+ * `zh` is absent throughout on purpose: every one of these plugins is written
+ * in Chinese, so a Chinese reader is already served by what it ships.
  */
 
 /** Locale id to label, for one tab. */
@@ -26,12 +30,69 @@ export type TabTitleTranslations = Record<string, string>
 /**
  * Tab id to its label per locale.
  *
- * `dsh-flowglass` publishes no Latin-script name for itself, so the package
- * name stands in as the brand rather than an invented translation of 流镜
- * ("flow mirror"); `dsh-docs-panel` already ships an English build calling it
- * "Global docs", which is the wording followed here.
+ * The six ids without a package prefix are `dsh-better-sidebar`'s own built-in
+ * tabs, which it registers through the same registry as everyone else.
+ *
+ * Names that are brands stay untranslated in every language: `dsh-flowglass`
+ * publishes no Latin-script name, so its package name stands in rather than an
+ * invented translation of 流镜 ("flow mirror"), and MDS, SSH and Prototype are
+ * read the same way in all three.
  */
 export const TAB_TITLES: Record<string, TabTitleTranslations> = {
+  // dsh-better-sidebar's built-ins.
+  editor: {
+    'pt-BR': 'Arquivos',
+    es: 'Archivos',
+  },
+  git: {
+    'pt-BR': 'Controle de versão',
+    es: 'Control de versiones',
+  },
+  subagent: {
+    'pt-BR': 'Tarefas',
+    es: 'Tareas',
+  },
+  sidechat: {
+    'pt-BR': 'Chat lateral (beta)',
+    es: 'Chat lateral (beta)',
+  },
+  terminal: {
+    'pt-BR': 'Terminal',
+    es: 'Terminal',
+  },
+  browser: {
+    'pt-BR': 'Navegador',
+    es: 'Navegador',
+  },
+
+  // Tabs other plugins register.
+  'dsh-openviking:memory': {
+    'pt-BR': 'Memória',
+    es: 'Memoria',
+  },
+  'dsh-prototype:view': {
+    'pt-BR': 'Protótipo',
+    es: 'Prototipo',
+  },
+  'dsh-mds:artifacts': {
+    'pt-BR': 'MDS',
+    es: 'MDS',
+  },
+  'dsh-ssh-tunnel': {
+    'pt-BR': 'Túnel SSH',
+    es: 'Túnel SSH',
+  },
+  'dsh-sidebar-qa:ask': {
+    'pt-BR': 'Acompanhamento',
+    es: 'Seguimiento',
+  },
+  'dsh-sidebar-qa:history': {
+    'pt-BR': 'Acompanhamentos',
+    es: 'Seguimientos',
+  },
+
+  // Tabs whose plugin ships Chinese only: English is supplied here too, so a
+  // reader in any of the three stops seeing a language they did not choose.
   'dsh-docs-panel:docs': {
     en: 'Global docs',
     'pt-BR': 'Documentos globais',
