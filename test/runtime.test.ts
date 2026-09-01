@@ -13,12 +13,15 @@ import {
   extractPluginFailureReferences,
   extractSlotConflictName,
   formatExitCode,
+  isHarnessStartupProbeHealthy,
+  resolveEnvironmentPath,
   resolveShellEnvironment,
   updateReadyStability
 } from '../src/main/runtime/harness-runtime'
 import { canGrantWindowPermission, isTrustedAppUrl } from '../src/main/security-policy'
 import { buildDisclaimedUtilityProcessSpec } from '../src/main/runtime/disclaimed-utility-process'
 import {
+  clearStaleHarnessAuthCookies,
   desktopHarnessUrl,
   isAbortedNavigationError,
   shouldLoadHarnessUrl
@@ -35,6 +38,15 @@ describe('Harness launch contract', () => {
     const restartedProbe = updateReadyStability(interruptedProbe.readySince, true, 2_000)
     expect(updateReadyStability(restartedProbe.readySince, true, 2_499).ready).toBe(false)
     expect(updateReadyStability(restartedProbe.readySince, true, 2_500).ready).toBe(true)
+  })
+
+  it('does not declare an authenticated Harness ready before its launch token arrives', () => {
+    // Harness 0.1.2 returns 401 to this deliberately unauthenticated probe.
+    // The response proves the port is live, but the renderer must not navigate
+    // until stdout has supplied the token it exchanges for a session cookie.
+    expect(isHarnessStartupProbeHealthy(401, undefined)).toBe(false)
+    expect(isHarnessStartupProbeHealthy(401, 'launch-token')).toBe(true)
+    expect(isHarnessStartupProbeHealthy(500, 'launch-token')).toBe(false)
   })
 
   it('binds the web server to a random loopback port', () => {
@@ -120,6 +132,25 @@ describe('Harness launch contract', () => {
       })
       expect(options.detached).toBeFalsy()
     }
+  })
+
+  it('finds the Windows PATH when the environment block stores it lowercase', () => {
+    // Windows environment variable names are case-insensitive and the captured
+    // block is not normalised, so a machine whose registry PATH value name is
+    // lowercase hands `resolveShellEnvironment()` the key `path`. An exact-case
+    // read misses it and the Harness launches with no PATH at all — every
+    // PATH-resolved tool call fails with ENOENT (issue #232).
+    const userPath = 'C:\\Windows\\System32;C:\\Users\\tester\\bin'
+    const options = buildHarnessSpawnOptions('C:\\launch-root', 'C:\\harness', 'win32', {
+      path: userPath
+    })
+    // Every key spelling PATH must carry the value: whichever of them survives
+    // Node's win32 case-dedupe, the child receives the user's PATH.
+    const pathEntries = Object.entries(options.env ?? {}).filter(([name]) =>
+      /^path$/iu.test(name)
+    )
+    expect(pathEntries.length).toBeGreaterThan(0)
+    for (const [, value] of pathEntries) expect(value).toBe(userPath)
   })
 
   it('passes the internal-loader flag directly to bundled Node.js', () => {
@@ -236,8 +267,8 @@ describe('shell environment resolution', () => {
     () => {
       const env = resolveShellEnvironment()
       expect(env).toBeDefined()
-      // Windows may preserve the conventional mixed-case key.
-      expect(env.PATH ?? env.Path).toBeTruthy()
+      // Windows preserves whatever casing the environment block stores.
+      expect(resolveEnvironmentPath(env)).toBeTruthy()
     },
     20_000
   )
@@ -251,7 +282,7 @@ describe('shell environment resolution', () => {
 
   it('produces a PATH that includes platform-standard system directories', () => {
     const env = resolveShellEnvironment()
-    const path = env.PATH ?? env.Path ?? ''
+    const path = resolveEnvironmentPath(env)
     if (process.platform === 'win32') {
       expect(path).toMatch(/[A-Za-z]:\\/)
     } else {
@@ -506,6 +537,42 @@ describe('navigation trust boundary', () => {
 })
 
 describe('Harness window activation', () => {
+  it('removes accumulated authority cookies before exchanging a new launch token', async () => {
+    const removed: Array<[string, string]> = []
+    const cookies = {
+      get: async () => [
+        { name: 'dsh-auth-old-port' },
+        { name: 'unrelated-cookie' },
+        { name: 'dsh-auth-current-port' }
+      ],
+      remove: async (url: string, name: string) => {
+        removed.push([url, name])
+      }
+    }
+
+    expect(
+      await clearStaleHarnessAuthCookies(
+        cookies,
+        'http://127.0.0.1:43127/?token=next',
+        'next'
+      )
+    ).toBe(2)
+    expect(removed).toEqual([
+      ['http://127.0.0.1:43127/', 'dsh-auth-old-port'],
+      ['http://127.0.0.1:43127/', 'dsh-auth-current-port']
+    ])
+  })
+
+  it('does not clear cookies for a non-Harness destination or without a launch token', async () => {
+    const cookies = {
+      get: async () => [{ name: 'dsh-auth-old-port' }],
+      remove: async () => undefined
+    }
+
+    expect(await clearStaleHarnessAuthCookies(cookies, 'https://example.com', 'next')).toBe(0)
+    expect(await clearStaleHarnessAuthCookies(cookies, 'http://127.0.0.1:43127')).toBe(0)
+  })
+
   it('stamps Windows renderer URLs so plugins can avoid the native titlebar overlay', () => {
     expect(desktopHarnessUrl('http://127.0.0.1:43127', 'win32')).toBe(
       'http://127.0.0.1:43127/?dsh-desktop-mode=advanced&dsh-desktop-platform=win32&dsh-desktop-titlebar-inset=36'

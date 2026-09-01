@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { chmod, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { delimiter, dirname, join } from 'node:path'
+import { resolveEnvironmentPath } from './harness-runtime'
 
 const PROFILE = 'web'
 const OPERATION_TIMEOUT_MS = 15 * 60 * 1000
@@ -57,9 +58,18 @@ function shellQuote(value: string): string {
 
 export function buildProfilePluginRemoveArguments(
   dshEntryPath: string,
-  pluginName: string
+  pluginName: string,
+  workspaceRoot = false
 ): string[] {
-  return [dshEntryPath, 'plugin', '--profile', PROFILE, 'remove', pluginName]
+  return [
+    dshEntryPath,
+    'plugin',
+    '--profile',
+    PROFILE,
+    'remove',
+    ...(workspaceRoot ? ['--workspace-root'] : []),
+    pluginName
+  ]
 }
 
 /**
@@ -137,11 +147,10 @@ export function buildProfilePluginCommandEnvironment(
   const result = { ...environment }
   delete result.ELECTRON_RUN_AS_NODE
 
-  const currentPath =
-    (process.platform === 'win32' ? result.Path : result.PATH) ??
-    result.PATH ??
-    result.Path ??
-    ''
+  // The spread above keeps only the casing the OS block actually stores —
+  // even for `process.env`, whose case-insensitivity does not survive a
+  // copy — so the PATH read must be case-insensitive itself (issue #232).
+  const currentPath = resolveEnvironmentPath(result)
   const parts = currentPath.split(delimiter).filter(Boolean)
   const additions = [shimDirectory, dirname(nodeExecutablePath)].filter(
     (directory) => !parts.includes(directory)
@@ -253,9 +262,15 @@ function killProcessTree(child: ReturnType<typeof spawn>): void {
 
 export async function removeProfilePluginWithDsh(
   options: ProfilePluginCommandOptions,
-  pluginName: string
+  pluginName: string,
+  workspaceRoot = false
 ): Promise<ProfilePluginCommandResult> {
-  return runProfileCommand(options, buildProfilePluginRemoveArguments(options.dshEntryPath, pluginName), 'Plugin removal', OPERATION_TIMEOUT_MS)
+  return runProfileCommand(
+    options,
+    buildProfilePluginRemoveArguments(options.dshEntryPath, pluginName, workspaceRoot),
+    'Plugin removal',
+    OPERATION_TIMEOUT_MS
+  )
 }
 
 /**
@@ -316,6 +331,17 @@ async function runProfileCommand(
         detached: process.platform !== 'win32'
       }
     )
+    // Observe completion before the first await below. A successful no-op
+    // package command can exit while the initial filesystem signature is
+    // being sampled; attaching the listener afterwards loses the one-shot
+    // event and leaves Safe Mode waiting forever even though pnpm is gone.
+    const completion = new Promise<
+      | { exit: { code: number | null; signal: NodeJS.Signals | null } }
+      | { error: Error }
+    >((resolve) => {
+      child.once('error', (error) => resolve({ error }))
+      child.once('exit', (code, signal) => resolve({ exit: { code, signal } }))
+    })
 
     let output = ''
     const append = (chunk: Buffer | string): void => {
@@ -351,12 +377,9 @@ async function runProfileCommand(
     }, PROGRESS_POLL_MS)
 
     try {
-      const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-        (resolve, reject) => {
-          child.once('error', reject)
-          child.once('exit', (code, signal) => resolve({ code, signal }))
-        }
-      )
+      const outcome = await completion
+      if ('error' in outcome) throw outcome.error
+      const { exit } = outcome
       if (expiry !== undefined) {
         return {
           ok: false,

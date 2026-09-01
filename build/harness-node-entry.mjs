@@ -1,4 +1,7 @@
+import childProcess from 'node:child_process'
+import { syncBuiltinESMExports } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { enforceWindowsChildProcessHide } from './windows-child-process-hide.mjs'
 
 // On macOS Harness runs inside an Electron utility process (TCC responsibility
 // isolation), so `process.execPath` and `argv0` point at the Electron helper
@@ -28,6 +31,20 @@ process.stdout.write(
 process.stdout.write(`[harness-node] execPath=${process.execPath}\n`)
 process.stdout.write(`[harness-node] cwd=${process.cwd()}\n`)
 process.stdout.write(`[harness-node] DSH_HOME=${process.env.DSH_HOME ?? ''}\n`)
+
+// Harness and the plugins running inside it spawn their own child processes
+// (pwsh, git, ripgrep, …) without windowsHide — that flag on the Harness
+// process itself only hides Harness's own console, not what it goes on to
+// launch. Each of those visible console windows steals foreground focus on
+// Windows. Patching child_process here, before dshEntryPath loads, catches
+// every spawn made anywhere in this process tree — Harness internals and
+// third-party plugins alike — without needing an upstream fix in each of
+// them. A caller that explicitly sets windowsHide keeps its own choice.
+if (process.platform === 'win32') {
+  enforceWindowsChildProcessHide(childProcess, syncBuiltinESMExports)
+
+  process.stdout.write('[harness-node] windowsHide enforcement enabled for child processes\n')
+}
 
 if (!dshEntryPath) {
   report('startup error', 'missing DSH entry path')

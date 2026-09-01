@@ -31,6 +31,7 @@ describe('desktop plugin market installer', () => {
       '--profile',
       'web',
       'add',
+      '--workspace-root',
       'dshmarket@latest'
     ])
     expect(MARKET_PACKAGE).toBe('dshmarket')
@@ -44,6 +45,7 @@ describe('desktop plugin market installer', () => {
       '--profile',
       'web',
       'remove',
+      '--workspace-root',
       'dshmarket'
     ])
   })
@@ -360,6 +362,7 @@ describe('desktop plugin market installer', () => {
       'utf8'
     )
     const preload = await readFile(join(process.cwd(), 'src', 'preload', 'index.ts'), 'utf8')
+    const main = await readFile(join(process.cwd(), 'src', 'main', 'index.ts'), 'utf8')
 
     expect(client).toContain("entry?.id === 'dshmarket'")
     expect(client).toContain("id: 'market'")
@@ -373,5 +376,10 @@ describe('desktop plugin market installer', () => {
     expect(desktopPatch).toContain('inject: [desktopProfiles]')
     expect(desktopPatch).toContain('allowRestart: false')
     expect(preload).toContain("restartHarness: (): Promise<{ ok: boolean }>")
+    expect(preload).toContain("uninstallMarket: (): Promise<{ ok: boolean }>")
+    expect(client).toContain("typeof bridge.uninstallMarket === 'function'")
+    expect(main).toContain("ipcMain.handle('market:uninstall'")
+    expect(main).toContain("await runtime.stop()")
+    expect(main).toMatch(/'dshmarket',\s+true/u)
   })
 })

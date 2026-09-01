@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildPnpmShimCommand,
+  buildProfilePluginCommandEnvironment,
+  buildProfilePluginRemoveArguments,
   diagnosticLine,
   removeProfilePluginWithDsh
 } from '../src/main/runtime/profile-plugin-command'
@@ -20,6 +22,18 @@ describe('profile-plugin-command', () => {
 
   afterEach(async () => {
     await rm(testDir, { recursive: true, force: true })
+  })
+
+  it('can target a workspace-root package explicitly', () => {
+    expect(buildProfilePluginRemoveArguments('/app/dsh/bin.js', 'dshmarket', true)).toEqual([
+      '/app/dsh/bin.js',
+      'plugin',
+      '--profile',
+      'web',
+      'remove',
+      '--workspace-root',
+      'dshmarket'
+    ])
   })
 
   it('runs the DSH remove command with the bundled pnpm shim on PATH', async () => {
@@ -67,6 +81,29 @@ describe('profile-plugin-command', () => {
       pnpmStatus: 0
     })
   })
+
+  it('observes a fast command exit before sampling a large profile tree', async () => {
+    const profileDirectory = join(testDir, 'profiles', 'web')
+    const dshEntryPath = join(testDir, 'fast-dsh.mjs')
+    await mkdir(join(profileDirectory, 'node_modules'), { recursive: true })
+    await Promise.all(
+      Array.from({ length: 1024 }, (_, index) =>
+        mkdir(join(profileDirectory, 'node_modules', `package-${String(index)}`))
+      )
+    )
+    await writeFile(dshEntryPath, 'process.exit(0)\n', 'utf8')
+
+    await expect(removeProfilePluginWithDsh(
+      {
+        dshHome: testDir,
+        dshEntryPath,
+        nodeExecutablePath: process.execPath,
+        pnpmEntryPath: join(process.cwd(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'),
+        environment: process.env
+      },
+      '@example/plugin'
+    )).resolves.toEqual({ ok: true })
+  }, 10_000)
 })
 
 describe('profile pnpm shim and failure reporting', () => {
@@ -104,5 +141,26 @@ describe('profile pnpm shim and failure reporting', () => {
     ).toContain('EPERM')
     expect(diagnosticLine('a\nb\nlast line')).toBe('last line')
     expect(diagnosticLine('   ')).toBeUndefined()
+  })
+})
+
+describe('buildProfilePluginCommandEnvironment', () => {
+  it('keeps the user PATH when the environment block stores it lowercase', () => {
+    // Spreading `process.env` keeps only the casing the OS block stores, so
+    // on a machine whose registry PATH value name is lowercase the previous
+    // exact-case read produced an empty base PATH — plugin commands then ran
+    // with just the shim and bundled-node directories (issue #232).
+    const userPath = 'C:\\Windows\\System32;C:\\Users\\tester\\bin'
+    const result = buildProfilePluginCommandEnvironment(
+      { path: userPath },
+      'C:\\shim',
+      'C:\\bundled\\node.exe'
+    )
+    if (process.platform === 'win32') {
+      expect(result.PATH).toContain(userPath)
+    } else {
+      // POSIX: `path` is a different variable and must stay out of PATH.
+      expect(result.PATH).not.toContain(userPath)
+    }
   })
 })
