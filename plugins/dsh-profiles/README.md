@@ -12,7 +12,7 @@ KISS multiuser profiles for dsh: a gate screen with a list of user profiles, eac
 
 ```json
 { "profiles": [ { "id": "games", "label": "Games", "preset": "default",
-    "plugins": ["dsh-mds:artifacts", "dsh-kanban:board"],
+    "plugins": ["dsh-mds:artifacts", "dsh-prototype:view"],
     "skills": ["~/.dsh/skills/games"], "createdAt": "..." } ], "active": null }
 ```
 
@@ -24,6 +24,6 @@ KISS multiuser profiles for dsh: a gate screen with a list of user profiles, eac
 
 On boot the client publishes `window.__profileTabEnabled(id)`; every in-tree better-sidebar plugin calls it before registering its tab. Absent `dsh-profiles` (or no active profile) the helper returns `true`, so nothing is hidden.
 
-Sample: create a `Games` profile with only `MDS` + `Kanban`; your `Web` profile can enable `Prototype`, `Memory`, `Kanban`, `Skills` — each person logs in and sees just their stack. (Skill-root scoping per profile is a documented next step; today all user skills remain discoverable while tab visibility is per-profile.)
+Sample: create a `Games` profile with only `MDS` + `Docs Panel`; your `Web` profile can enable `Prototype`, `Memory`, `Skills` — each person logs in and sees just their stack. (Skill-root scoping per profile is a documented next step; today all user skills remain discoverable while tab visibility is per-profile.)
 
 MIT.

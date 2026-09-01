@@ -59,7 +59,7 @@ button.danger:hover{background:#3b1212}
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-var PLUGIN_LABELS={"dsh-better-sidebar:skills":"Skills","dsh-mds:artifacts":"MDS (markdown)","dsh-prototype:view":"Prototype","dsh-kanban:board":"Kanban","dsh-openviking:memory":"Memory (OpenViking)","dsh-ssh-tunnel:*":"SSH Tunnel","dsh-docs-panel:docs":"Docs Panel","dsh-flowglass:*":"Flowglass","dsh-sidebar-qa:*":"Sidebar QA"};
+var PLUGIN_LABELS={"dsh-better-sidebar:skills":"Skills","dsh-mds:artifacts":"MDS (markdown)","dsh-prototype:view":"Prototype","dsh-openviking:memory":"Memory (OpenViking)","dsh-ssh-tunnel:*":"SSH Tunnel","dsh-docs-panel:docs":"Docs Panel","dsh-flowglass:*":"Flowglass","dsh-sidebar-qa:*":"Sidebar QA"};
 var KEY={};
 function api(m,p){return fetch('/profiles/api/'+m,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p||{})}).then(function(r){return r.json()})}
 function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');clearTimeout(KEY.t);KEY.t=setTimeout(function(){t.className='toast'},3000)}
@@ -146,7 +146,6 @@ export const KNOWN_PLUGINS = [
   'dsh-better-sidebar:skills',
   'dsh-mds:artifacts',
   'dsh-prototype:view',
-  'dsh-kanban:board',
   'dsh-openviking:memory',
   'dsh-ssh-tunnel:*',
   'dsh-docs-panel:docs',

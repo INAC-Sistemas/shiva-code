@@ -64,31 +64,43 @@ function log(msg) {
  * ({sessionId, cwd}); explicit cwd wins, then the session's own `header.cwd`,
  * then the process cwd.
  *
- * The session is resolved by direct lookup, the same way the rest of the app
- * resolves it. Scanning `list()` for a matching id resolved nothing here, and
- * the fallback then served the SERVER's cwd — a different workspace than the
- * one the tab is showing whenever `dsh web` was started outside it, which shows
- * up as an existing prototype folder reported as missing.
+ * A session id resolves in two steps because the live store answers for only
+ * part of them: `sessions.get()` holds the sessions loaded in THIS process, and
+ * a session the user picks in the sidebar after a restart is not among them
+ * until it is opened. The persisted header carries the same `cwd` and is the
+ * step that covers the rest, which is what the sidebar's own resolution does.
  *
  * `process.cwd()` is reached only when the request carries no session at all;
  * an unresolvable session id is logged rather than silently answered with
  * another directory's files.
+ * @param ctx - host context, for the session services.
+ * @param payload - the request body carrying the tab's `{sessionId, cwd}` scope.
+ * @returns absolute path of the workspace this request belongs to.
  */
-function workspaceOf(ctx, payload) {
+async function workspaceOf(ctx, payload) {
   const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
   if (cwd && resolve(cwd) === cwd) return cwd
   const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : ''
-  if (sessionId) {
-    let headerCwd
+  if (!sessionId) return process.cwd()
+
+  const live = ctx.get('sessions')?.get(sessionId)?.header?.cwd
+  if (typeof live === 'string' && live) return live
+
+  const persistence = ctx.get('sessionPersistence')
+  if (persistence !== undefined) {
+    let stored
     try {
-      headerCwd = ctx.sessions?.get?.(sessionId)?.header?.cwd
-    } catch {
-      // `ctx.sessions` throws when no sessions service is mounted at all (a
-      // harness assembled without one); every other outcome is `undefined`.
+      stored = (await persistence.inspect(sessionId)).meta.cwd
+    } catch (e) {
+      // `inspect` rejects for an id with no record on disk - a session the tab
+      // reported that this harness's backend does not own. Nothing else can
+      // reach here, and the fallback below is the answer for it.
+      log(`session "${sessionId}" is not on disk: ${String((e && e.message) || e)}`)
     }
-    if (typeof headerCwd === 'string' && headerCwd) return headerCwd
-    log(`session "${sessionId}" has no cwd - falling back to ${process.cwd()}`)
+    if (typeof stored === 'string' && stored) return stored
   }
+
+  log(`session "${sessionId}" has no cwd - falling back to ${process.cwd()}`)
   return process.cwd()
 }
 
@@ -559,7 +571,7 @@ export function apply(ctx, config = {}) {
     let payload
     try { payload = await readBody(req) } catch (e) { return json(res, 400, { ok: false, error: e.message }) }
 
-    const workspace = workspaceOf(ctx, payload)
+    const workspace = await workspaceOf(ctx, payload)
     const root = join(workspace, PROTOTYPE_FOLDER)
     const token = scopeToken(workspace)
     scopes.set(token, workspace)
