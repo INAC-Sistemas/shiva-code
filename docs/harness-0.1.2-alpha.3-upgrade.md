@@ -168,10 +168,12 @@ cosmokit `1.8.2→1.8.3`、schemastery `3.18.1→3.18.2`。
 
 ## 其他需要注意的
 
-- `packages/dsh-desktop-client-ui` 与 `packages/dsh-desktop-preset-transfer` 的 peer 范围
-  放宽到 `^0.1.2-alpha.3`（预发布版的 caret 只在同一 `major.minor.patch` 内匹配）。
-  `dsh-desktop-market-installer` 本轮**未改**——它的 peer 已在 alpha.1 升级时放宽，本次
-  peer token 未落在需要 bump 的条目上。
+- `packages/dsh-desktop-{client-ui,preset-transfer,market-installer}` 三个桌面插件包的
+  `@deepseek-ai/dsh*` peer 依赖现均为 `^0.1.2-alpha.3`（`market-installer` 在依赖切换提交
+  `ade05bc` 中一并更新，另两个随版本字样清理提交 `454d0a9` 更新）——预发布版的 caret 只在
+  同一 `major.minor.patch` 内匹配，所以每次上游发版这些 token 都要跟着对齐。注意从 alpha.1
+  上调到 alpha.3 是抬高下限（收紧），并非放宽；`^0.1.2-alpha.1` 本就能匹配 `0.1.2-alpha.3`，
+  这里只是版本字样对齐，不是功能性放宽。
 - `packages/dsh-desktop-preset-transfer/index.js` 的 `PRESET_SOURCE_DSH_VERSION`
   → `0.1.2-alpha.3`（连带 `test/preset-transfer-patch.test.ts` / `test/profile-compatibility.test.ts`
   的 fixture 与断言）。
