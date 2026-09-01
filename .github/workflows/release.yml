@@ -626,6 +626,8 @@ jobs:
           tag = os.environ.get("GITHUB_REF_NAME", "unknown")
           src = pathlib.Path("release-assets")
 
+          version = tag[1:] if tag.startswith("v") else tag
+
           api.upload_folder(
               repo_id=repo_id,
               folder_path=str(src),
@@ -634,6 +636,52 @@ jobs:
               token=token,
           )
           print(f"✅ Uploaded {src} -> {repo_id}/releases/latest")
+
+          # Immutable per-version archive so the desktop client can roll back.
+          api.upload_folder(
+              repo_id=repo_id,
+              folder_path=str(src),
+              path_in_repo=f"releases/archive/{version}",
+              commit_message=f"Archive {tag}",
+              token=token,
+          )
+          print(f"✅ Archived {src} -> {repo_id}/releases/archive/{version}")
+
+          # Rebuild the rollback index from the versions we know exist: whatever
+          # the current published index lists, plus the one just archived. This
+          # avoids a read-modify-write race and any dependency on directory
+          # listing.
+          import json, subprocess, tempfile, urllib.request
+
+          known = {version}
+          try:
+              with urllib.request.urlopen(
+                  "https://dshdesktop.com/updates/versions.json", timeout=15
+              ) as response:
+                  current = json.load(response)
+              for entry in current.get("versions", []):
+                  name = entry.get("version")
+                  if isinstance(name, str) and name:
+                      known.add(name)
+          except Exception as error:  # first release, or index temporarily missing
+              print(f"⚠️ Could not read existing version index: {error}")
+
+          with tempfile.TemporaryDirectory() as work:
+              names_file = pathlib.Path(work) / "names.json"
+              index_file = pathlib.Path(work) / "versions.json"
+              names_file.write_text(json.dumps(sorted(known)))
+              subprocess.run(
+                  ["node", "scripts/build-version-index.mjs", str(names_file), str(index_file)],
+                  check=True,
+              )
+              api.upload_file(
+                  path_or_fileobj=str(index_file),
+                  path_in_repo="releases/versions.json",
+                  repo_id=repo_id,
+                  commit_message=f"Version index after {tag}",
+                  token=token,
+              )
+          print("✅ Rebuilt releases/versions.json")
           PY
 
       - name: Build Feishu release note prompt
