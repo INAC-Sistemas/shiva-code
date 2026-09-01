@@ -50,6 +50,43 @@ describe('GitHub release contract', () => {
     expect(peerOnlyRuntimePackages).toEqual([])
   })
 
+  it('vendors upstream-new closure packages as file: production deps with no registry resolution', async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectRoot, 'package.json'), 'utf8')
+    ) as { dependencies: Record<string, string> }
+    const packageLockRaw = await readFile(
+      path.join(projectRoot, 'package-lock.json'),
+      'utf8'
+    )
+    const packageLock = JSON.parse(packageLockRaw) as {
+      packages: Record<string, { resolved?: string }>
+    }
+
+    // alpha.3 introduced these as transitive deps of shipped packages; they must
+    // resolve from the vendored tarballs, not registry.npmmirror.com.
+    const promotedClosurePackages = [
+      '@deepseek-ai/dsh-client-ui-schedule',
+      '@deepseek-ai/dsh-deque',
+      '@deepseek-ai/dsh-session-turn-outline',
+      '@deepseek-ai/dsh-util-time',
+      '@deepseek-ai/dsh-util-values'
+    ]
+
+    for (const packageName of promotedClosurePackages) {
+      expect(packageJson.dependencies[packageName]).toMatch(
+        /^file:packages\/harness-0\.1\.2-alpha\.3\/npm-dsh\/.+\.tgz$/
+      )
+      expect(packageLock.packages[`node_modules/${packageName}`]?.resolved).toMatch(
+        /^file:packages\/harness-0\.1\.2-alpha\.3\/npm-dsh\//
+      )
+    }
+
+    // No @deepseek-ai/dsh-* package may resolve from a remote registry URL.
+    expect(packageLockRaw).not.toMatch(
+      /"resolved":\s*"https?:\/\/[^"]*deepseek-ai[/-]dsh/
+    )
+  })
+
   it('does not promote optional Harness providers and test support into the desktop runtime', async () => {
     const packageJson = JSON.parse(
       await readFile(path.join(projectRoot, 'package.json'), 'utf8')
@@ -72,7 +109,9 @@ describe('GitHub release contract', () => {
       '@deepseek-ai/dsh-lsp',
       '@deepseek-ai/dsh-lsp-stdio',
       '@deepseek-ai/dsh-sdk-client',
-      '@deepseek-ai/dsh-session-persistence-sqlite',
+      // NOTE: @deepseek-ai/dsh-session-persistence-sqlite was removed upstream in
+      // 0.1.2-alpha.3, so its exclusion assertion is gone. dsh-storage-sqlite is
+      // likewise no longer in the closure but its guard is kept defensively.
       '@deepseek-ai/dsh-session-snapshot',
       '@deepseek-ai/dsh-session-title-all-prompts-llm',
       '@deepseek-ai/dsh-storage-sqlite',
