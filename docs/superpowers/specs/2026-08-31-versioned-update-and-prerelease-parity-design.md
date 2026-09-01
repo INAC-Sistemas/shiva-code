@@ -297,3 +297,47 @@ location ~ ^/updates/prerelease/(?<tag>[^/]+)/(?<file>.+)$ {
 - **`allowDowngrade` 残留**：若步骤 8 `finally` 未执行（进程崩溃），下次启动 `configureUpdater` 重新显式 `autoUpdater.allowDowngrade` 未设置 —— 实现时在 `configureUpdater()` 显式 `autoUpdater.allowDowngrade = false` 兜底。
 - **降级数据不兼容**：无法在客户端完全防护，仅以确认弹窗告知用户。属可接受范围（回退是应急手段）。
 - **ModelScope 列目录 API 限流 / 变更**：仅影响 `versions.json` 重建（发布期，非用户路径），失败则索引停留在上一版本，客户端仍可回退已在索引中的版本。
+
+## 部署 runbook（实现落地版）
+
+### 1. nginx（仓库外，运维执行）
+
+`dshdesktop.com/updates/latest/` 已经 302 到 ModelScope `alexyaojin/dsh-desktop` 的 `releases/latest/`。新增同源规则：
+
+```nginx
+# 历史版本包（回退用）
+location ~ ^/updates/archive/(?<ver>[^/]+)/(?<file>.+)$ {
+    return 302 <MODELSCOPE_RESOLVE_BASE>/releases/archive/$ver/$file;
+}
+# 回退版本索引
+location = /updates/versions.json {
+    return 302 <MODELSCOPE_RESOLVE_BASE>/releases/versions.json;
+}
+# 预发布（可选，仅内部验证）
+location ~ ^/updates/prerelease/(?<tag>[^/]+)/(?<file>.+)$ {
+    return 302 <MODELSCOPE_RESOLVE_BASE>/releases/prerelease/$tag/$file;
+}
+```
+
+`<MODELSCOPE_RESOLVE_BASE>` 取现有 `releases/latest/` 那条 302 规则的目标前缀（去掉 `releases/latest/…` 部分）。客户端只认 `dshdesktop.com` 域名，直链格式仅 nginx 关心。
+
+### 2. 触发预发布
+
+GitHub Actions → Release desktop installers → Run workflow：
+- `prerelease_tag` 填一个非 `v` 前缀的合法 semver，例如 `2.1.0-rc.1`。
+- 结果：mac + win 走与正式版逐字节一致的打包 + 签名 + 公证 + UKey 签名 + Windows 冒烟测试；发布为 GitHub `--prerelease`；ModelScope 传到 `releases/prerelease/<tag>/`；不动 `releases/latest`、不写 `versions.json`、不发飞书。
+
+### 3. 历史版本回填（可选，一次性）
+
+`versions.json` 只包含本次改造上线后发布的正式版。要让更早的版本也能回退：
+
+1. 把该版本的完整 `release-assets/`（`latest*.yml` + 安装包 + `.blockmap`）传到 ModelScope `releases/archive/<version>/`。
+2. 本地跑：`node scripts/build-version-index.mjs <(printf '%s' '["1.2.3","1.2.4",...]') /tmp/versions.json`（列全所有 `archive/` 下的版本名），再把 `/tmp/versions.json` 传到 ModelScope `releases/versions.json`。
+   —— 或直接等下一次正式发布，`publish` job 会用「现有索引 ∪ 新版本」重建。
+
+### 4. 发布后自检
+
+- `curl -sL https://dshdesktop.com/updates/versions.json` 返回本次版本。
+- `curl -sIL https://dshdesktop.com/updates/archive/<version>/latest-mac.yml` 最终 200。
+- 客户端「检查更新 → 安装其它版本…」能列出并选择版本。
+- GitHub Release 正文为中文结构化文案（首行 `# DSH Desktop v<version> — …`）。
