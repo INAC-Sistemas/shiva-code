@@ -16,3 +16,7 @@ build/icon-1024.png
 .coaligne/
 .coaligneignore
 
+
+# Python bytecode from release-note scripts / tests
+__pycache__/
+*.pyc

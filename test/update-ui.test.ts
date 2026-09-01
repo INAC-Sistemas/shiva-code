@@ -4,6 +4,7 @@ import type { UpdateStatus } from '../src/shared/contracts'
 import {
   isUpdateDismissed,
   shouldShowUpdate,
+  updateHeadline,
   updateMessage
 } from '../src/preload/update-view'
 
@@ -67,6 +68,23 @@ describe('secure update card wiring', () => {
     expect(preload).toContain("ipcRenderer.invoke('updates:install')")
     expect(preload).toContain("'right:20px'")
     expect(preload).toContain("'bottom:20px'")
+  })
+})
+
+describe('downgrade copy', () => {
+  it('names the downgrade in both locales', () => {
+    const status: UpdateStatus = {
+      phase: 'downloading',
+      currentVersion: '1.5.0',
+      availableVersion: '1.2.0',
+      manual: true,
+      downgrade: true,
+      percent: 30
+    }
+    expect(updateHeadline(status, 'zh').title).toContain('降级')
+    expect(updateMessage(status, 'zh')).toContain('1.2.0')
+    expect(updateHeadline(status, 'en').title.toLowerCase()).toContain('downgrad')
+    expect(updateMessage(status, 'en')).toContain('1.2.0')
   })
 })
 
