@@ -593,17 +593,51 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-release-assets.mjs release-assets "${GITHUB_REF_NAME#v}"
+      - name: Build GitHub release note prompt
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p .github/release-artifacts
+          git fetch --force --tags
+          python3 .github/scripts/github_release_notes.py build-prompt \
+            --tag "$RELEASE_TAG" \
+            --output .github/release-artifacts/github-release-prompt.txt
+      - name: Generate GitHub release note
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          out=.github/release-artifacts/github-release-notes.md
+          if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo "Generating GitHub release note via Copilot CLI..."
+            npm install -g @github/copilot@latest || true
+            prompt="$(cat .github/release-artifacts/github-release-prompt.txt)"
+            if copilot -p "$prompt" -s --model gpt-5.6-terra --no-ask-user > "$out" 2>/dev/null && \
+               python3 .github/scripts/github_release_notes.py validate --tag "$RELEASE_TAG" --input "$out"; then
+              echo "✅ AI GitHub release note generated and validated."
+            else
+              echo "⚠️ Falling back to the deterministic GitHub release note."
+              python3 .github/scripts/github_release_notes.py generate-fallback --tag "$RELEASE_TAG" --output "$out"
+            fi
+          else
+            echo "MODELS_TOKEN not set; using the deterministic GitHub release note."
+            python3 .github/scripts/github_release_notes.py generate-fallback --tag "$RELEASE_TAG" --output "$out"
+          fi
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          notes=.github/release-artifacts/github-release-notes.md
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$RELEASE_TAG" --notes-file "$notes" --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" release-assets/* \
               --verify-tag \
-              --generate-notes \
+              --notes-file "$notes" \
               --title "DSH Desktop $RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY"
           fi
