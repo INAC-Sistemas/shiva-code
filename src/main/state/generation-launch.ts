@@ -32,26 +32,26 @@ type Note = (line: string) => void
  * generation while it runs.
  */
 export async function prepareGenerationsForLaunch(dshHome: string, note: Note): Promise<void> {
+  const { removed, failed } = await sweepRegistry(dshHome)
+  if (removed.length > 0) {
+    note(`[desktop] swept ${removed.length} unreferenced plugin generation(s)`)
+  }
+  if (failed.length > 0) {
+    // Inert — nothing resolves against them; the next cold start retries.
+    note(`[desktop] ${failed.length} generation(s) could not be removed yet, will retry`)
+  }
+  // Projection must not invent an empty profile manifest. On a first launch,
+  // doing so prevents app-boot from installing the shipped web bundles and
+  // leaves Desktop overlays waiting forever for services such as connection.
+  // Use the same initializer and template app-boot itself uses so its defaults
+  // remain the single source of truth.
+  const profileDir = resolveProfileDir('web', dshHome)
+  if (!existsSync(join(profileDir, 'package.json'))) {
+    const template = PROFILE_TEMPLATES.web
+    if (template === undefined) throw new Error('Harness does not define the web profile template')
+    initProfile(profileDir, template.bundles, template.patchReload)
+  }
   try {
-    const { removed, failed } = await sweepRegistry(dshHome)
-    if (removed.length > 0) {
-      note(`[desktop] swept ${removed.length} unreferenced plugin generation(s)`)
-    }
-    if (failed.length > 0) {
-      // Inert — nothing resolves against them; the next cold start retries.
-      note(`[desktop] ${failed.length} generation(s) could not be removed yet, will retry`)
-    }
-    // Projection must not invent an empty profile manifest. On a first launch,
-    // doing so prevents app-boot from installing the shipped web bundles and
-    // leaves Desktop overlays waiting forever for services such as connection.
-    // Use the same initializer and template app-boot itself uses so its defaults
-    // remain the single source of truth.
-    const profileDir = resolveProfileDir('web', dshHome)
-    if (!existsSync(join(profileDir, 'package.json'))) {
-      const template = PROFILE_TEMPLATES.web
-      if (template === undefined) throw new Error('Harness does not define the web profile template')
-      initProfile(profileDir, template.bundles, template.patchReload)
-    }
     const projection = await projectGenerations(dshHome)
     if (projection.linked.length > 0 || projection.unlinked.length > 0) {
       note(
@@ -60,9 +60,9 @@ export async function prepareGenerationsForLaunch(dshHome: string, note: Note): 
       )
     }
   } catch (error) {
-    // A projection failure is recoverable on the next launch and must not block
-    // this one — Harness reports whatever it can resolve.
-    note(`[desktop] generation projection failed: ${error instanceof Error ? error.message : error}`)
+    const detail = error instanceof Error ? error.message : String(error)
+    note(`[desktop] generation projection failed: ${detail}`)
+    throw new Error(`generation projection failed: ${detail}`)
   }
 }
 

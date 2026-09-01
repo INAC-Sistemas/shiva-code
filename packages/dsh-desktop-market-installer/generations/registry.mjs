@@ -42,6 +42,26 @@ export function registryLayout(dshHome) {
   }
 }
 
+const SAFE_PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/iu
+const SAFE_VERSION_PATTERN = /^[0-9a-z][0-9a-z._+-]*$/iu
+
+function assertSafePackageName(pluginName, context = 'Generation plugin name') {
+  if (typeof pluginName !== 'string' || !SAFE_PACKAGE_NAME_PATTERN.test(pluginName)) {
+    throw new Error(`${context} is not a safe npm package name: ${String(pluginName)}`)
+  }
+}
+
+function assertSafeVersion(version, context = 'Generation version') {
+  if (
+    typeof version !== 'string' ||
+    !SAFE_VERSION_PATTERN.test(version) ||
+    version === '.' ||
+    version === '..'
+  ) {
+    throw new Error(`${context} is not safe for a generation id: ${String(version)}`)
+  }
+}
+
 export async function ensureRegistryDirectories(dshHome) {
   const layout = registryLayout(dshHome)
   for (const dir of [layout.generations, layout.staging, layout.trash]) {
@@ -58,19 +78,38 @@ export async function ensureRegistryDirectories(dshHome) {
  * generation and different inputs never collide.
  */
 export function generationId(pluginName, version, lockfileText) {
+  assertSafePackageName(pluginName)
+  assertSafeVersion(version)
   const safeName = pluginName.replace(/^@/u, '').replace(/[/\\]/gu, '+')
   const digest = createHash('sha256').update(lockfileText).digest('hex').slice(0, 12)
   return `${safeName}+${version}+${digest}`
 }
 
 async function readPointer(path) {
+  let text
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf8'))
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((entry) => typeof entry === 'string')
-  } catch {
-    return []
+    text = await readFile(path, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw new Error(
+      `Generation pointer could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
   }
+
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    throw new Error(
+      `Generation pointer is invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
+  }
+  if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === 'string')) {
+    throw new Error('Generation pointer must be an array of generation ids.')
+  }
+  return parsed
 }
 
 async function writePointerAtomically(path, ids) {
@@ -136,16 +175,42 @@ async function lockAgeMs(lockFile) {
 const META_NAME = 'generation.json'
 
 async function readGenerationMeta(directory) {
+  const path = join(directory, META_NAME)
+  let text
   try {
-    const parsed = JSON.parse(await readFile(join(directory, META_NAME), 'utf8'))
-    if (typeof parsed.pluginName !== 'string' || typeof parsed.version !== 'string') return undefined
-    return {
-      pluginName: parsed.pluginName,
-      version: parsed.version,
-      ...(typeof parsed.sourceSpec === 'string' ? { sourceSpec: parsed.sourceSpec } : {})
-    }
-  } catch {
-    return undefined
+    text = await readFile(path, 'utf8')
+  } catch (error) {
+    throw new Error(
+      `Generation metadata could not be read at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    throw new Error(
+      `Generation metadata is invalid JSON at ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Generation metadata root is invalid at ${path}.`)
+  }
+  assertSafePackageName(parsed.pluginName, `Generation metadata plugin name at ${path}`)
+  assertSafeVersion(parsed.version, `Generation metadata version at ${path}`)
+  if (parsed.sourceSpec !== undefined && typeof parsed.sourceSpec !== 'string') {
+    throw new Error(`Generation metadata source spec is invalid at ${path}.`)
+  }
+  return {
+    pluginName: parsed.pluginName,
+    version: parsed.version,
+    ...(typeof parsed.sourceSpec === 'string' ? { sourceSpec: parsed.sourceSpec } : {})
   }
 }
 
@@ -159,15 +224,20 @@ export async function listGenerations(dshHome) {
   let entries
   try {
     entries = await readdir(generations, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (error?.code === 'ENOENT') return []
+    throw new Error(
+      `Generation registry could not be read at ${generations}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
   }
   const found = []
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     const directory = join(generations, entry.name)
     const meta = await readGenerationMeta(directory)
-    if (meta === undefined) continue
     found.push({ id: entry.name, directory, ...meta })
   }
   return found
@@ -216,9 +286,10 @@ export async function resolveEnabledGenerations(dshHome) {
   const enabled = new Map()
   for (const id of desired) {
     const generation = byId.get(id)
-    if (generation !== undefined && existsSync(generation.directory)) {
-      enabled.set(generation.pluginName, generation)
+    if (generation === undefined || !existsSync(generation.directory)) {
+      throw new Error(`Desired generation is missing or unreadable: ${id}`)
     }
+    enabled.set(generation.pluginName, generation)
   }
   return enabled
 }
@@ -229,6 +300,10 @@ export async function collectUnreferencedGenerations(dshHome) {
     readDesired(dshHome),
     listGenerations(dshHome)
   ])
+  const known = new Set(all.map((generation) => generation.id))
+  for (const id of desired) {
+    if (!known.has(id)) throw new Error(`Desired generation is missing or unreadable: ${id}`)
+  }
   const referenced = new Set(desired)
   return all.filter((generation) => !referenced.has(generation.id)).map((generation) => generation.id)
 }

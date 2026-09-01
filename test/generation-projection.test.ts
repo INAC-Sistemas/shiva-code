@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectGenerations } from '../packages/dsh-desktop-market-installer/generations/projection'
 import {
   ensureRegistryDirectories,
@@ -10,6 +10,30 @@ import {
   writeDesired,
   writeGenerationMeta
 } from '../packages/dsh-desktop-market-installer/generations/registry'
+
+const generationMetaReadFault: {
+  matches?: (path: string) => boolean
+} = vi.hoisted(() => ({}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const actualReadFile = actual.readFile as (...args: any[]) => Promise<any>
+  return {
+    ...actual,
+    readFile: async (path: Parameters<typeof actual.readFile>[0], ...args: any[]) => {
+      if (
+        generationMetaReadFault.matches &&
+        typeof path === 'string' &&
+        generationMetaReadFault.matches(path)
+      ) {
+        throw Object.assign(new Error('EPERM: generation.json is temporarily locked'), {
+          code: 'EPERM'
+        })
+      }
+      return actualReadFile(path, ...args)
+    }
+  }
+})
 
 describe('generation projection onto the app-boot contract', () => {
   const homes: string[] = []
@@ -56,6 +80,7 @@ describe('generation projection onto the app-boot contract', () => {
   }
 
   afterEach(async () => {
+    generationMetaReadFault.matches = undefined
     await Promise.all(homes.map((home) => rm(home, { recursive: true, force: true })))
     homes.length = 0
   })
@@ -132,5 +157,98 @@ describe('generation projection onto the app-boot contract', () => {
     // still a real directory, still readable
     expect((await lstat(realDir)).isDirectory()).toBe(true)
     expect((await lstat(realDir)).isSymbolicLink()).toBe(false)
+  })
+
+  it('does not overwrite or project links onto an existing corrupt profile manifest', async () => {
+    const home = await freshHome()
+    await ensureRegistryDirectories(home)
+    await fakeGeneration(home, 'keep+1+x', 'keeper', '1.0.0')
+    await writeDesired(home, ['keep+1+x'])
+    const profile = join(home, 'profiles', 'web')
+    const manifestPath = join(profile, 'package.json')
+    const corrupt = '{"name":"dsh-profile-web",broken\n'
+    await mkdir(profile, { recursive: true })
+    await writeFile(manifestPath, corrupt, 'utf8')
+
+    await expect(projectGenerations(home)).rejects.toThrow(/Profile manifest is invalid JSON/u)
+    expect(await readFile(manifestPath, 'utf8')).toBe(corrupt)
+    expect(existsSync(join(profile, 'node_modules', 'keeper'))).toBe(false)
+  })
+
+  async function projectedProfileForMetadataFailure(kind: string): Promise<{
+    home: string
+    generationDirectory: string
+    manifestPath: string
+    manifestBefore: string
+    linkPath: string
+    linkTarget: string
+  }> {
+    const home = await freshHome()
+    await ensureRegistryDirectories(home)
+    await initProfile(home)
+    const id = `${kind}+1+x`
+    await fakeGeneration(home, id, `${kind}-plugin`, '1.0.0')
+    await writeDesired(home, [id])
+    await projectGenerations(home)
+    const generationDirectory = join(registryLayout(home).generations, id)
+    const manifestPath = join(home, 'profiles', 'web', 'package.json')
+    const linkPath = join(home, 'profiles', 'web', 'node_modules', `${kind}-plugin`)
+    return {
+      home,
+      generationDirectory,
+      manifestPath,
+      manifestBefore: await readFile(manifestPath, 'utf8'),
+      linkPath,
+      linkTarget: await readlink(linkPath)
+    }
+  }
+
+  async function expectProjectionFailurePreservesProfile(
+    fixture: Awaited<ReturnType<typeof projectedProfileForMetadataFailure>>,
+    message: RegExp
+  ): Promise<void> {
+    await expect(projectGenerations(fixture.home)).rejects.toThrow(message)
+    expect(await readFile(fixture.manifestPath, 'utf8')).toBe(fixture.manifestBefore)
+    expect((await lstat(fixture.linkPath)).isSymbolicLink()).toBe(true)
+    expect(await readlink(fixture.linkPath)).toBe(fixture.linkTarget)
+  }
+
+  it('preserves the existing projection when desired generation metadata is temporarily unreadable', async () => {
+    const fixture = await projectedProfileForMetadataFailure('locked')
+    generationMetaReadFault.matches = (path) =>
+      path === join(fixture.generationDirectory, 'generation.json')
+
+    await expectProjectionFailurePreservesProfile(fixture, /Generation metadata could not be read/u)
+  })
+
+  it('preserves the existing projection when generation metadata contains invalid JSON', async () => {
+    const fixture = await projectedProfileForMetadataFailure('broken')
+    await writeFile(join(fixture.generationDirectory, 'generation.json'), '{broken metadata\n', 'utf8')
+
+    await expectProjectionFailurePreservesProfile(fixture, /Generation metadata is invalid JSON/u)
+  })
+
+  it('preserves the existing projection when generation metadata contains an unsafe package name', async () => {
+    const fixture = await projectedProfileForMetadataFailure('unsafe')
+    await writeFile(
+      join(fixture.generationDirectory, 'generation.json'),
+      JSON.stringify({ pluginName: '../../outside', version: '1.0.0' }),
+      'utf8'
+    )
+
+    await expectProjectionFailurePreservesProfile(fixture, /safe npm package name/u)
+  })
+
+  it('preserves the existing projection when a desired generation loses its package root', async () => {
+    const fixture = await projectedProfileForMetadataFailure('missing-root')
+    await rm(
+      join(fixture.generationDirectory, 'node_modules', 'missing-root-plugin'),
+      { recursive: true, force: true }
+    )
+
+    await expectProjectionFailurePreservesProfile(
+      fixture,
+      /Enabled generation package root is missing or unreadable/u
+    )
   })
 })

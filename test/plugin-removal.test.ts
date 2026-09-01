@@ -1,8 +1,40 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const fsFaults = vi.hoisted(() => ({
+  renameMatches: undefined as undefined | ((from: string, to: string) => boolean),
+  rmMatches: undefined as undefined | ((path: string) => boolean),
+  ledgerRenameCount: 0,
+  failLedgerRenameAt: undefined as number | undefined
+}))
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  return {
+    ...actual,
+    rename: async (from: string, to: string) => {
+      if (to.endsWith('plugin-removals.json')) {
+        fsFaults.ledgerRenameCount += 1
+        if (fsFaults.ledgerRenameCount === fsFaults.failLedgerRenameAt) {
+          throw Object.assign(new Error('fixture ledger rename EPERM'), { code: 'EPERM' })
+        }
+      }
+      if (fsFaults.renameMatches?.(from, to)) {
+        throw Object.assign(new Error('fixture rename EPERM'), { code: 'EPERM' })
+      }
+      return actual.rename(from, to)
+    },
+    rm: async (path: string, options?: Parameters<typeof actual.rm>[1]) => {
+      if (fsFaults.rmMatches?.(path)) {
+        throw Object.assign(new Error('fixture rm EBUSY'), { code: 'EBUSY' })
+      }
+      return actual.rm(path, options)
+    }
+  }
+})
 import {
   disableGeneration,
   ensureRegistryDirectories,
@@ -11,16 +43,32 @@ import {
   writeGenerationMeta
 } from '../packages/dsh-desktop-market-installer/generations/registry'
 import { projectGenerations } from '../packages/dsh-desktop-market-installer/generations/projection'
+import { prepareGenerationsForLaunch } from '../src/main/state/generation-launch'
+import type { PluginComponentRestoreOptions } from '../src/main/state/plugin-component-cleanup'
 import {
+  cleanupVerifiedRemovalBackup,
   confirmPluginRemovalsBooted,
   enforcePendingPluginRemovals,
   listPendingPluginRemovals,
+  listVerifiedRemovalBackups,
   removePluginSafely,
-  shouldDeferProfileMaintenance
+  restorePluginRemovalBackup,
+  shouldDeferProfileMaintenance,
+  snapshotPluginRemovalLedger
 } from '../src/main/state/plugin-removal'
 
 describe('durable plugin removal', () => {
   const homes: string[] = []
+
+  function launchAgentPlist(label: string, programArgument: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>${label}</string>
+<key>ProgramArguments</key><array><string>/usr/bin/node</string><string>${programArgument}</string></array>
+</dict></plist>
+`
+  }
 
   async function profile(pluginName = '@example/plugin-a'): Promise<{
     dshHome: string
@@ -48,7 +96,118 @@ describe('durable plugin removal', () => {
     return { dshHome, profileDirectory }
   }
 
+  async function removedGeneration(pluginName: string, suffix: string): Promise<{
+    dshHome: string
+    profileDirectory: string
+    generationId: string
+    generationDirectory: string
+    removalId: string
+    backupDirectory: string
+  }> {
+    const { dshHome, profileDirectory } = await profile(pluginName)
+    const layout = await ensureRegistryDirectories(dshHome)
+    const generationId = `${pluginName.replaceAll('/', '+')}+1.0.0+${suffix}`
+    const generationDirectory = join(layout.generations, generationId)
+    const packageDirectory = join(generationDirectory, 'node_modules', pluginName)
+    await mkdir(packageDirectory, { recursive: true })
+    await writeGenerationMeta(generationDirectory, { pluginName, version: '1.0.0' })
+    await writeFile(
+      join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: pluginName, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } })
+    )
+    await writeFile(join(packageDirectory, 'cordis.patch.yml'), '[]\n')
+    await writeFile(join(packageDirectory, 'payload.js'), 'export const intact = true\n')
+    await writeDesired(dshHome, [generationId])
+    await projectGenerations(dshHome)
+    const removed = await removePluginSafely({
+      dshHome,
+      pluginName,
+      cleanupOwnedComponents: async () => ({ ok: true, failures: [] }),
+      uninstallGeneration: async () => {
+        await disableGeneration(dshHome, pluginName)
+        await projectGenerations(dshHome)
+        return true
+      },
+      now: () => new Date('2026-08-29T15:00:00.000Z')
+    })
+    expect(removed).toMatchObject({ removed: true })
+    return {
+      dshHome,
+      profileDirectory,
+      generationId,
+      generationDirectory,
+      removalId: removed.removalId as string,
+      backupDirectory: removed.backupDirectory as string
+    }
+  }
+
+  async function legacyRemovalWithComponent(pluginName: string, label: string): Promise<{
+    dshHome: string
+    profileDirectory: string
+    backupDirectory: string
+    legacyPath: string
+    fileName: string
+    removalId: string
+  }> {
+    const { dshHome, profileDirectory } = await profile(pluginName)
+    await rm(join(profileDirectory, 'node_modules', pluginName), { recursive: true, force: true })
+    await writeFile(
+      join(profileDirectory, 'package.json'),
+      JSON.stringify({ dependencies: {}, dsh: { profile: { bundles: [] } } })
+    )
+    const backupDirectory = join(
+      dshHome,
+      'recovery',
+      'plugin-removals',
+      '2026-08-29T15-00-00-000Z',
+      pluginName
+    )
+    const sourcePackage = join(backupDirectory, 'profile-packages', 'node_modules', pluginName)
+    await mkdir(sourcePackage, { recursive: true })
+    await writeFile(join(sourcePackage, 'package.json'), JSON.stringify({
+      name: pluginName,
+      version: '1.0.0',
+      dsh: { bundle: { patch: 'cordis.patch.yml' } }
+    }))
+    await writeFile(join(sourcePackage, 'cordis.patch.yml'), '[]\n')
+    await writeFile(join(backupDirectory, 'package.json'), JSON.stringify({
+      dependencies: { [pluginName]: '1.0.0' },
+      dsh: { profile: { bundles: [pluginName] } }
+    }))
+    await writeFile(join(backupDirectory, 'cordis.patch.yml'), '[]\n')
+    await mkdir(join(dshHome, 'recovery'), { recursive: true })
+    await writeFile(join(dshHome, 'recovery', 'plugin-removals.json'), JSON.stringify({
+      protocol: 1,
+      removals: {
+        [pluginName]: {
+          pluginName,
+          status: 'removed',
+          disabledAt: '2026-08-29T15:00:00.000Z',
+          updatedAt: '2026-08-29T15:30:00.000Z',
+          backupDirectory,
+          failures: []
+        }
+      }
+    }))
+    const fileName = `${label}.plist`
+    const legacyDirectory = join(
+      dshHome,
+      'recovery',
+      'uninstalled-components',
+      '2026-08-29T15-21-00-000Z'
+    )
+    const legacyPath = join(legacyDirectory, fileName)
+    await mkdir(legacyDirectory, { recursive: true })
+    await writeFile(legacyPath, launchAgentPlist(label, `/old/node_modules/${pluginName}/agent.mjs`))
+    const removalId = (await snapshotPluginRemovalLedger(dshHome)).backups[0]!.removalId
+    return { dshHome, profileDirectory, backupDirectory, legacyPath, fileName, removalId }
+  }
+
   afterEach(async () => {
+    fsFaults.renameMatches = undefined
+    fsFaults.rmMatches = undefined
+    fsFaults.ledgerRenameCount = 0
+    fsFaults.failLedgerRenameAt = undefined
     await Promise.all(homes.map((home) => rm(home, { recursive: true, force: true })))
     homes.length = 0
   })
@@ -96,9 +255,23 @@ describe('durable plugin removal', () => {
     expect(await shouldDeferProfileMaintenance(dshHome)).toBe(true)
     await confirmPluginRemovalsBooted(dshHome)
     expect(await shouldDeferProfileMaintenance(dshHome)).toBe(false)
+    // The verified backup is never auto-deleted; the user must confirm.
     expect(existsSync(result.backupDirectory as string)).toBe(true)
+    const pending = await snapshotPluginRemovalLedger(dshHome)
+    expect(pending.pendingDeletion).toHaveLength(1)
+    const firstPending = pending.pendingDeletion[0]
+    expect(firstPending).toBeDefined()
+    expect(firstPending?.pluginName).toBe('@example/plugin-a')
+    expect(firstPending?.bootVerifiedAt).toBeDefined()
+    // A second confirmPluginRemovalsBooted still leaves the backup in place.
     await confirmPluginRemovalsBooted(dshHome)
+    expect(existsSync(result.backupDirectory as string)).toBe(true)
+    // The user can opt in to cleanup; that is the only path that removes it.
+    const cleanup = await cleanupVerifiedRemovalBackup(dshHome, result.removalId as string)
+    expect(cleanup).toEqual({ ok: true })
     expect(existsSync(result.backupDirectory as string)).toBe(false)
+    const verified = await listVerifiedRemovalBackups(dshHome)
+    expect(verified).toEqual([])
   })
 
   it('keeps a detached legacy plugin disabled when profile reconciliation fails', async () => {
@@ -177,6 +350,11 @@ describe('durable plugin removal', () => {
       pluginName: 'generation-plugin',
       version: '1.0.0'
     })
+    await mkdir(join(generationDirectory, 'node_modules', 'generation-plugin'), { recursive: true })
+    await writeFile(
+      join(generationDirectory, 'node_modules', 'generation-plugin', 'package.json'),
+      JSON.stringify({ name: 'generation-plugin', version: '1.0.0' })
+    )
     await writeDesired(dshHome, [generationId])
 
     const result = await removePluginSafely({
@@ -205,6 +383,11 @@ describe('durable plugin removal', () => {
       pluginName: 'generation-plugin',
       version: '1.0.0'
     })
+    await mkdir(join(generationDirectory, 'node_modules', 'generation-plugin'), { recursive: true })
+    await writeFile(
+      join(generationDirectory, 'node_modules', 'generation-plugin', 'package.json'),
+      JSON.stringify({ name: 'generation-plugin', version: '1.0.0' })
+    )
     await writeDesired(dshHome, [generationId])
     const reconcileLegacyProfile = vi.fn(async () => ({ ok: true }))
 
