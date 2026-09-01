@@ -32,6 +32,8 @@ locale 集合改为运行时注册表，而完备性由仓库来证明，而不�
 
 `permission.access` 此前经由未类型化的 `register(ns, locale, dict)` 重载注册，因而不在该类型表中。现在它与 `settings.permission` 并列声明，其注册改用类型化形式，`optionsOf` 的参数也由 `(key: string) => string` 收窄为 `TranslateNS<typeof ACCESS_NS>`。
 
+**由插件硬编码单一语言的侧边栏 tab 采取改标签，而非翻译。** `dsh-docs-panel:docs` 与 `dsh-flowglass:flow` 携带的中文标题字面量从不抵达 locale 注册表，因此任何字典都无法寻址它们。侧边栏在渲染时调用 tab 的标题，于是 `dsh-i18n` 把这些描述符的标题替换为在每次绘制时读取当前 locale 的函数，并在卸载时恢复原值。该表位于 `src/tab-titles.ts`，刻意放在 `src/locales/` 之外：任何已附带的包都未声明的 namespace 会让门禁的反向断言失败。代价是这些标签成为本次工作中唯一无人校验的部分——表中缺失的 locale 会回退到插件自己的标题，因此过期条目退化为原文，而不是损坏。
+
 ## 门禁为何指名模块而非包
 
 该门禁按源码路径 import 每个声明所在的模块。按包名 import 会经 `exports` 解析到产出的声明文件，而其中若干包只在内部使用自己的字典类型——声明文件省略了该 import，`declare module` 块从未抵达，门禁便会在该 namespace 干脆缺席的情况下通过。这种失败是静默的，而这正是完备性门禁最不该有的性质。
@@ -59,3 +61,5 @@ locale 集合改为运行时注册表，而完备性由仓库来证明，而不�
 `LocaleSnapshot.active` 与 `LocaleDefinition.id` 由 `LocaleId` 扩宽为 `string`。`LocaleId` 仍然是已附带的语言集合，也仍然为仓库内每个字典所有者所用的 `register` 重载提供类型，因此双语对齐在原有位置照旧被强制。
 
 `dsh-better-sidebar` 与 `dsh-sidebar-qa` 注册各自的 namespace，被刻意排除在该门禁的 import 列表之外——那是另外 403 个键，保持在这两个插件各自附带的语言中。
+
+tab 标题的覆盖会伸进另一个插件的注册表，这是本次工作原本不会有的耦合：它依赖 `dsh-better-sidebar` 暴露 `getTab`／`subscribe`，也依赖它惰性解析标题。两者都是承重的，而它们都不是该插件承诺的契约，因此上游的一次改动会让这两个标签悄无声息地退回中文。

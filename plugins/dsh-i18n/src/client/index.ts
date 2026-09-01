@@ -13,9 +13,16 @@
  * the plugin loads, and everyone else stays where they were.
  */
 import { BUNDLES } from '../locales/index.ts'
+import { installTabTitles } from './tab-titles.ts'
 import type { ClientContext } from '../context-types.ts'
 
-/** Services required before mounting; provided by the shipped locale plugin. */
+/**
+ * Services required before mounting; provided by the shipped locale plugin.
+ *
+ * `betterSidebar` is deliberately absent: the tab relabelling waits for it
+ * through `ctx.inject`, so a composition without that sidebar still gets the
+ * languages.
+ */
 export const inject = ['locale']
 
 /**
@@ -36,4 +43,8 @@ export function apply(ctx: ClientContext): void {
       return () => { for (const dispose of disposers.reverse()) dispose() }
     }, `dsh-i18n: ${bundle.definition.id}`)
   }
+
+  // Tabs whose owning plugin ships one hardcoded language reach no dictionary;
+  // they are relabelled in the sidebar registry instead.
+  installTabTitles(ctx)
 }

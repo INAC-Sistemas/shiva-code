@@ -48,6 +48,16 @@ The check lives there rather than here because a plugin resolves outside the mon
 
 When a shipped package adds a string, that gate fails until both languages carry it.
 
+## Tabs other plugins own
+
+Two sidebar tabs carry a title their plugin hardcodes in Chinese and never routes through the locale registry: `dsh-docs-panel:docs` and `dsh-flowglass:flow`. No dictionary can reach them — there is no key to override.
+
+The sidebar resolves a tab's title by **calling it at render time**, which leaves one honest seam. This plugin replaces those descriptors' titles with a function that reads the active locale on every paint, so a switch reaches them with no re-registration, and restores the plugin's own title on unload. A locale absent from [src/tab-titles.ts](src/tab-titles.ts) falls back to what the tab shipped, which is why a Chinese reader keeps the original wording.
+
+This is an override of third-party copy and **the completeness gate does not cover it**: nothing fails when one of those plugins renames its tab or starts translating itself. The fallback is what keeps a stale entry from breaking the label — it shows the plugin's own title instead.
+
+`dsh-flowglass` publishes no Latin-script name, so its package name stands in as the brand rather than an invented translation of 流镜.
+
 ## Install
 
 ```sh

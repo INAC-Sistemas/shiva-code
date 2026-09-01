@@ -32,6 +32,8 @@ The locale set is a runtime registry, and completeness is proved from the reposi
 
 `permission.access` was registered through the untyped `register(ns, locale, dict)` overload and was therefore absent from the map. It is now declared alongside `settings.permission`, its registration uses the typed form, and `optionsOf` takes `TranslateNS<typeof ACCESS_NS>` instead of `(key: string) => string`.
 
+**Sidebar tabs whose plugin hardcodes one language are relabelled, not translated.** `dsh-docs-panel:docs` and `dsh-flowglass:flow` carry a literal Chinese title that never reaches the locale registry, so no dictionary can address them. The sidebar calls a tab's title at render time, so `dsh-i18n` replaces those descriptors' titles with a function reading the active locale on every paint, and restores the original on unload. The table lives in `src/tab-titles.ts`, deliberately outside `src/locales/`: a namespace no shipped package declares would fail the gate's reverse assertion. The cost is that these labels are the one part of this work nothing verifies — a locale absent from the table falls back to the plugin's own title, so a stale entry degrades to the original rather than breaking.
+
 ## Why the gate names modules, not packages
 
 The gate imports each declaring module by source path. The package-name form resolves through `exports` to the emitted declaration file, and several of these packages use their dictionary types only internally — the declaration elides the import, the `declare module` block never arrives, and the gate would pass with that namespace simply absent. That failure is silent, which is the worst property a completeness gate can have.
@@ -59,3 +61,5 @@ The durable preference field lost its enum. A settings document can now name a l
 `LocaleSnapshot.active` and `LocaleDefinition.id` widened from `LocaleId` to `string`. `LocaleId` remains the shipped set and still types the `register` overload every in-tree dictionary owner uses, so bilingual balance stays enforced where it was.
 
 `dsh-better-sidebar` and `dsh-sidebar-qa` register their own namespaces and are deliberately outside the gate's import list — 403 further keys that stay in the languages those plugins ship.
+
+The tab-title overrides reach into another plugin's registry, which is a coupling this work would not otherwise have: it depends on `dsh-better-sidebar` exposing `getTab`/`subscribe` and on it resolving titles lazily. Both are load-bearing and neither is a contract that plugin promises, so an upstream change there silently returns those two labels to Chinese.

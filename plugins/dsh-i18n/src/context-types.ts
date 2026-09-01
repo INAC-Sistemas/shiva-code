@@ -36,6 +36,12 @@ export interface LocaleDefinition {
  */
 export interface LocaleService {
   /**
+   * The current locale snapshot. Read at render time by the sidebar tab
+   * titles this package overrides, so a switch reaches them without
+   * re-registering anything.
+   */
+  getSnapshot(): { active: string }
+  /**
    * Add a locale to the selectable set.
    * @param definition - the locale, its display name, and its document language.
    * @returns disposer removing it (the reader falls back off it).
@@ -53,9 +59,57 @@ export interface LocaleService {
   register(ns: string, locale: string, dict: Record<string, string>): () => void
 }
 
+/** A sidebar tab type as `dsh-better-sidebar` holds it in its registry. */
+export interface SidebarTabDescriptor {
+  /** Registration id, e.g. `dsh-docs-panel:docs`. */
+  id: string
+  /**
+   * The rail label. The sidebar resolves it at render time (its own helper
+   * calls a function value on every paint), which is what lets a replacement
+   * follow locale switches without re-registering the tab.
+   */
+  title?: string | (() => string)
+}
+
+/**
+ * The `dsh-better-sidebar` service face (mirror of its client service — only
+ * the slices this package touches).
+ *
+ * Only reads and the tab registry: this package never registers a tab of its
+ * own, it relabels tabs other plugins registered.
+ */
+export interface SidebarService {
+  /**
+   * @param id - a registered tab id.
+   * @returns the descriptor as the registry holds it, or undefined.
+   */
+  getTab(id: string): SidebarTabDescriptor | undefined
+  /**
+   * Notified whenever the tab registry changes, which is how a tab registered
+   * after this plugin activates still gets relabelled.
+   * @param listener - change callback.
+   * @returns unsubscribe.
+   */
+  subscribe(listener: () => void): () => void
+}
+
 /** The browser cordis context after the client runtime provides its services. */
 export interface ClientContext {
   locale: LocaleService
+  /**
+   * Read an optional service by name; `undefined` when nothing provides it.
+   * @param name - service name.
+   * @returns the service, or undefined.
+   */
+  get(name: string): unknown
+  /**
+   * Run a callback for each lifetime of the named services, so work that
+   * depends on an OPTIONAL plugin waits for it and unwinds with it.
+   * @param services - service names to wait for.
+   * @param callback - receives the context in which they are available.
+   * @returns disposer for the wait and anything the callback set up.
+   */
+  inject(services: string[], callback: (ctx: ClientContext) => void): () => void
   /**
    * Register a disposable effect owned by this plugin's fiber.
    * @param callback - creates the disposer released on unload.
