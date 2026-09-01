@@ -1,3 +1,7 @@
+import type { AvailableRelease } from '../../shared/contracts'
+
+export type { AvailableRelease }
+
 export const STABLE_FEED_URL = 'https://dshdesktop.com/updates/latest/'
 export const VERSION_INDEX_URL = 'https://dshdesktop.com/updates/versions.json'
 
@@ -5,12 +9,6 @@ const INDEX_TIMEOUT_MS = 8_000
 
 export function archiveFeedUrl(version: string): string {
   return `https://dshdesktop.com/updates/archive/${version}/`
-}
-
-export interface AvailableRelease {
-  version: string
-  tag: string
-  archiveUrl: string
 }
 
 /** Split "1.2.3-rc.1" into ([1,2,3], "rc.1"). Non-numeric segments read as 0. */
