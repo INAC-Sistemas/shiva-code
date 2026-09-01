@@ -8905,6 +8905,21 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
 
+  plugins/dsh-i18n:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.0
+        version: 22.20.0
+      tsdown:
+        specifier: ^0.22.2
+        version: 0.22.2(oxc-resolver@11.20.0)(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
   plugins/dsh-login:
     dependencies:
       '@deepseek-ai/schemastery':

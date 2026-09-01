@@ -454,7 +454,7 @@ function detectBrowserLocale(locales: readonly LocaleDefinition[]): string | und
   for (const tag of [...(navigator.languages ?? []), navigator.language]) {
     const wanted = tag.toLowerCase()
     const primary = wanted.split('-')[0]
-    const match = locales.find(locale => {
+    const match = locales.find((locale) => {
       const id = locale.id.toLowerCase()
 
       return id === wanted || id === primary

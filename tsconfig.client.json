@@ -26,6 +26,9 @@
     // Client package outside packages/client with a local CSS module face.
     "packages/extensions/ui-cordis/src/css-modules.d.ts",
     "packages/client/tsdown.client.ts",
+    // The translation plugins' dictionaries, so `verify-plugin-locales`
+    // can assert them against the namespace map this program merges.
+    "plugins/dsh-i18n/src/**/*.ts",
     "scripts/client-build-environment.ts",
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",

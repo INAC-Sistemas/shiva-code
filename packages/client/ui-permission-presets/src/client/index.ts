@@ -22,6 +22,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // (the settings invalidation rides the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ClientContext, SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { PermissionSelect } from '@deepseek-ai/dsh-permission-presets/client'
@@ -51,7 +52,7 @@ function selectOf(session: SessionFace | undefined): PermissionSelect | undefine
 }
 
 /** Flatten the projection select into popup rows; `custom` is display state, never a target. */
-function optionsOf(value: PermissionSelect, t: (key: string) => string): SelectOption[] {
+function optionsOf(value: PermissionSelect, t: TranslateNS<typeof ACCESS_NS>): SelectOption[] {
   return value.options
     .filter(option => option.value !== 'custom')
     .map(option => ({
@@ -83,27 +84,10 @@ export function apply(ctx: ClientContext): void {
   const sessions = ctx.sessions
   // This optional bundle and ui-conversation can load independently, so each
   // owns the same safety copy under its own locale namespace.
-  /* jscpd:ignore-start */
-  ctx.effect(() => {
-    const disposers = [
-      ctx.locale.register(ACCESS_NS, 'zh', {
-        'confirm.title': accessZh['confirm.title'],
-        'confirm.description': accessZh['confirm.description'],
-        'confirm.acknowledge': accessZh['confirm.acknowledge'],
-        'confirm.cancel': accessZh['confirm.cancel'],
-        'confirm.enable': accessZh['confirm.enable'],
-      }),
-      ctx.locale.register(ACCESS_NS, 'en', {
-        'confirm.title': accessEn['confirm.title'],
-        'confirm.description': accessEn['confirm.description'],
-        'confirm.acknowledge': accessEn['confirm.acknowledge'],
-        'confirm.cancel': accessEn['confirm.cancel'],
-        'confirm.enable': accessEn['confirm.enable'],
-      }),
-    ]
-    return () => { for (const dispose of disposers) dispose() }
-  }, 'ui-permission: Full access confirmation dictionaries')
-  /* jscpd:ignore-end */
+  ctx.effect(
+    () => ctx.locale.register(ACCESS_NS, { zh: accessZh, en: accessEn }),
+    'ui-permission: Full access confirmation dictionaries',
+  )
   const t = ctx.locale.bind(ACCESS_NS)
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>
     sessions.binding(session.sessionId)?.session

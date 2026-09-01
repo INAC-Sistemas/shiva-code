@@ -11,7 +11,7 @@ import {
   IconChevronDownOutline14, Menu, RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
-import type { PermissionSettingsKey } from './locales.ts'
+import type { PermissionAccessKey, PermissionSettingsKey } from './locales.ts'
 import { FULL_ACCESS_PRESET } from './presentation.ts'
 import css from './PermissionRow.module.css'
 
@@ -129,5 +129,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Permission row copy. */
     'settings.permission': PermissionSettingsKey
+    /**
+     * The current-session Full access confirmation copy, which this bundle
+     * and ui-conversation each own under their own namespace so either can
+     * load without the other.
+     */
+    'permission.access': PermissionAccessKey
   }
 }

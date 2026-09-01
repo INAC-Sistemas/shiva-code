@@ -30,7 +30,7 @@ describe('locale host', () => {
     await ctx.settings.update(ns, { preference: 'pt-BR' })
     expect(ctx.settings.get(ns)).toEqual({ preference: 'pt-BR' })
     // The field is still typed: only its value set opened up.
-    await expect(ctx.settings.update(ns, { preference: 7 } as never)).rejects.toThrow()
+    await expect(ctx.settings.update(ns, { preference: 7 as unknown as string })).rejects.toThrow()
     await fiber.dispose()
     expect(ctx.settings.describe().map(row => row.ns)).not.toContain(ns)
   })
