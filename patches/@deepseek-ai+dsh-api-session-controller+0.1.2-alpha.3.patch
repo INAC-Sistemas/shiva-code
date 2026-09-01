@@ -1,8 +1,8 @@
 diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js b/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js
-index 5576f38..d594c59 100644
+index 79fb339..439e98a 100644
 --- a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js
 +++ b/node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js
-@@ -2674,7 +2674,10 @@ let SessionController = (() => {
+@@ -2593,7 +2593,10 @@ let SessionController = (() => {
  			ctx.plugin(SessionFileReferences);
  			ctx.plugin(SessionSkillCatalog);
  			ctx.on("session/created", (session) => {
