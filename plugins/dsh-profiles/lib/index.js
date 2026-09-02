@@ -85,7 +85,7 @@ button.danger:hover{background:#3b1212}
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-var PLUGIN_LABELS={"dsh-better-sidebar:skills":"Skills","dsh-mds:artifacts":"MDS (markdown)","dsh-prototype:view":"Prototype","dsh-openviking:memory":"Memory (OpenViking)","dsh-ssh-tunnel:*":"SSH Tunnel","dsh-docs-panel:docs":"Docs Panel","dsh-flowglass:*":"Flowglass","dsh-sidebar-qa:*":"Sidebar QA"};
+var PLUGIN_LABELS={"dsh-skill-manager:skills":"Skills","dsh-mds:artifacts":"MDS (markdown)","dsh-prototype:view":"Prototype","dsh-openviking:memory":"Memory (OpenViking)","dsh-ssh-tunnel":"SSH Tunnel","dsh-docs-panel:docs":"Docs Panel","dsh-flowglass:flow":"Flowglass","dsh-sidebar-qa:ask":"Sidebar QA — Perguntar","dsh-sidebar-qa:history":"Sidebar QA — Histórico"};
 var KEY={};
 function api(m,p){return fetch('/profiles/api/'+m,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p||{})}).then(function(r){return r.json()})}
 function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');clearTimeout(KEY.t);KEY.t=setTimeout(function(){t.className='toast'},3000)}
@@ -171,15 +171,18 @@ function sameOrigin(req) {
 
 // Plugin ids the profile can toggle. Kept as the source of truth for the
 // create/edit modal so a profile only ever offers real tabs.
+// Cada entrada é o `id` exato passado a `betterSidebar.registerTab`:
+// `__profileTabEnabled` compara por igualdade, então um curinga nunca casa.
 export const KNOWN_PLUGINS = [
-  'dsh-better-sidebar:skills',
+  'dsh-skill-manager:skills',
   'dsh-mds:artifacts',
   'dsh-prototype:view',
   'dsh-openviking:memory',
-  'dsh-ssh-tunnel:*',
+  'dsh-ssh-tunnel',
   'dsh-docs-panel:docs',
-  'dsh-flowglass:*',
-  'dsh-sidebar-qa:*',
+  'dsh-flowglass:flow',
+  'dsh-sidebar-qa:ask',
+  'dsh-sidebar-qa:history',
 ]
 
 // First-run seed: "Profile Epic" — todos os plugins, todas as skills (as
