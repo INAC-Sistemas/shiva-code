@@ -7,9 +7,35 @@ import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const inject = ['webServer', 'sessions']
 export const PROFILES_FILE = join(homedir(), '.dsh', 'profiles', 'profiles.json')
+
+// Raízes de skills conhecidas: o tier do nosso plugin (versionado no repo),
+// o user-dsh e o user-agents. O modal mostra cada skill como um check.
+const PLUGIN_SKILLS_DIR = fileURLToPath(new URL('../../dsh-skill-manager/skills/', import.meta.url))
+const SKILL_ROOTS = [
+  PLUGIN_SKILLS_DIR,
+  join(homedir(), '.dsh', 'skills'),
+  join(homedir(), '.agents', 'skills'),
+]
+
+/** Nomes de todas as skills disponíveis (dir bundle + .md flat). */
+async function listSkills() {
+  const names = new Set()
+  for (const root of SKILL_ROOTS) {
+    if (!existsSync(root)) continue
+    let entries = []
+    try { entries = await readdir(root, { withFileTypes: true }) } catch { continue }
+    for (const ent of entries) {
+      if (ent.name.startsWith('.')) continue
+      if (ent.isDirectory() && existsSync(join(root, ent.name, 'SKILL.md'))) names.add(ent.name)
+      else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) names.add(ent.name.replace(/\.md$/i, ''))
+    }
+  }
+  return [...names].sort()
+}
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/
 
@@ -65,33 +91,36 @@ function api(m,p){return fetch('/profiles/api/'+m,{method:'POST',headers:{'conte
 function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');clearTimeout(KEY.t);KEY.t=setTimeout(function(){t.className='toast'},3000)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function render(list,plugins){var g=document.getElementById('grid');g.innerHTML=list.map(function(p){
-  return '<div class="card"><div class="nm">'+esc(p.label)+'</div><div class="meta">Preset: '+esc(p.preset||'default')+' · '+(p.plugins||[]).length+' plugins'+(p.skills&&p.skills.length?' · skills: '+esc(p.skills.join(', ')):'')+'</div>'+
+  return '<div class="card"><div class="nm">'+esc(p.label)+'</div><div class="meta">Preset: '+esc(p.preset||'default')+' · '+(p.plugins||[]).length+' plugins · '+(p.skills||[]).length+' skills</div>'+
   '<div class="acts"><button class="primary" data-enter="'+esc(p.id)+'">Entrar</button><button data-edit="'+esc(p.id)+'">Editar</button><button class="danger" data-del="'+esc(p.id)+'">Excluir</button></div></div>'
 }).join('')||'<p class="lead">Nenhum perfil ainda. Crie o primeiro.</p>'}
-function openModal(draft,plugins,isEdit){var m=document.getElementById('modal');
-  var chk=plugins.map(function(id){return '<label><input type="checkbox" '+(draft.plugins.indexOf(id)>=0?'checked':'')+' value="'+esc(id)+'"> '+esc(PLUGIN_LABELS[id]||id)+'</label>'}).join('');
+function openModal(draft,plugins,skillsList,isEdit){var m=document.getElementById('modal');
+  var chk=plugins.map(function(id){return '<label class="pck"><input type="checkbox" class="pick-plugin" '+(draft.plugins.indexOf(id)>=0?'checked':'')+' value="'+esc(id)+'"> '+esc(PLUGIN_LABELS[id]||id)+'</label>'}).join('');
+  var sk='<p class="dim">Nenhuma skill disponível ainda — crie em Skills.</p>';
+  if(skillsList&&skillsList.length){var sel=(draft.skills||[]);
+    sk=skillsList.map(function(s){var on=sel.indexOf(s)>=0||sel.length===0;return '<label class="skx"><input type="checkbox" class="pick-skill" '+(on?'checked':'')+' value="'+esc(s)+'"> '+esc(s)+'</label>'}).join('')}
   m.innerHTML='<h2>'+(isEdit?'Editar perfil':'Criar perfil')+'</h2>'+
   '<div class="f"><label>Identificador (minúsculas, 1-32)</label><input id="f-id" value="'+esc(draft.id)+'" placeholder="games | web | eri…"></div>'+
   '<div class="f"><label>Nome de exibição</label><input id="f-label" value="'+esc(draft.label)+'" placeholder="Games | Sistemas Web…"></div>'+
   '<div class="f"><label>Preset padrão</label><input id="f-preset" value="'+esc(draft.preset||'default')+'"></div>'+
   '<div class="f"><label>Plugins visíveis na barra lateral</label><div class="checks">'+chk+'</div></div>'+
-  '<div class="f"><label>Pastas de skills (vírgula — ex.: ~/.dsh/skills/games)</label><input id="f-skills" value="'+esc((draft.skills||[]).join(', '))+'"></div>'+
+  '<div class="f"><label>Skills do perfil</label><div class="checks">'+sk+'</div></div>'+
   '<div class="acts"><button id="m-cancel">Cancelar</button><button class="primary" id="m-save">Salvar</button></div>';
   document.getElementById('overlay').classList.add('open');
   document.getElementById('m-cancel').onclick=closeModal;
   document.getElementById('m-save').onclick=function(){
-    var plugins=[].map.call(m.querySelectorAll('.checks input:checked'),function(c){return c.value});
-    var skills=document.getElementById('f-skills').value.split(',').map(function(s){return s.trim()}).filter(Boolean);
+    var plugins=[].map.call(m.querySelectorAll('.pick-plugin:checked'),function(c){return c.value});
+    var skills=[].map.call(m.querySelectorAll('.pick-skill:checked'),function(c){return c.value});
     api(isEdit?'update':'create',{id:document.getElementById('f-id').value.trim().toLowerCase(),label:document.getElementById('f-label').value.trim(),preset:document.getElementById('f-preset').value.trim()||'default',plugins:plugins,skills:skills}).then(function(r){
       if(!r.ok)return toast(r.error||'falhou',true);closeModal();bootstrap();toast(isEdit?'Perfil atualizado':'Perfil criado')})
   }}
 function closeModal(){document.getElementById('overlay').classList.remove('open')}
-function bootstrap(){api('bootstrap').then(function(r){if(!r.ok)return;render(r.profiles,r.plugins)})}
+function bootstrap(){api('bootstrap').then(function(r){if(!r.ok)return;KEY.plugins=r.plugins||[];KEY.skills=r.availableSkills||[];render(r.profiles,r.plugins)})}
 document.addEventListener('click',function(e){var et=e.target.dataset&&e.target.dataset.enter;var ed=e.target.dataset&&e.target.dataset.edit;var dd=e.target.dataset&&e.target.dataset.del;
   if(et){api('setActive',{active:et}).then(function(){location.href='/'})}
-  else if(ed){loadOne(ed,function(p){openModal(p,KEY.plugins,true)})}
+  else if(ed){loadOne(ed,function(p){openModal(p,KEY.plugins,KEY.skills,true)})}
   else if(dd){if(!confirm('Excluir perfil?'))return;api('delete',{id:dd}).then(function(r){if(!r.ok)return toast(r.error,true);bootstrap();toast('Perfil excluído')})}
-  else if(e.target.id==='add'){api('bootstrap').then(function(r){KEY.plugins=r.plugins;openModal({id:'',label:'',preset:'default',plugins:r.plugins.slice(),skills:[]},r.plugins,false)})}
+  else if(e.target.id==='add'){api('bootstrap').then(function(r){KEY.plugins=r.plugins;KEY.skills=r.availableSkills||[];openModal({id:'',label:'',preset:'default',plugins:r.plugins.slice(),skills:[]},r.plugins,r.availableSkills,false)})}
 })
 function loadOne(id,cb){api('list').then(function(r){var p=r.profiles.find(function(x){return x.id===id});if(p)return cb(p)})}
 document.addEventListener('click',function(e){if(e.target.className==='overlay')closeModal()})
@@ -191,11 +220,11 @@ export function apply(ctx) {
         case 'bootstrap': {
           const store = await seedProfileEpic(await readStore())
           const active = store.profiles.find((p) => p.id === store.active) ?? null
-          return json(res, 200, { ok: true, active, profiles: store.profiles, plugins: KNOWN_PLUGINS })
+          return json(res, 200, { ok: true, active, profiles: store.profiles, plugins: KNOWN_PLUGINS, availableSkills: await listSkills() })
         }
         case 'list': {
           const store = await readStore()
-          return json(res, 200, { ok: true, profiles: store.profiles, active: store.active })
+          return json(res, 200, { ok: true, profiles: store.profiles, active: store.active, availableSkills: await listSkills() })
         }
         case 'create': {
           const id = String(payload.id ?? '').trim().toLowerCase()
