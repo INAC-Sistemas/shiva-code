@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { describe, expect, it } from 'vitest'
 
@@ -30,19 +30,19 @@ const patchedPackages = [
   },
   {
     name: 'dsh-api-session-controller',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/index.js',
     markers: ['disposeOwned(sessionId)', 'await persistence.delete(request.sessionId)', 'workspaceRegistry.forgetSession(request.sessionId)']
   },
   {
     name: 'dsh-api-session-controller',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/client.js',
     markers: ['SessionDeleteError', 'this.remote.session.delete({ sessionId })', 'if (this.watched === sessionId) this.watched = void 0']
   },
   {
     name: 'dsh-api-session-controller',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/typert.host.js',
     markers: ["id: '@deepseek-ai/dsh-api-session-controller#session/delete'", "method: 'delete'"]
   },
@@ -87,12 +87,12 @@ describe('permanent session deletion dependency patches', () => {
     }
     const removed = SessionId('desktop-delete-removed')
     const kept = SessionId('desktop-delete-kept')
-    const event = [{ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }] as const
+    const event = [{ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }] as const
 
     try {
-      await persistence.create({ version: SESSION_FORMAT_VERSION, id: removed, createdAt: 1 })
+      await persistence.create({ version: SESSION_FORMAT_VERSION, id: removed, createdAt: 1, isSeeded: false })
       await persistence.append(removed, event)
-      await persistence.create({ version: SESSION_FORMAT_VERSION, id: kept, createdAt: 2 })
+      await persistence.create({ version: SESSION_FORMAT_VERSION, id: kept, createdAt: 2, isSeeded: false })
       await persistence.append(kept, event)
 
       expect(await persistence.delete(removed)).toBe(true)
