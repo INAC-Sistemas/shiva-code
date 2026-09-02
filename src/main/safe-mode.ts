@@ -192,7 +192,7 @@ export function buildSafeModeViewModel(options: {
           : 'profile'
     )
     const name = groupKind === 'profile'
-      ? zh ? 'Profile 核心依赖' : 'Profile core dependencies'
+      ? 'Profile'
       : first.groupName ?? first.packageName
     const actionLabel = [...new Set(grouped.map((issue) => issue.actionLabel))].join(zh ? '；' : '; ')
     return {
