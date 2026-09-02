@@ -1,8 +1,7 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js
-index c90afda..aa2c530 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-deliverables/lib/client.js
-@@ -204,7 +204,7 @@ window.__ModuleLoader__.load({
+@@ -208,7 +208,7 @@
  		*/
  		function producedFileMentions(paths, openFile, label) {
  			return { resolve(value) {
@@ -11,10 +10,11 @@ index c90afda..aa2c530 100644
  				if (path === void 0) return void 0;
  				return {
  					open: () => {
-@@ -215,6 +215,21 @@ window.__ModuleLoader__.load({
+@@ -218,6 +218,21 @@
+ 					title: path
  				};
  			} };
- 		}
++		}
 +		/**
 +		* Resolve Codex-style local path references that were not produced by a tool
 +		* in the current turn. Keep bare identifiers inert: without a slash, an
@@ -29,11 +29,10 @@ index c90afda..aa2c530 100644
 +			if (/[\\/]/.test(path) || /[\\/]$/.test(path)) return path;
 +			if (/^[^\\/]+\.[A-Za-z0-9][A-Za-z0-9._-]{0,15}$/.test(path)) return path;
 +			return void 0;
-+		}
+ 		}
  		/** The single produced path whose basename is exactly `value`, else undefined. */
  		function onlyPathWithBasename(paths, value) {
- 			const matches = paths.filter((path) => basename(path) === value);
-@@ -454,8 +469,7 @@ window.__ModuleLoader__.load({
+@@ -381,8 +396,7 @@
  			const t = ctx.locale.bind(NS);
  			ctx.provide("chatFileMentions", { forClosing(owner) {
  				const paths = selectProducedFiles(owner);
