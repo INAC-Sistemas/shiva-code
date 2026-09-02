@@ -722,10 +722,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.
  								},
  								children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutline16, { size: 14 }), t("add")]
  							}), (0, react_jsx_runtime.jsxs)("button", {
-@@ -2241,7 +2605,7 @@
- 		}
- 		//#endregion
- 		//#region \0dsh-css:/Users/alex/Documents/Code/AI/deepseek-harness/packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.module.css.mjs
+@@ -2244,4 +2608,4 @@
 -		const css$1 = "._2CJT8a_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}._2CJT8a_editor{margin-top:24px}@media (width<=560px){._2CJT8a_editor{margin-top:20px}}";
 +		const css$1 = "._2CJT8a_description{color:var(--dsw-alias-label-secondary);margin:0;font-size:14px;line-height:24px}._2CJT8a_selectionLabel{color:var(--dsw-alias-label-primary);margin:20px 0 10px;font-size:13px;font-weight:500}._2CJT8a_providerList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}._2CJT8a_providerButton{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;flex-direction:column;align-items:flex-start;min-height:58px;padding:10px 12px;display:flex;cursor:pointer;text-align:left}._2CJT8a_providerButton:hover{background:var(--dsw-alias-interactive-bg-hover)}._2CJT8a_providerButtonSelected{border-color:var(--dsw-alias-brand-primary);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary)}._2CJT8a_providerName{font-size:14px;font-weight:500;line-height:20px}._2CJT8a_providerKind{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}._2CJT8a_editor{margin-top:24px}@media (width<=560px){._2CJT8a_editor{margin-top:18px}}";
  		const tagId$1 = "@deepseek-ai/dsh-client-ui-settings-models/DeepSeekOnboardingDialog.module.css";
