@@ -9,10 +9,22 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import z from '@deepseek-ai/schemastery'
 import * as mcpClient from '@deepseek-ai/dsh-mcp-client'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 export const inject = ['webServer', 'sessions']
+
+/**
+ * `pythonCandidates` overrides the probed interpreter commands, best first;
+ * empty (the default) means {@link platformInterpreters}. Each entry is a
+ * command with optional arguments, split on spaces (`py -3.12`, `python3.12`,
+ * or an absolute path). The version range is not configurable: the pinned
+ * wheel's native dependencies decide it.
+ */
+export const Config = z.object({
+  pythonCandidates: z.array(String).default([]),
+})
 
 const OV_VERSION = '0.4.17'
 const OV_PORT = 1933
@@ -21,9 +33,68 @@ const OV_DIR = join(homedir(), '.dsh', 'openviking')
 const VENV_DIR = join(OV_DIR, 'venv')
 const OV_CONF = join(homedir(), '.openviking', 'ov.conf')
 const SETTINGS_FILE = join(OV_DIR, 'settings.json')
-const SERVER_EXE = join(VENV_DIR, 'Scripts', 'openviking-server.exe')
 
-const PINNED_INTERPRETERS = ['py -3.11', 'py -3.12', 'py -3.10', 'python']
+/** Inclusive minor-version range for the venv interpreter; 3.13+ may miss native deps for `openviking==OV_VERSION`. */
+const PY_MIN_MINOR = 10
+const PY_MAX_MINOR = 12
+
+/**
+ * Interpreter commands probed on install, best first. Windows resolves
+ * versions through the `py` launcher; POSIX exposes versioned `python3.X`
+ * names. The trailing generic name is a fallback that the version check still
+ * gates, so an out-of-range default interpreter is rejected, not used.
+ */
+const PLATFORM_INTERPRETERS = {
+  win32: ['py -3.12', 'py -3.11', 'py -3.10', 'python'],
+  darwin: ['python3.12', 'python3.11', 'python3.10', 'python3'],
+  linux: ['python3.12', 'python3.11', 'python3.10', 'python3'],
+}
+
+/**
+ * Interpreter candidates for a platform.
+ * @param platform - the platform to resolve for; defaults to the process platform.
+ * @returns the probe order, falling back to the POSIX names on an unlisted platform.
+ */
+export function platformInterpreters(platform = process.platform) {
+  return PLATFORM_INTERPRETERS[platform] ?? PLATFORM_INTERPRETERS.linux
+}
+
+/**
+ * Path to an executable inside the venv. The layout belongs to CPython's
+ * `venv` module, not to us: `Scripts\<name>.exe` on Windows, `bin/<name>`
+ * everywhere else.
+ * @param name - the executable's base name, without extension.
+ * @param platform - the platform to resolve for; defaults to the process platform.
+ * @returns the absolute path under {@link VENV_DIR}.
+ */
+export function venvExe(name, platform = process.platform) {
+  return platform === 'win32'
+    ? join(VENV_DIR, 'Scripts', `${name}.exe`)
+    : join(VENV_DIR, 'bin', name)
+}
+
+/**
+ * Read the version out of `<interpreter> --version` output.
+ * @param out - the command's combined stdout/stderr.
+ * @returns `[major, minor]`, or `null` when the output carries no version.
+ */
+export function parsePythonVersion(out) {
+  const m = /Python\s+(\d+)\.(\d+)/i.exec(String(out ?? ''))
+  return m ? [Number(m[1]), Number(m[2])] : null
+}
+
+/**
+ * Whether an interpreter version can build the venv.
+ * @param version - the `[major, minor]` pair from {@link parsePythonVersion}, or `null`.
+ * @returns `true` only for 3.PY_MIN_MINOR through 3.PY_MAX_MINOR inclusive.
+ */
+export function supportedPython(version) {
+  if (!version) return false
+  const [major, minor] = version
+  return major === 3 && minor >= PY_MIN_MINOR && minor <= PY_MAX_MINOR
+}
+
+const SERVER_EXE = venvExe('openviking-server')
 
 function log(msg) {
   console.log(`[dsh-openviking] ${msg}`)
@@ -52,25 +123,35 @@ function run(cmd, args, opts = {}) {
   })
 }
 
-async function installFlow() {
+async function installFlow(candidates) {
   job.phase = 'installing'
+  const range = `3.${PY_MIN_MINOR}–3.${PY_MAX_MINOR}`
   try {
     await mkdir(OV_DIR, { recursive: true })
-    // 1. pick a Python 3.10-3.12 interpreter (3.13+ may miss native deps).
-    jobLog('interpreter', 'procurando Python 3.10–3.12…')
+    // 1. pick an interpreter in range. `--version` exiting 0 is not enough:
+    // the generic fallback names resolve to whatever the machine defaults to,
+    // which is routinely outside the range the pinned wheel needs.
+    jobLog('interpreter', `procurando Python ${range}…`)
     let picked = null
-    for (const candidate of PINNED_INTERPRETERS) {
+    for (const candidate of candidates) {
       const [cmd, ...args] = candidate.split(' ')
       const r = await run(cmd, [...args, '--version'])
-      jobLog('interpreter', `${candidate} → ${r.out.trim() || `exit ${r.code}`}`)
-      if (r.code === 0) { picked = { cmd, args }; break }
+      const version = r.code === 0 ? parsePythonVersion(r.out) : null
+      if (!supportedPython(version)) {
+        const why = version ? `${version[0]}.${version[1]} fora da faixa ${range}` : (r.out.trim() || `exit ${r.code}`)
+        jobLog('interpreter', `${candidate} → ${why}`)
+        continue
+      }
+      jobLog('interpreter', `${candidate} → ${version[0]}.${version[1]} aceito`)
+      picked = { cmd, args }
+      break
     }
-    if (!picked) throw new Error('Python 3.10–3.12 não encontrado nesta máquina')
+    if (!picked) throw new Error(`Python ${range} não encontrado nesta máquina`)
     // 2. venv dedicado.
     jobLog('venv', `criando venv em ${VENV_DIR}…`)
     const venv = await run(picked.cmd, [...picked.args, '-m', 'venv', VENV_DIR])
     if (venv.code !== 0) throw new Error(`venv falhou: ${venv.out.slice(-400)}`)
-    const pip = join(VENV_DIR, 'Scripts', 'pip.exe')
+    const pip = venvExe('pip')
     // 3. instalar o wheel pinado (baixa ~26 MB + dependências).
     jobLog('install', `pip install openviking==${OV_VERSION} (baixa ~26 MB, aguarde)…`)
     const ins = await run(pip, ['install', '--disable-pip-version-check', `openviking==${OV_VERSION}`])
@@ -88,10 +169,10 @@ async function installFlow() {
   }
 }
 
-function spawnInstaller() {
+function spawnInstaller(candidates) {
   if (job.phase === 'installing') return
   job.phase = 'installing'
-  void installFlow()
+  void installFlow(candidates)
 }
 
 // ── settings → ov.conf ────────────────────────────────────────────────────
@@ -393,12 +474,15 @@ function sameOrigin(req) {
   try { return new URL(origin).host === String(req.headers.host ?? '') } catch { return false }
 }
 
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
   const webServer = ctx.get('webServer')
   if (!webServer || typeof webServer.register !== 'function') {
     log('webServer indisponível — plugin inativo')
     return
   }
+
+  // Configured order wins whole; otherwise this platform's probe order.
+  const interpreters = config.pythonCandidates?.length ? config.pythonCandidates : platformInterpreters()
 
   const handler = async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local')
@@ -418,7 +502,7 @@ export function apply(ctx) {
         }
         case 'install': {
           if (job.phase === 'installing') return json(res, 409, { ok: false, error: 'install already running' })
-          spawnInstaller()
+          spawnInstaller(interpreters)
           return json(res, 200, { ok: true })
         }
         case 'models': {
@@ -498,7 +582,7 @@ export function apply(ctx) {
     }
     if (!existsSync(SERVER_EXE)) {
       log('primeira execução: instalando OpenViking automaticamente…')
-      spawnInstaller()
+      spawnInstaller(interpreters)
       return
     }
     if (!(await isConfigured())) {

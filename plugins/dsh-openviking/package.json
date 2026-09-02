@@ -26,7 +26,8 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-mcp-client": "workspace:^"
+    "@deepseek-ai/dsh-mcp-client": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
     "dsh-better-sidebar": ">=0.12.0",

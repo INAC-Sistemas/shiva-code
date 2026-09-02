@@ -14,10 +14,24 @@ Native [OpenViking](https://github.com/volcengine/OpenViking) for dsh: the agent
 
 `POST /openviking/api/<method>` (same-origin): `status`, `install`, `configure` `{embedding, vlm?}`, `restart`, `reset` (kills our child, removes the venv).
 
+## Config
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `pythonCandidates` | `[]` | Interpreter commands probed on install, best first. Empty means this platform's order: `py -3.12 \| -3.11 \| -3.10 \| python` on Windows, `python3.12 \| python3.11 \| python3.10 \| python3` on macOS and Linux. An entry may carry arguments (`py -3.11`) or be an absolute path. |
+
+Set it only when the interpreter lives somewhere the probe order misses; the 3.10–3.12 range itself is not configurable, because the pinned wheel's native dependencies decide it.
+
+## Platform
+
+Interpreter names and venv layout are resolved from `process.platform` at runtime, so one source serves all three platforms: the venv's executables are `Scripts\<name>.exe` on Windows and `bin/<name>` on macOS and Linux — CPython's `venv` layout, not ours.
+
+Version selection reads the version out of `<interpreter> --version` and enforces 3.10–3.12; an interpreter that runs but reports an out-of-range version is skipped with the reason in the tab log, never used. This matters for the generic fallback names, which resolve to whatever the machine defaults to — routinely 3.9 on macOS and 3.13+ on a current Linux.
+
 ## Notes
 
 - The server refuses to start without an embedding section (it would fall back to a local embedder that is not shipped); the wizard is therefore the gate — no half-broken state is ever shown.
-- Python 3.10–3.12 is preferred for the venv (3.13+ may miss native deps); the installer picks the best available interpreter and reports every step in the tab log.
+- Python 3.10–3.12 is required for the venv (3.13+ may miss native deps); the installer picks the first candidate in range and reports every step in the tab log. It must already be on the machine — bundling a runtime is a separate, unsolved packaging question.
 - Privacy: data stays on the machine; embedding/VLM text is sent to whichever provider is configured (Ollama keeps everything local).
 - OpenViking is AGPL-3.0 — running it as a separate process keeps the harness clean; revisit before commercial bundling.
 - The upstream clone used as reference lives outside the repo (`../dsh-references/openviking`) and is not committed.
