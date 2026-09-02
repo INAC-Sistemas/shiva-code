@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 describe('Feishu release notes pipeline', () => {
   const pythonTestTimeoutMs = 15_000
@@ -9,6 +10,47 @@ describe('Feishu release notes pipeline', () => {
   const workflowPath = join(process.cwd(), '.github', 'workflows', 'release.yml')
 
   const pythonEnv = { ...process.env, PYTHONIOENCODING: 'utf-8' }
+
+  const fixtureRepos: string[] = []
+
+  afterEach(() => {
+    for (const dir of fixtureRepos.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  interface FixtureCommit {
+    message: string
+    date: string
+    tag?: string
+  }
+
+  /** A throwaway git repo with a known commit + tag graph, HEAD left untagged. */
+  function buildTagFixtureRepo(commits: FixtureCommit[]): string {
+    const dir = mkdtempSync(join(tmpdir(), 'feishu-tags-'))
+    fixtureRepos.push(dir)
+    const git = (args: string[], extraEnv: Record<string, string> = {}): void => {
+      execFileSync('git', args, {
+        cwd: dir,
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: '/dev/null',
+          GIT_CONFIG_SYSTEM: '/dev/null',
+          GIT_AUTHOR_NAME: 'Test',
+          GIT_AUTHOR_EMAIL: 'test@example.com',
+          GIT_COMMITTER_NAME: 'Test',
+          GIT_COMMITTER_EMAIL: 'test@example.com',
+          ...extraEnv
+        }
+      })
+    }
+    git(['init', '-q', '-b', 'main'])
+    for (const { message, date, tag } of commits) {
+      writeFileSync(join(dir, 'file.txt'), `${message}\n`)
+      git(['add', '.'])
+      git(['commit', '-q', '-m', message], { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date })
+      if (tag) git(['tag', tag])
+    }
+    return dir
+  }
 
   it(
     'builds a prompt with valid metadata and evidence blocks',
@@ -152,49 +194,33 @@ Description here.
   )
 
   it('differentiates previous tag resolution between prerelease and official release', () => {
-    // For official release v0.7.1, previous stable tag is v0.7.0
-    const officialPrompt = execFileSync(
-      'python3',
-      [scriptPath, 'build-prompt', '--tag', 'v0.7.1'],
-      {
+    // A self-contained tag graph so this does not depend on which branch or
+    // which fetched tags the checkout happens to carry:
+    //   c0 (v0.7.0) -> c1 (v0.7.1) -> c2 (0.7.2, prerelease-style) -> c3 (HEAD, untagged)
+    const repo = buildTagFixtureRepo([
+      { message: 'base', date: '2026-01-01T00:00:00', tag: 'v0.7.0' },
+      { message: 'stable work', date: '2026-02-01T00:00:00', tag: 'v0.7.1' },
+      { message: 'prerelease cut', date: '2026-03-01T00:00:00', tag: '0.7.2' },
+      { message: 'unreleased work', date: '2026-04-01T00:00:00' }
+    ])
+    const buildPrompt = (args: string[]): string =>
+      execFileSync('python3', [scriptPath, 'build-prompt', ...args], {
         encoding: 'utf8',
-        env: pythonEnv
-      }
-    )
-    expect(officialPrompt).toContain('Previous stable tag: v0.7.0')
+        env: pythonEnv,
+        cwd: repo
+      })
 
-    // For prerelease 0.7.2, previous tag is v0.7.1
-    const prereleasePrompt = execFileSync(
-      'python3',
-      [scriptPath, 'build-prompt', '--tag', '0.7.2', '--prerelease'],
-      {
-        encoding: 'utf8',
-        env: pythonEnv
-      }
-    )
-    expect(prereleasePrompt).toContain('Previous tag: v0.7.1')
+    // Official v0.7.1: previous stable tag is v0.7.0.
+    expect(buildPrompt(['--tag', 'v0.7.1'])).toContain('Previous stable tag: v0.7.0')
 
-    // For a future simulated prerelease like 0.8.0-rc.1 on current HEAD, previous tag is 0.7.2
-    const futurePrereleasePrompt = execFileSync(
-      'python3',
-      [scriptPath, 'build-prompt', '--tag', '0.8.0-rc.1', '--prerelease'],
-      {
-        encoding: 'utf8',
-        env: pythonEnv
-      }
-    )
-    expect(futurePrereleasePrompt).toContain('Previous tag: 0.7.2')
+    // Prerelease 0.7.2: nearest tag of any kind before it is v0.7.1.
+    expect(buildPrompt(['--tag', '0.7.2', '--prerelease'])).toContain('Previous tag: v0.7.1')
 
-    // For a future official release v0.8.0 on current HEAD, previous stable tag must skip 0.7.2 and find v0.7.1
-    const futureOfficialPrompt = execFileSync(
-      'python3',
-      [scriptPath, 'build-prompt', '--tag', 'v0.8.0'],
-      {
-        encoding: 'utf8',
-        env: pythonEnv
-      }
-    )
-    expect(futureOfficialPrompt).toContain('Previous stable tag: v0.7.1')
+    // Future prerelease 0.8.0-rc.1 on HEAD: nearest tag is the 0.7.2 prerelease.
+    expect(buildPrompt(['--tag', '0.8.0-rc.1', '--prerelease'])).toContain('Previous tag: 0.7.2')
+
+    // Future official v0.8.0 on HEAD: must skip the 0.7.2 prerelease and pick v0.7.1.
+    expect(buildPrompt(['--tag', 'v0.8.0'])).toContain('Previous stable tag: v0.7.1')
   })
 
   it('integrates Feishu release notification into GitHub Actions workflow', () => {
