@@ -23,6 +23,10 @@ import {
   removeProfilePluginWithDsh
 } from './runtime/profile-plugin-command'
 import {
+  ensureMinimumMarketBaseline,
+  VERIFIED_MARKET_BASELINE
+} from './state/profile-repair'
+import {
   clearProfileInstallMarker,
   markProfileInstallComplete
 } from './state/profile-install-marker'
@@ -231,8 +235,8 @@ function schedulePluginRecoverySessionReset(): void {
   pluginRecoveryResetTimer = setTimeout(() => {
     pluginRecoveryResetTimer = undefined
     pluginRecoveryRemovedPlugins = []
-  // Keep the chain alive long enough for slower Windows machines to finish
-  // rendering a frontend plugin failure after the backend reports ready.
+    // Keep the chain alive long enough for slower Windows machines to finish
+    // rendering a frontend plugin failure after the backend reports ready.
   }, 60_000)
 }
 
@@ -705,8 +709,7 @@ function scheduleNormalProfileBootConfirmation(): void {
     })().catch((error) => {
       profileBootConfirmationComplete = false
       runtime.note(
-        `[desktop] normal Profile boot confirmation failed: ${
-          error instanceof Error ? error.message : String(error)
+        `[desktop] normal Profile boot confirmation failed: ${error instanceof Error ? error.message : String(error)
         }`
       )
     })
@@ -731,7 +734,7 @@ function markHarnessRendered(): void {
     if (next.level !== gpuFallbackState.level) {
       runtime?.note(
         `[desktop] GPU fallback lowered to ${next.level} after ` +
-          `${gpuFallbackState.stableLaunches + 1} stable launches`
+        `${gpuFallbackState.stableLaunches + 1} stable launches`
       )
     }
     gpuFallbackState = next
@@ -776,7 +779,7 @@ function respondToGpuFallbackSignal(
   }
   runtime?.note(
     `[desktop] ${details} fallback=${gpuFallbackState.level} ` +
-      `failures=${gpuFallbackState.failures}`
+    `failures=${gpuFallbackState.failures}`
   )
   const plan = planGpuFallbackResponse({
     state: gpuFallbackState,
@@ -895,10 +898,10 @@ function createWindow(): BrowserWindow {
     frame: process.platform !== 'darwin',
     ...(isWindows
       ? {
-          titleBarStyle: 'hidden' as const,
-          titleBarOverlay: windowsTitleBarOverlay(nativeTheme.shouldUseDarkColors),
-          autoHideMenuBar: true
-        }
+        titleBarStyle: 'hidden' as const,
+        titleBarOverlay: windowsTitleBarOverlay(nativeTheme.shouldUseDarkColors),
+        autoHideMenuBar: true
+      }
       : {}),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#141416' : '#f8f8f6',
     webPreferences: {
@@ -965,8 +968,7 @@ async function openHarness(
       runtime.snapshot().authToken
     ).catch((error) => {
       runtime.note(
-        `[desktop] stale Harness cookie cleanup failed: ${
-          error instanceof Error ? error.message : String(error)
+        `[desktop] stale Harness cookie cleanup failed: ${error instanceof Error ? error.message : String(error)
         }`
       )
       return 0
@@ -1157,6 +1159,11 @@ function launchHarness(): Promise<void> {
         // Profile writes, but before any operation invokes pnpm.
         const pinned = await ensureStoreDirPinned(dshHome)
         if (pinned) runtime.note(`[desktop] pinned the profile's pnpm store: ${pinned}`)
+        const upgradedMarket = await ensureMinimumMarketBaseline(dshHome)
+        if (upgradedMarket) {
+          runtime.note(`[desktop] upgraded dshmarket baseline to ^${VERIFIED_MARKET_BASELINE} in profile manifest`)
+          await clearProfileInstallMarker(dshHome)
+        }
       },
       enforcePendingPluginRemovals: () =>
         enforcePendingPluginRemovals(dshHome, (line) => runtime.note(line)),
@@ -1605,9 +1612,9 @@ async function showPluginRecovery(options?: {
         if (pendingPlugins.length > 0) {
           notice = isChinese
             ? `已禁用以下插件，但 Profile 依赖清理失败，尚未恢复正常模式：` +
-              `${pendingPlugins.join('、')}。请重试卸载或进入安全模式。`
+            `${pendingPlugins.join('、')}。请重试卸载或进入安全模式。`
             : `These plugins are disabled, but profile dependency cleanup failed, so normal mode ` +
-              `was not restarted: ${pendingPlugins.join(', ')}. Retry removal or enter Safe Mode.`
+            `was not restarted: ${pendingPlugins.join(', ')}. Retry removal or enter Safe Mode.`
           continue
         }
         if (failedPlugins.length === detection.plugins.length) {
@@ -1633,10 +1640,10 @@ async function showPluginRecovery(options?: {
           )
           notice = isChinese
             ? `插件已移除，但 Profile 仍有 ${blockingIssues.length} 项兼容问题。` +
-              '为避免再次进入空白界面，请进入安全模式继续处理。'
+            '为避免再次进入空白界面，请进入安全模式继续处理。'
             : `The plugin was removed, but ${blockingIssues.length} blocking profile compatibility ` +
-              `issue${blockingIssues.length === 1 ? ' remains' : 's remain'}. ` +
-              'Continue in Safe Mode to avoid another blank normal window.'
+            `issue${blockingIssues.length === 1 ? ' remains' : 's remain'}. ` +
+            'Continue in Safe Mode to avoid another blank normal window.'
           continue
         }
         await launchHarness()
@@ -1703,41 +1710,41 @@ async function waitForSafeModeAction(options: {
   const window = safeModeManagerWindow && !safeModeManagerWindow.isDestroyed()
     ? safeModeManagerWindow
     : (() => {
-        const bounds = parent.getBounds()
-        const manager = new BrowserWindow({
-          parent,
-          modal: true,
-          x: bounds.x,
-          y: bounds.y,
-          width: bounds.width,
-          height: bounds.height,
-          minWidth: 640,
-          minHeight: 520,
-          show: false,
-          frame: false,
-          transparent: true,
-          backgroundColor: '#00000000',
-          resizable: false,
-          movable: false,
-          minimizable: false,
-          maximizable: false,
-          fullscreenable: false,
-          webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-            preload: join(import.meta.dirname, '../preload/index.cjs'),
-            sandbox: true,
-            webSecurity: true
-          }
-        })
-        secureWindow(manager)
-        manager.on('closed', () => {
-          if (safeModeManagerWindow === manager) safeModeManagerWindow = undefined
-          resolveSafeModeAction({ type: 'agent' })
-        })
-        safeModeManagerWindow = manager
-        return manager
-      })()
+      const bounds = parent.getBounds()
+      const manager = new BrowserWindow({
+        parent,
+        modal: true,
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        minWidth: 640,
+        minHeight: 520,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          preload: join(import.meta.dirname, '../preload/index.cjs'),
+          sandbox: true,
+          webSecurity: true
+        }
+      })
+      secureWindow(manager)
+      manager.on('closed', () => {
+        if (safeModeManagerWindow === manager) safeModeManagerWindow = undefined
+        resolveSafeModeAction({ type: 'agent' })
+      })
+      safeModeManagerWindow = manager
+      return manager
+    })()
   const model = buildSafeModeViewModel({
     locale: harnessLocale(),
     plugins: options.plugins,
@@ -2181,12 +2188,12 @@ async function showSafeModeManager(initial?: {
           ? `已禁用 ${pendingPlugins.length} 个插件；Profile 依赖清理待重试。插件不会在后续启动中重新启用。`
           : `Disabled ${pendingPlugins.length} plugin${pendingPlugins.length === 1 ? '' : 's'}; profile dependency cleanup is pending. They will stay disabled on later launches.`
         : failed === 0
-        ? isChinese
-          ? `处理完成：修复 ${repaired} 项，卸载 ${selectedPlugins.length} 个插件。`
-          : `Completed: ${repaired} repair${repaired === 1 ? '' : 's'} and ${selectedPlugins.length} plugin removal${selectedPlugins.length === 1 ? '' : 's'}.`
-        : isChinese
-          ? `已修复 ${repaired} 项、卸载 ${selectedPlugins.length - failedPlugins.length} 个插件；${failed} 项未能处理。`
-          : `Completed ${repaired} repairs and removed ${selectedPlugins.length - failedPlugins.length} plugins; ${failed} items could not be processed.`
+          ? isChinese
+            ? `处理完成：修复 ${repaired} 项，卸载 ${selectedPlugins.length} 个插件。`
+            : `Completed: ${repaired} repair${repaired === 1 ? '' : 's'} and ${selectedPlugins.length} plugin removal${selectedPlugins.length === 1 ? '' : 's'}.`
+          : isChinese
+            ? `已修复 ${repaired} 项、卸载 ${selectedPlugins.length - failedPlugins.length} 个插件；${failed} 项未能处理。`
+            : `Completed ${repaired} repairs and removed ${selectedPlugins.length - failedPlugins.length} plugins; ${failed} items could not be processed.`
       noticeTone = failed === 0 && pendingPlugins.length === 0 ? 'success' : 'error'
     }
   } finally {
@@ -2206,31 +2213,31 @@ function installMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin'
       ? [
-          {
-            label: app.name,
-            submenu: [
-              {
-                label: isChinese ? '关于 DSH Desktop' : 'About DSH Desktop',
-                click: () => {
-                  if (mainWindow && !mainWindow.isDestroyed()) {
-                    void showAbout(mainWindow).catch(showUnexpectedError)
-                  }
+        {
+          label: app.name,
+          submenu: [
+            {
+              label: isChinese ? '关于 DSH Desktop' : 'About DSH Desktop',
+              click: () => {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  void showAbout(mainWindow).catch(showUnexpectedError)
                 }
-              },
-              {
-                label: checkForUpdatesLabel,
-                accelerator: 'CmdOrCtrl+U',
-                click: () => void checkForUpdates(true).catch(showUnexpectedError)
-              },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const }
-            ]
-          }
-        ]
+              }
+            },
+            {
+              label: checkForUpdatesLabel,
+              accelerator: 'CmdOrCtrl+U',
+              click: () => void checkForUpdates(true).catch(showUnexpectedError)
+            },
+            { type: 'separator' as const },
+            { role: 'hide' as const },
+            { role: 'hideOthers' as const },
+            { role: 'unhide' as const },
+            { type: 'separator' as const },
+            { role: 'quit' as const }
+          ]
+        }
+      ]
       : []),
     {
       label: 'Harness',
@@ -2257,13 +2264,13 @@ function installMenu(): void {
         ...(process.platform === 'darwin'
           ? []
           : [
-              { type: 'separator' as const },
-              {
-                label: checkForUpdatesLabel,
-                accelerator: 'CmdOrCtrl+U',
-                click: () => void checkForUpdates(true).catch(showUnexpectedError)
-              }
-            ]),
+            { type: 'separator' as const },
+            {
+              label: checkForUpdatesLabel,
+              accelerator: 'CmdOrCtrl+U',
+              click: () => void checkForUpdates(true).catch(showUnexpectedError)
+            }
+          ]),
         ...(process.platform === 'darwin'
           ? []
           : [{ type: 'separator' as const }, { role: 'quit' as const }])
@@ -2387,8 +2394,8 @@ async function bootstrap(): Promise<void> {
     launchProcess: (executablePath, args, options) =>
       process.platform === 'darwin'
         ? launchDisclaimedUtilityProcess(utilityProcess, args, options, {
-            disclaim: !developmentBuild
-          })
+          disclaim: !developmentBuild
+        })
         : spawn(executablePath, args, options),
     onChanged: (snapshot) => {
       if (snapshot.phase === 'ready' && snapshot.url) {

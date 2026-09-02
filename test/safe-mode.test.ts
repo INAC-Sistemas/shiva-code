@@ -113,7 +113,7 @@ describe('Safe Mode', () => {
       { name: 'plugin-a', actionLabel: '卸载插件', incompatible: false, suspected: false }
     ])
     expect(model.issueGroups[0]).toMatchObject({
-      name: 'Profile 核心依赖',
+      name: 'Profile',
       kindLabel: 'Profile',
       issueIds: ['core-version-mismatch:@deepseek-ai/example']
     })
