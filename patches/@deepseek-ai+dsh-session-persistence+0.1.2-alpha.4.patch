@@ -1,21 +1,20 @@
 diff --git a/node_modules/@deepseek-ai/dsh-session-persistence/lib/index.js b/node_modules/@deepseek-ai/dsh-session-persistence/lib/index.js
-index d0b44a2..e202704 100644
 --- a/node_modules/@deepseek-ai/dsh-session-persistence/lib/index.js
 +++ b/node_modules/@deepseek-ai/dsh-session-persistence/lib/index.js
-@@ -46,6 +46,11 @@ var SessionPreparations = class {
+@@ -45,6 +45,11 @@
+ 	*/
  	has(id) {
  		return this.entries.has(id);
- 	}
++	}
 +	/** Reject deletion while an unpublished Session exclusively owns the id. */
 +	assertDeletable(id) {
 +		const phase = this.entries.get(id)?.phase;
 +		if (phase === "committing" || phase === "reserved") throw new Error(`cannot delete session "${id}" while its persisted preparation is reserved`);
-+	}
+ 	}
  	/**
  	* Observe one prepared source, sharing an in-flight read for the same id.
- 	* @param id - session identity.
-@@ -909,6 +914,22 @@ var PersistenceCoordinator = class {
- 		state.cursor += events.length;
+@@ -940,6 +945,22 @@
+ 		state.cursor = nextCursor;
  		this.preparations.invalidate(id);
  	}
 +	/** Permanently remove a cold Session identity after all owned writes retire. */
@@ -37,7 +36,7 @@ index d0b44a2..e202704 100644
  	/**
  	* Prepare and reserve the exact unpublished Session used by resume.
  	* Revision retries converge once the durable log remains unchanged for one
-@@ -1510,6 +1531,10 @@ var SessionPersistence = class extends Service {
+@@ -1566,6 +1587,10 @@
  	ensureMaterialized(_session) {
  		return Promise.reject(/* @__PURE__ */ new Error("this session persistence backend cannot materialize an empty session"));
  	}
@@ -49,19 +48,18 @@ index d0b44a2..e202704 100644
  	* Prepare the exact unpublished Session used by resume. Implementations may
  	* reuse object graphs retained by an earlier {@link inspect} after confirming
 diff --git a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/coordinator.d.ts b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/coordinator.d.ts
-index 9c66847..b94370d 100644
 --- a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/coordinator.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/coordinator.d.ts
-@@ -148,6 +148,8 @@ export interface PersistenceBackend<TornMarker = unknown> {
-      * empty session). Returns once the batch is durable.
+@@ -148,6 +148,8 @@
+      * inherited prefix length.
       */
-     appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void>;
+     appendBatch(storage: SessionStorageMetadata, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void>;
 +    /** Permanently remove one stored Session artifact. */
 +    deleteStored?(id: SessionId): Promise<boolean>;
      /**
       * Make a crash repair durable: truncate the torn tail (iff
       * `tornMarker !== undefined`) and append `closers` (iff any). NOT required to
-@@ -227,6 +229,8 @@ export declare class PersistenceCoordinator<TornMarker = unknown> {
+@@ -229,6 +231,8 @@
       */
      append(id: SessionId, events: readonly SessionEvent[]): Promise<void>;
      private appendCore;
@@ -71,10 +69,9 @@ index 9c66847..b94370d 100644
       * Prepare and reserve the exact unpublished Session used by resume.
       * Revision retries converge once the durable log remains unchanged for one
 diff --git a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/index.d.ts b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/index.d.ts
-index 73c8541..f72e58a 100644
 --- a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/index.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/index.d.ts
-@@ -129,6 +129,8 @@ export declare abstract class SessionPersistence extends Service {
+@@ -143,6 +143,8 @@
       * @param events - the contiguous batch to persist, in seq order.
       */
      abstract append(id: SessionId, events: readonly SessionEvent[]): Promise<void>;
@@ -84,10 +81,9 @@ index 73c8541..f72e58a 100644
       * Prepare the exact unpublished Session used by resume. Implementations may
       * reuse object graphs retained by an earlier {@link inspect} after confirming
 diff --git a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/preparations.d.ts b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/preparations.d.ts
-index ebb788e..27ed0ab 100644
 --- a/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/preparations.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-session-persistence/lib/types/preparations.d.ts
-@@ -39,6 +39,8 @@ export declare class SessionPreparations<Source extends PreparedSource, CommitSt
+@@ -39,6 +39,8 @@
       * @returns whether an entry exists for the identity.
       */
      has(id: SessionId): boolean;

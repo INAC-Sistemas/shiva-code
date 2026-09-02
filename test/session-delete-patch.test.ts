@@ -12,13 +12,13 @@ const projectRoot = path.resolve(import.meta.dirname, '..')
 const patchedPackages = [
   {
     name: 'dsh-session-persistence',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/index.js',
     markers: ['assertDeletable(id)', 'async delete(id)', 'await this.backend.deleteStored(id)']
   },
   {
     name: 'dsh-session-persistence-jsonl',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/index.js',
     markers: ['delete(id) {', 'return this.coordinator.delete(id)', 'async deleteStored(id)']
   },
