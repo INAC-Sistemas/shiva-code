@@ -48,7 +48,7 @@ const patchedPackages = [
   },
   {
     name: 'dsh-client-ui-workspace',
-    version: '0.1.2-alpha.3',
+    version: '0.1.2-alpha.4',
     file: 'lib/client.js',
     markers: ['delete.session', 'danger: true', 'Workspace files are kept', 'await sessions.delete(sessionId)']
   }
