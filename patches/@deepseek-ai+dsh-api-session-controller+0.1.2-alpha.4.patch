@@ -406,6 +406,14 @@ diff --git a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/agen
 index cd2b002..b766708 100644
 --- a/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/agent.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-api-session-controller/lib/types/agent.d.ts
+@@ -1,6 +1,6 @@
+ /** Agent activation, composition, and model-selection policy owned by API Session. */
+ import type { Context } from '@deepseek-ai/cordis';
+-import type { Agent, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef } from '@deepseek-ai/dsh-agent';
++import type { Agent, AgentHandle, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef } from '@deepseek-ai/dsh-agent';
+ import type { Session, SessionId } from '@deepseek-ai/dsh-session';
+ import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence';
+ import { type SessionObservation } from '@deepseek-ai/dsh-session-query';
 @@ -67,6 +67,7 @@ export declare class ApiSessionAgentController {
      private readonly ctx;
      private readonly resumes;
