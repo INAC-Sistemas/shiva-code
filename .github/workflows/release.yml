@@ -850,12 +850,13 @@ jobs:
           tag = os.environ["PRERELEASE_TAG"]
           src = pathlib.Path("release-assets")
 
-          api.upload_folder(
-              repo_id=repo_id,
-              folder_path=str(src),
-              path_in_repo=f"releases/prerelease/{tag}",
-              commit_message=f"Pre-release {tag}",
-              token=token,
-          )
-          print(f"✅ Uploaded {src} -> {repo_id}/releases/prerelease/{tag}")
+          for path_in_repo in (f"releases/prerelease/{tag}", "releases/prerelease/latest"):
+              api.upload_folder(
+                  repo_id=repo_id,
+                  folder_path=str(src),
+                  path_in_repo=path_in_repo,
+                  commit_message=f"Pre-release {tag}",
+                  token=token,
+              )
+              print(f"✅ Uploaded {src} -> {repo_id}/{path_in_repo}")
           PY
