@@ -27,6 +27,17 @@ let versionPickerLoading = false
 let versionPickerError = false
 let versionPickerList: AvailableRelease[] | null = null
 let installingVersion: string | null = null
+
+const ABOUT_ROOT_ID = 'dsh-desktop-about-root'
+interface AboutInfo {
+  desktopVersion: string
+  harnessVersion: string
+  locale: 'en' | 'zh'
+}
+let aboutHost: HTMLElement | null = null
+let aboutShadow: ShadowRoot | null = null
+let aboutOpen = false
+let aboutInfo: AboutInfo | null = null
 let receivedStatusEvent = false
 let phoneConnected = false
 let sidebarSettingsArea: HTMLElement | undefined
@@ -303,6 +314,7 @@ function initializeUi(): void {
     mountWindowsTitlebarLayout({ document, ipcRenderer })
   }
   mount()
+  mountAbout()
   mountMobileButton()
   checkBootFailureInDom()
   domObserver.observe(document.documentElement, {
@@ -496,10 +508,6 @@ function render(): void {
     body.appendChild(actions)
   }
 
-  if (['up-to-date', 'available', 'error'].includes(status.phase)) {
-    appendVersionPicker(body, status)
-  }
-
   row.appendChild(body)
 
   const close = button('×', 'close')
@@ -551,101 +559,10 @@ function comparePreloadVersions(a: string, b: string): number {
   return ap < bp ? -1 : 1
 }
 
-/**
- * The "install another version" affordance. Lets the user pick a newer release
- * to jump to, or roll back to an older one (with a confirmation that spells out
- * the downgrade). Installing runs the normal download + restart flow.
- */
-function appendVersionPicker(body: HTMLElement, status: UpdateStatus): void {
-  const toggle = button(
-    locale === 'zh' ? '安装其它版本…' : 'Install another version…',
-    'secondary'
-  )
-  toggle.addEventListener('click', () => {
-    versionPickerOpen = !versionPickerOpen
-    if (versionPickerOpen && versionPickerList === null && !versionPickerLoading) {
-      loadVersionList()
-    }
-    render()
-  })
-  body.appendChild(toggle)
-
-  if (!versionPickerOpen) return
-
-  const panel = element('div', 'body')
-
-  if (versionPickerLoading) {
-    const line = element('p', 'description')
-    line.textContent = locale === 'zh' ? '正在获取版本列表…' : 'Loading versions…'
-    panel.appendChild(line)
-  } else if (versionPickerError) {
-    const line = element('p', 'description')
-    line.textContent =
-      locale === 'zh' ? '暂时无法获取版本列表' : 'Unable to load version list'
-    panel.appendChild(line)
-  } else if (versionPickerList && versionPickerList.length > 0) {
-    const current = status.currentVersion
-    const newer = versionPickerList.filter(
-      (release) => comparePreloadVersions(release.version, current) > 0
-    )
-    const older = versionPickerList.filter(
-      (release) => comparePreloadVersions(release.version, current) < 0
-    )
-    appendVersionGroup(panel, locale === 'zh' ? '较新版本' : 'Newer versions', newer, current)
-    appendVersionGroup(panel, locale === 'zh' ? '历史版本（回退）' : 'Roll back', older, current)
-  } else {
-    const line = element('p', 'description')
-    line.textContent = locale === 'zh' ? '没有可选的其它版本' : 'No other versions available'
-    panel.appendChild(line)
-  }
-
-  body.appendChild(panel)
-}
-
-function appendVersionGroup(
-  panel: HTMLElement,
-  heading: string,
-  releases: AvailableRelease[],
-  currentVersion: string
-): void {
-  if (releases.length === 0) return
-  const label = element('p', 'title')
-  label.textContent = heading
-  panel.appendChild(label)
-
-  const actions = element('div', 'actions')
-  for (const release of releases.slice(0, 12)) {
-    const pick = button(`v${release.version}`, 'secondary')
-    pick.disabled = installingVersion !== null
-    pick.addEventListener('click', () => selectVersion(release, currentVersion))
-    actions.appendChild(pick)
-  }
-  panel.appendChild(actions)
-}
-
-function selectVersion(release: AvailableRelease, currentVersion: string): void {
-  const downgrade = comparePreloadVersions(release.version, currentVersion) < 0
-  const message = downgrade
-    ? locale === 'zh'
-      ? `将降级到 ${release.version}（当前 ${currentVersion}）。降级不会迁移新版本写入的数据，可能导致配置不兼容。确定继续？`
-      : `This downgrades to ${release.version} (currently ${currentVersion}). A downgrade does not migrate data written by newer versions and may be config-incompatible. Continue?`
-    : locale === 'zh'
-      ? `将安装 ${release.version}，确定继续？`
-      : `Install ${release.version}?`
-  if (!window.confirm(message)) return
-
-  installingVersion = release.version
-  versionPickerOpen = false
-  render()
-  void ipcRenderer.invoke('updates:install-version', release.version).catch((error: unknown) => {
-    console.error('[updater] unable to install version', error)
-  })
-}
-
-function loadVersionList(): void {
+function loadVersionList(onDone?: () => void): void {
   versionPickerLoading = true
   versionPickerError = false
-  render()
+  if (onDone) onDone()
   void ipcRenderer
     .invoke('updates:list-versions')
     .then((releases: AvailableRelease[]) => {
@@ -658,8 +575,199 @@ function loadVersionList(): void {
     })
     .finally(() => {
       versionPickerLoading = false
-      render()
+      if (onDone) onDone()
     })
+}
+
+function mountAbout(): void {
+  if (document.getElementById(ABOUT_ROOT_ID)) return
+
+  aboutHost = document.createElement('div')
+  aboutHost.id = ABOUT_ROOT_ID
+  aboutHost.style.cssText = [
+    'position:fixed',
+    'inset:0',
+    'z-index:2147483647',
+    'display:none',
+    'align-items:center',
+    'justify-content:center',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'
+  ].join(';')
+
+  aboutShadow = aboutHost.attachShadow({ mode: 'closed' })
+  const style = document.createElement('style')
+  style.textContent = aboutStyles
+  aboutShadow.appendChild(style)
+  document.documentElement.appendChild(aboutHost)
+  renderAbout()
+}
+
+function renderAbout(): void {
+  if (!aboutHost || !aboutShadow) return
+  if (!aboutOpen || !aboutInfo) {
+    aboutHost.style.display = 'none'
+    const existing = aboutShadow.querySelector('.about-overlay')
+    if (existing) existing.remove()
+    return
+  }
+
+  aboutHost.style.display = 'flex'
+  const info = aboutInfo
+  const zh = info.locale === 'zh'
+  const currentVer = info.desktopVersion
+
+  let overlay = aboutShadow.querySelector('.about-overlay') as HTMLElement | null
+  if (!overlay) {
+    overlay = element('div', 'about-overlay')
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        aboutOpen = false
+        versionPickerOpen = false
+        renderAbout()
+      }
+    })
+    aboutShadow.appendChild(overlay)
+  }
+
+  const card = element('div', 'about-card')
+  card.setAttribute('role', 'dialog')
+  card.setAttribute('aria-modal', 'true')
+  card.setAttribute('aria-label', zh ? '关于 DSH Desktop' : 'About DSH Desktop')
+
+  // Header row with Title and Close '×'
+  const header = element('div', 'about-header')
+  const title = element('h2', 'about-title')
+  title.textContent = zh ? '关于 DSH Desktop' : 'About DSH Desktop'
+  header.appendChild(title)
+
+  const closeBtn = button('×', 'about-close')
+  closeBtn.setAttribute('aria-label', zh ? '关闭' : 'Close')
+  closeBtn.addEventListener('click', () => {
+    aboutOpen = false
+    versionPickerOpen = false
+    renderAbout()
+  })
+  header.appendChild(closeBtn)
+  card.appendChild(header)
+
+  // Body content matching user's screenshot
+  const body = element('div', 'about-body')
+  const line1 = element('p', 'about-line')
+  line1.textContent = `${zh ? 'DSH Desktop 版本： ' : 'DSH Desktop version: '}${info.desktopVersion}`
+  body.appendChild(line1)
+
+  const line2 = element('p', 'about-line')
+  line2.textContent = `${zh ? '内置 Harness 版本： ' : 'Bundled Harness version: '}${info.harnessVersion}`
+  body.appendChild(line2)
+
+  const hint = element('p', 'about-hint')
+  hint.textContent = zh ? 'Harness 随 DSH Desktop 更新。' : 'Harness is updated with DSH Desktop.'
+  body.appendChild(hint)
+  card.appendChild(body)
+
+  // Actions row: [ 选择版本 ] [ 检查更新 ] side-by-side
+  const actions = element('div', 'about-actions')
+
+  const selectVersionBtn = button(
+    zh ? '选择版本' : 'Select version',
+    versionPickerOpen ? 'btn-action active' : 'btn-action'
+  )
+  selectVersionBtn.addEventListener('click', () => {
+    versionPickerOpen = !versionPickerOpen
+    if (versionPickerOpen && versionPickerList === null && !versionPickerLoading) {
+      loadVersionList(renderAbout)
+    }
+    renderAbout()
+  })
+  actions.appendChild(selectVersionBtn)
+
+  const checkUpdatesBtn = button(zh ? '检查更新' : 'Check for updates', 'btn-action')
+  checkUpdatesBtn.addEventListener('click', () => {
+    aboutOpen = false
+    versionPickerOpen = false
+    renderAbout()
+    void ipcRenderer.invoke('updates:check').catch((error: unknown) => {
+      console.error('[updater] unable to check updates', error)
+    })
+  })
+  actions.appendChild(checkUpdatesBtn)
+  card.appendChild(actions)
+
+  // Version picker inside About dialog
+  if (versionPickerOpen) {
+    const pickerContainer = element('div', 'version-picker-container')
+    if (versionPickerLoading) {
+      const line = element('p', 'version-status-text')
+      line.textContent = zh ? '正在获取版本列表…' : 'Loading versions…'
+      pickerContainer.appendChild(line)
+    } else if (versionPickerError) {
+      const line = element('p', 'version-status-text')
+      line.textContent = zh ? '暂时无法获取版本列表' : 'Unable to load version list'
+      pickerContainer.appendChild(line)
+    } else if (versionPickerList && versionPickerList.length > 0) {
+      const newer = versionPickerList.filter(
+        (release) => comparePreloadVersions(release.version, currentVer) > 0
+      )
+      const older = versionPickerList.filter(
+        (release) => comparePreloadVersions(release.version, currentVer) < 0
+      )
+      appendAboutVersionGroup(pickerContainer, zh ? '较新版本' : 'Newer versions', newer, currentVer, zh)
+      appendAboutVersionGroup(pickerContainer, zh ? '历史版本（回退）' : 'Roll back', older, currentVer, zh)
+    } else {
+      const line = element('p', 'version-status-text')
+      line.textContent = zh ? '没有可选的其它版本' : 'No other versions available'
+      pickerContainer.appendChild(line)
+    }
+    card.appendChild(pickerContainer)
+  }
+
+  overlay.replaceChildren(card)
+}
+
+function appendAboutVersionGroup(
+  container: HTMLElement,
+  heading: string,
+  releases: AvailableRelease[],
+  currentVersion: string,
+  zh: boolean
+): void {
+  if (releases.length === 0) return
+  const group = element('div', 'version-group')
+  const label = element('p', 'version-group-title')
+  label.textContent = heading
+  group.appendChild(label)
+
+  const buttonsRow = element('div', 'version-buttons')
+  for (const release of releases.slice(0, 12)) {
+    const pick = button(`v${release.version}`, 'version-tag-btn')
+    pick.disabled = installingVersion !== null
+    pick.addEventListener('click', () => {
+      selectVersionFromAbout(release, currentVersion, zh)
+    })
+    buttonsRow.appendChild(pick)
+  }
+  group.appendChild(buttonsRow)
+  container.appendChild(group)
+}
+
+function selectVersionFromAbout(release: AvailableRelease, currentVersion: string, zh: boolean): void {
+  const downgrade = comparePreloadVersions(release.version, currentVersion) < 0
+  const message = downgrade
+    ? zh
+      ? `将降级到 ${release.version}（当前 ${currentVersion}）。降级不会迁移新版本写入的数据，可能导致配置不兼容。确定继续？`
+      : `This downgrades to ${release.version} (currently ${currentVersion}). A downgrade does not migrate data written by newer versions and may be config-incompatible. Continue?`
+    : zh
+      ? `将安装 ${release.version}，确定继续？`
+      : `Install ${release.version}?`
+  if (!window.confirm(message)) return
+
+  installingVersion = release.version
+  aboutOpen = false
+  versionPickerOpen = false
+  renderAbout()
+  void ipcRenderer.invoke('updates:install-version', release.version).catch((error: unknown) => {
+    console.error('[updater] unable to install version', error)
+  })
 }
 
 function dismissCurrent(): void {
@@ -835,9 +943,200 @@ const mobileButtonStyles = `
   #${MOBILE_BUTTON_ID}.is-connected > span { opacity:1; }
 `
 
+const aboutStyles = `
+  :host { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  .about-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .about-card {
+    position: relative;
+    width: min(380px, calc(100vw - 40px));
+    max-height: min(560px, calc(100vh - 60px));
+    overflow-y: auto;
+    color: var(--dsw-alias-label-primary, #202124);
+    background: var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.98));
+    border: 1px solid var(--dsw-alias-border-l2, rgba(32, 33, 36, 0.14));
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .about-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .about-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 20px;
+    letter-spacing: -0.1px;
+    color: var(--dsw-alias-label-primary, #202124);
+  }
+  .about-close {
+    width: 26px;
+    height: 26px;
+    margin: -4px -6px 0 0;
+    flex: none;
+    color: var(--dsw-alias-label-secondary, #73777f);
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    font-size: 20px;
+    line-height: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .about-close:hover {
+    color: var(--dsw-alias-label-primary, #202124);
+    background: rgba(127, 127, 127, 0.12);
+  }
+  .about-body {
+    font-size: 13px;
+    line-height: 21px;
+    margin-bottom: 18px;
+    color: var(--dsw-alias-label-primary, #202124);
+  }
+  .about-line {
+    margin: 2px 0;
+  }
+  .about-hint {
+    margin: 12px 0 0;
+    color: var(--dsw-alias-label-secondary, #666b73);
+    font-size: 12.5px;
+  }
+  .about-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  button {
+    appearance: none;
+    border: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:focus-visible { outline: 2px solid #4d6bfe; outline-offset: 2px; }
+  button:disabled { cursor: default; opacity: 0.55; }
+  .btn-action {
+    flex: 1;
+    min-height: 34px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--dsw-alias-label-primary, #202124);
+    background: var(--dsw-alias-interactive-bg, rgba(32, 33, 36, 0.06));
+    border: 1px solid var(--dsw-alias-border-l2, rgba(32, 33, 36, 0.14));
+  }
+  .btn-action:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(32, 33, 36, 0.1));
+  }
+  .btn-action.active {
+    background: rgba(77, 107, 254, 0.12);
+    border-color: rgba(77, 107, 254, 0.35);
+    color: #4d6bfe;
+  }
+  .version-picker-container {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--dsw-alias-border-l2, rgba(32, 33, 36, 0.1));
+  }
+  .version-group {
+    margin-top: 10px;
+  }
+  .version-group-title {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dsw-alias-label-secondary, #666b73);
+  }
+  .version-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .version-tag-btn {
+    min-height: 28px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dsw-alias-label-secondary, #666b73);
+    background: transparent;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(32, 33, 36, 0.16));
+  }
+  .version-tag-btn:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary, #202124);
+    background: var(--dsw-alias-interactive-bg-hover, rgba(32, 33, 36, 0.08));
+  }
+  .version-status-text {
+    margin: 6px 0;
+    font-size: 12px;
+    color: var(--dsw-alias-label-secondary, #666b73);
+  }
+  @media (prefers-color-scheme: dark) {
+    .about-card {
+      color: var(--dsw-alias-label-primary, #f3f4f6);
+      background: var(--dsw-alias-bg-layer-1, rgba(31, 32, 35, 0.98));
+      border-color: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.14));
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+    .about-title, .about-body { color: var(--dsw-alias-label-primary, #f3f4f6); }
+    .about-hint, .version-status-text, .about-close { color: var(--dsw-alias-label-secondary, #a9adb5); }
+    .about-close:hover { color: var(--dsw-alias-label-primary, #f3f4f6); background: rgba(255, 255, 255, 0.1); }
+    .btn-action {
+      color: var(--dsw-alias-label-primary, #f3f4f6);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.18));
+    }
+    .btn-action:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); }
+    .btn-action.active {
+      background: rgba(77, 107, 254, 0.2);
+      border-color: rgba(77, 107, 254, 0.45);
+      color: #7b93ff;
+    }
+    .version-picker-container { border-top-color: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.14)); }
+    .version-group-title, .version-tag-btn { color: var(--dsw-alias-label-secondary, #a9adb5); }
+    .version-tag-btn { border-color: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.18)); }
+    .version-tag-btn:hover:not(:disabled) {
+      color: var(--dsw-alias-label-primary, #f3f4f6);
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+`
+
 ipcRenderer.on('updates:status-changed', (_event, status: UpdateStatus) => {
   receivedStatusEvent = true
   applyStatus(status)
+})
+
+ipcRenderer.on('desktop:show-about', (_event, info: AboutInfo) => {
+  aboutInfo = info
+  aboutOpen = true
+  versionPickerOpen = false
+  renderAbout()
+})
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && aboutOpen) {
+    aboutOpen = false
+    versionPickerOpen = false
+    renderAbout()
+  }
 })
 
 void ipcRenderer

@@ -1354,6 +1354,18 @@ function registerHarnessHandlers(): void {
     }
     return { ok: true }
   })
+
+  ipcMain.removeHandler('desktop:about-info')
+  ipcMain.handle('desktop:about-info', (event) => {
+    assertTrustedMainWindowEvent(event)
+    const locale = harnessLocale()
+    return {
+      desktopVersion: app.getVersion(),
+      harnessVersion:
+        bundledHarnessVersion(app.getAppPath()) ?? (locale === 'zh' ? '未知' : 'Unknown'),
+      locale
+    }
+  })
 }
 
 function assertTrustedDesktopMenuEvent(event: IpcMainInvokeEvent): void {
@@ -1407,6 +1419,21 @@ function assertTrustedSafeModeManagerEvent(event: IpcMainInvokeEvent): void {
 
 async function showAbout(window: BrowserWindow): Promise<void> {
   const locale = harnessLocale()
+  const info = {
+    desktopVersion: app.getVersion(),
+    harnessVersion:
+      bundledHarnessVersion(app.getAppPath()) ?? (locale === 'zh' ? '未知' : 'Unknown'),
+    locale
+  }
+  if (window && !window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
+    try {
+      window.webContents.send('desktop:show-about', info)
+      return
+    } catch {
+      // Fall through to native dialog fallback
+    }
+  }
+
   const checkForUpdatesLabel = locale === 'zh' ? '检查更新' : 'Check for Updates'
   const result = await dialog.showMessageBox(window, {
     type: 'info',
