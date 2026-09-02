@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { UpdateStatus } from '../shared/contracts'
+import type { AvailableRelease, UpdateStatus } from '../shared/contracts'
 import {
   isUpdateDismissed,
   shouldShowUpdate,
@@ -22,6 +22,11 @@ let dismissedVersion: string | null = null
 let dismissedTransientPhase: UpdateStatus['phase'] | null = null
 let installing = false
 let accepting = false
+let versionPickerOpen = false
+let versionPickerLoading = false
+let versionPickerError = false
+let versionPickerList: AvailableRelease[] | null = null
+let installingVersion: string | null = null
 let receivedStatusEvent = false
 let phoneConnected = false
 let sidebarSettingsArea: HTMLElement | undefined
@@ -31,9 +36,26 @@ let domSyncScheduled = false
 let bootScanSettled = false
 let bootFailureTriggered = false
 let bootFailureTimer: number | undefined
+let rendererHealthReportInFlight = false
+let rendererHealthHeartbeat: number | undefined
 const pendingBootFailureMessages: string[] = []
 
 const BOOT_FAILURE_SETTLE_MS = 400
+const RENDERER_HEALTH_HEARTBEAT_MS = 5_000
+
+function reportRendererHealthy(): void {
+  if (rendererHealthReportInFlight || !sidebarRoot?.isConnected) return
+  rendererHealthReportInFlight = true
+  void ipcRenderer.invoke('harness:renderer-healthy').catch(() => undefined).finally(() => {
+    rendererHealthReportInFlight = false
+  })
+}
+
+function startRendererHealthHeartbeat(): void {
+  reportRendererHealthy()
+  if (rendererHealthHeartbeat !== undefined) return
+  rendererHealthHeartbeat = window.setInterval(reportRendererHealthy, RENDERER_HEALTH_HEARTBEAT_MS)
+}
 
 function currentBootFailureText(): string | undefined {
   // Harness removes this root once the application starts. Scoping the check
@@ -101,8 +123,10 @@ function runDomSync(): void {
   // sidebar appearing is that moment. Past it the selector can never match
   // again, so scanning on would walk the conversation tree every frame for a
   // guaranteed miss. The window error handlers stay as the real backstop.
-  if (sidebarRoot?.isConnected) bootScanSettled = true
-  else checkBootFailureInDom()
+  if (sidebarRoot?.isConnected) {
+    bootScanSettled = true
+    startRendererHealthHeartbeat()
+  } else checkBootFailureInDom()
 }
 
 contextBridge.exposeInMainWorld('dshDesktopDirectoryPicker', {
@@ -305,6 +329,11 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 })
 
+window.addEventListener('pagehide', () => {
+  if (rendererHealthHeartbeat !== undefined) window.clearInterval(rendererHealthHeartbeat)
+  rendererHealthHeartbeat = undefined
+})
+
 contextBridge.exposeInMainWorld(
   'dshDesktop',
   Object.freeze({
@@ -326,7 +355,7 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     action: (
       action: string,
-      selection: { plugins?: string[]; issues?: string[] }
+      selection: { plugins?: string[]; issues?: string[]; removalId?: string }
     ): Promise<{ ok: boolean }> => ipcRenderer.invoke('safe-mode:action', action, selection)
   })
 )
@@ -362,6 +391,9 @@ function applyStatus(status: UpdateStatus): void {
     host.dataset.updateManual = String(status.manual)
   }
   if (status.phase === 'error') installing = false
+  if (['error', 'downloading', 'downloaded', 'up-to-date'].includes(status.phase)) {
+    installingVersion = null
+  }
   if (status.phase !== 'available') accepting = false
   render()
 }
@@ -464,6 +496,10 @@ function render(): void {
     body.appendChild(actions)
   }
 
+  if (['up-to-date', 'available', 'error'].includes(status.phase)) {
+    appendVersionPicker(body, status)
+  }
+
   row.appendChild(body)
 
   const close = button('×', 'close')
@@ -492,6 +528,138 @@ function skipButton(status: UpdateStatus): HTMLButtonElement {
     })
   })
   return skip
+}
+
+/** Compare two dotted versions; prerelease sorts below its release. Mirrors
+ * `version-catalog.compareVersions` — a small duplication across the
+ * main/preload boundary, kept local so the preload bundle stays standalone. */
+function comparePreloadVersions(a: string, b: string): number {
+  const parse = (value: string): [number[], string] => {
+    const [core = '', ...pre] = value.trim().split('-')
+    const nums = core.split('.').map((part) => Number.parseInt(part, 10) || 0)
+    while (nums.length < 3) nums.push(0)
+    return [nums, pre.join('-')]
+  }
+  const [an, ap] = parse(a)
+  const [bn, bp] = parse(b)
+  for (let i = 0; i < 3; i += 1) {
+    if ((an[i] ?? 0) !== (bn[i] ?? 0)) return (an[i] ?? 0) - (bn[i] ?? 0)
+  }
+  if (ap === bp) return 0
+  if (!ap) return 1
+  if (!bp) return -1
+  return ap < bp ? -1 : 1
+}
+
+/**
+ * The "install another version" affordance. Lets the user pick a newer release
+ * to jump to, or roll back to an older one (with a confirmation that spells out
+ * the downgrade). Installing runs the normal download + restart flow.
+ */
+function appendVersionPicker(body: HTMLElement, status: UpdateStatus): void {
+  const toggle = button(
+    locale === 'zh' ? '安装其它版本…' : 'Install another version…',
+    'secondary'
+  )
+  toggle.addEventListener('click', () => {
+    versionPickerOpen = !versionPickerOpen
+    if (versionPickerOpen && versionPickerList === null && !versionPickerLoading) {
+      loadVersionList()
+    }
+    render()
+  })
+  body.appendChild(toggle)
+
+  if (!versionPickerOpen) return
+
+  const panel = element('div', 'body')
+
+  if (versionPickerLoading) {
+    const line = element('p', 'description')
+    line.textContent = locale === 'zh' ? '正在获取版本列表…' : 'Loading versions…'
+    panel.appendChild(line)
+  } else if (versionPickerError) {
+    const line = element('p', 'description')
+    line.textContent =
+      locale === 'zh' ? '暂时无法获取版本列表' : 'Unable to load version list'
+    panel.appendChild(line)
+  } else if (versionPickerList && versionPickerList.length > 0) {
+    const current = status.currentVersion
+    const newer = versionPickerList.filter(
+      (release) => comparePreloadVersions(release.version, current) > 0
+    )
+    const older = versionPickerList.filter(
+      (release) => comparePreloadVersions(release.version, current) < 0
+    )
+    appendVersionGroup(panel, locale === 'zh' ? '较新版本' : 'Newer versions', newer, current)
+    appendVersionGroup(panel, locale === 'zh' ? '历史版本（回退）' : 'Roll back', older, current)
+  } else {
+    const line = element('p', 'description')
+    line.textContent = locale === 'zh' ? '没有可选的其它版本' : 'No other versions available'
+    panel.appendChild(line)
+  }
+
+  body.appendChild(panel)
+}
+
+function appendVersionGroup(
+  panel: HTMLElement,
+  heading: string,
+  releases: AvailableRelease[],
+  currentVersion: string
+): void {
+  if (releases.length === 0) return
+  const label = element('p', 'title')
+  label.textContent = heading
+  panel.appendChild(label)
+
+  const actions = element('div', 'actions')
+  for (const release of releases.slice(0, 12)) {
+    const pick = button(`v${release.version}`, 'secondary')
+    pick.disabled = installingVersion !== null
+    pick.addEventListener('click', () => selectVersion(release, currentVersion))
+    actions.appendChild(pick)
+  }
+  panel.appendChild(actions)
+}
+
+function selectVersion(release: AvailableRelease, currentVersion: string): void {
+  const downgrade = comparePreloadVersions(release.version, currentVersion) < 0
+  const message = downgrade
+    ? locale === 'zh'
+      ? `将降级到 ${release.version}（当前 ${currentVersion}）。降级不会迁移新版本写入的数据，可能导致配置不兼容。确定继续？`
+      : `This downgrades to ${release.version} (currently ${currentVersion}). A downgrade does not migrate data written by newer versions and may be config-incompatible. Continue?`
+    : locale === 'zh'
+      ? `将安装 ${release.version}，确定继续？`
+      : `Install ${release.version}?`
+  if (!window.confirm(message)) return
+
+  installingVersion = release.version
+  versionPickerOpen = false
+  render()
+  void ipcRenderer.invoke('updates:install-version', release.version).catch((error: unknown) => {
+    console.error('[updater] unable to install version', error)
+  })
+}
+
+function loadVersionList(): void {
+  versionPickerLoading = true
+  versionPickerError = false
+  render()
+  void ipcRenderer
+    .invoke('updates:list-versions')
+    .then((releases: AvailableRelease[]) => {
+      versionPickerList = Array.isArray(releases) ? releases : []
+    })
+    .catch((error: unknown) => {
+      console.error('[updater] unable to list versions', error)
+      versionPickerError = true
+      versionPickerList = null
+    })
+    .finally(() => {
+      versionPickerLoading = false
+      render()
+    })
 }
 
 function dismissCurrent(): void {

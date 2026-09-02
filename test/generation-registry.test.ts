@@ -65,19 +65,37 @@ describe('the plugin generation registry', () => {
     expect(await listGenerations(home)).toEqual([])
   })
 
-  it('resolves only the generations that desired points at and that exist on disk', async () => {
+  it('resolves desired generations and fails closed when the pointer references a missing id', async () => {
     const home = await freshHome()
     await ensureRegistryDirectories(home)
     await fakeGeneration(home, 'sidebar+0.17.1+aaaa', 'dsh-better-sidebar', '0.17.1')
     await fakeGeneration(home, 'pet+1.0.0+bbbb', '@linxin666/dsh-pet', '1.0.0')
 
-    await writeDesired(home, ['sidebar+0.17.1+aaaa', 'missing+9.9.9+cccc'])
+    await writeDesired(home, ['sidebar+0.17.1+aaaa'])
     const enabled = await resolveEnabledGenerations(home)
 
     expect([...enabled.keys()]).toEqual(['dsh-better-sidebar'])
     expect(enabled.get('dsh-better-sidebar')?.version).toBe('0.17.1')
     // pet exists on disk but is not desired, so resolution cannot see it.
     expect(enabled.has('@linxin666/dsh-pet')).toBe(false)
+
+    await writeDesired(home, ['sidebar+0.17.1+aaaa', 'missing+9.9.9+cccc'])
+    await expect(resolveEnabledGenerations(home)).rejects.toThrow(
+      /Desired generation is missing or unreadable: missing\+9\.9\.9\+cccc/u
+    )
+    await expect(sweepRegistry(home)).rejects.toThrow(
+      /Desired generation is missing or unreadable: missing\+9\.9\.9\+cccc/u
+    )
+    expect((await listGenerations(home)).map((generation) => generation.id).sort()).toEqual([
+      'pet+1.0.0+bbbb',
+      'sidebar+0.17.1+aaaa'
+    ])
+  })
+
+  it('rejects package names and versions that could escape or corrupt a generation path', () => {
+    expect(() => generationId('../outside', '1.0.0', 'lock')).toThrow(/safe npm package name/u)
+    expect(() => generationId('safe-plugin', '../1.0.0', 'lock')).toThrow(/safe for a generation id/u)
+    expect(() => generationId('safe-plugin', '..', 'lock')).toThrow(/safe for a generation id/u)
   })
 
   it('treats desired as the sole authority for generation retention', async () => {
@@ -112,6 +130,22 @@ describe('the plugin generation registry', () => {
     expect(removed).toContain('staging/abandoned-uuid')
     const survivors = (await listGenerations(home)).map((generation) => generation.id)
     expect(survivors).toEqual(['keep+1+x'])
+  })
+
+  it('fails closed without sweeping generations when desired.json is corrupt', async () => {
+    const home = await freshHome()
+    const layout = await ensureRegistryDirectories(home)
+    await fakeGeneration(home, 'keep+1+x', 'keep', '1')
+    await writeFile(layout.desiredPointer, '{not-json\n', 'utf8')
+
+    await expect(sweepRegistry(home)).rejects.toThrow(/Generation pointer is invalid JSON/u)
+    expect((await listGenerations(home)).map((generation) => generation.id)).toEqual(['keep+1+x'])
+
+    await writeFile(layout.desiredPointer, JSON.stringify(['keep+1+x', 42]), 'utf8')
+    await expect(readDesired(home)).rejects.toThrow(
+      /Generation pointer must be an array of generation ids/u
+    )
+    expect((await listGenerations(home)).map((generation) => generation.id)).toEqual(['keep+1+x'])
   })
 
   it('serialises operations across the cross-process lock', async () => {

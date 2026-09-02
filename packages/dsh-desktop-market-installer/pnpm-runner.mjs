@@ -11,6 +11,10 @@
  *
  *   EPERM: operation not permitted, rename '…\argparse_tmp_19856_4' -> '…\argparse'
  *
+ * Generation projection paths are removed from pnpm's manifest view before
+ * this recovery is considered, so only shared-tree packages can reach the
+ * replacement path below.
+ *
  * Two recoveries, in order of how little they disturb: retry once (a scanner's
  * handle is gone within a second), then move the blocked target aside and
  * retry (a rename of the directory itself succeeds where replacing its
@@ -22,7 +26,7 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync, watch } from 'node:fs'
-import { readdir, rename } from 'node:fs/promises'
+import { readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -86,6 +90,132 @@ export function sidelinePath(target, now = Date.now()) {
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+const PROJECTION_VERSION = 1
+const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/iu
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function writeJsonAtomically(path, value) {
+  const temporary = `${path}.${process.pid}.${Date.now()}.pnpm-projection.tmp`
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, undefined, 2)}\n`, 'utf8')
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * Keep generation-owned Profile entries outside pnpm's mutable dependency set.
+ *
+ * The persistent manifest exposes installed versions to dsh-market, but the
+ * package roots themselves are junctions owned by the cold-start projector.
+ * Letting pnpm see the same names gives two writers one node_modules path and
+ * makes pnpm attempt `<plugin>_tmp_* -> <plugin>` while Harness is live.
+ *
+ * The ownership marker survives the temporary manifest so a crash is safe:
+ * cold start can always derive the visible fields again from desired.json.
+ */
+export async function suspendGenerationProjectionForPnpm(profileDirectory) {
+  const manifestPath = join(profileDirectory, 'package.json')
+  let text
+  try {
+    text = await readFile(manifestPath, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { plugins: [], restore: async () => undefined }
+    throw error
+  }
+
+  let manifest
+  try {
+    manifest = JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Profile manifest is invalid before pnpm projection isolation: ${errorText(error)}`)
+  }
+  if (!isRecord(manifest)) {
+    throw new Error('Profile manifest root is invalid before pnpm projection isolation.')
+  }
+
+  const projection = manifest.dsh?.desktop?.generationProjection
+  const projectedPlugins = projection?.version === PROJECTION_VERSION && isRecord(projection.plugins)
+    ? Object.keys(projection.plugins).filter((name) => PACKAGE_NAME_PATTERN.test(name))
+    : []
+  if (projectedPlugins.length === 0) {
+    return { plugins: [], restore: async () => undefined }
+  }
+
+  const dependencies = manifest.dependencies === undefined ? {} : manifest.dependencies
+  const pnpm = manifest.pnpm === undefined ? {} : manifest.pnpm
+  const overrides = pnpm.overrides === undefined ? {} : pnpm.overrides
+  if (!isRecord(dependencies) || !isRecord(pnpm) || !isRecord(overrides)) {
+    throw new Error('Profile dependency fields are invalid before pnpm projection isolation.')
+  }
+
+  const owned = new Map(projectedPlugins.map((name) => [name, {
+    dependency: Object.hasOwn(dependencies, name)
+      ? { present: true, value: dependencies[name] }
+      : { present: false },
+    override: Object.hasOwn(overrides, name)
+      ? { present: true, value: overrides[name] }
+      : { present: false }
+  }]))
+  let changed = false
+  for (const name of projectedPlugins) {
+    if (Object.hasOwn(dependencies, name)) {
+      delete dependencies[name]
+      changed = true
+    }
+    if (Object.hasOwn(overrides, name)) {
+      delete overrides[name]
+      changed = true
+    }
+  }
+  if (!changed) return { plugins: [], restore: async () => undefined }
+
+  manifest.dependencies = dependencies
+  if (Object.keys(overrides).length > 0) pnpm.overrides = overrides
+  else delete pnpm.overrides
+  if (Object.keys(pnpm).length > 0) manifest.pnpm = pnpm
+  else delete manifest.pnpm
+  await writeJsonAtomically(manifestPath, manifest)
+
+  let restored = false
+  return {
+    plugins: projectedPlugins,
+    restore: async () => {
+      if (restored) return
+      const currentText = await readFile(manifestPath, 'utf8')
+      let current
+      try {
+        current = JSON.parse(currentText)
+      } catch (error) {
+        throw new Error(`Profile manifest is invalid after pnpm projection isolation: ${errorText(error)}`)
+      }
+      if (!isRecord(current)) {
+        throw new Error('Profile manifest root is invalid after pnpm projection isolation.')
+      }
+      const currentDependencies = isRecord(current.dependencies) ? current.dependencies : {}
+      const currentPnpm = isRecord(current.pnpm) ? current.pnpm : {}
+      const currentOverrides = isRecord(currentPnpm.overrides) ? currentPnpm.overrides : {}
+      for (const [name, state] of owned) {
+        if (state.dependency.present) currentDependencies[name] = state.dependency.value
+        else delete currentDependencies[name]
+        if (state.override.present) currentOverrides[name] = state.override.value
+        else delete currentOverrides[name]
+      }
+      current.dependencies = currentDependencies
+      if (Object.keys(currentOverrides).length > 0) currentPnpm.overrides = currentOverrides
+      else delete currentPnpm.overrides
+      if (Object.keys(currentPnpm).length > 0) current.pnpm = currentPnpm
+      else delete current.pnpm
+      await writeJsonAtomically(manifestPath, current)
+      restored = true
+    }
+  }
 }
 
 /**
@@ -253,7 +383,7 @@ function killTree(child) {
  * Run pnpm, recovering from a Windows locked rename. Returns the exit code of
  * the run that decided the outcome.
  */
-export async function runWithLockRecovery(executable, args, options = {}) {
+async function runWithLockRecoveryUnisolated(executable, args, options = {}) {
   const {
     spawnProcess = spawn,
     moveAside = rename,
@@ -337,6 +467,28 @@ export async function runWithLockRecovery(executable, args, options = {}) {
   const third = await run()
   report(third.code === 0 ? 'the install succeeded' : 'the install failed again')
   return third
+}
+
+/**
+ * Run pnpm with generation projection names removed from its manifest view,
+ * then restore the market-facing fields regardless of pnpm's outcome.
+ */
+export async function runWithLockRecovery(executable, args, options = {}) {
+  const profileDirectory = options.profileDirectory ?? process.cwd()
+  const isolateProjection = options.isolateProjection ?? suspendGenerationProjectionForPnpm
+  const report = options.report ?? ((message) => process.stderr.write(`${MARKER} ${message}\n`))
+  const isolation = await isolateProjection(profileDirectory)
+  if (isolation.plugins.length > 0) {
+    report(`excluded ${isolation.plugins.length} generation projection(s) from pnpm`)
+  }
+  try {
+    return await runWithLockRecoveryUnisolated(executable, args, options)
+  } finally {
+    await isolation.restore()
+    if (isolation.plugins.length > 0) {
+      report(`restored ${isolation.plugins.length} generation projection(s) after pnpm`)
+    }
+  }
 }
 
 /** The `<pkg>_tmp_<pid>_<n>` staging name pnpm leaves beside its destination. */
