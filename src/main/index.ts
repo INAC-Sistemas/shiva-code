@@ -22,7 +22,12 @@ import {
   installProfileDependenciesWithDsh,
   removeProfilePluginWithDsh
 } from './runtime/profile-plugin-command'
-import { clearDamagedPackageDirectories, hasProfile } from './state/profile-repair'
+import {
+  clearDamagedPackageDirectories,
+  ensureMinimumMarketBaseline,
+  hasProfile,
+  VERIFIED_MARKET_BASELINE
+} from './state/profile-repair'
 import {
   clearProfileInstallMarker,
   isProfileInstallComplete,
@@ -919,6 +924,11 @@ async function showSplash(): Promise<void> {
 async function repairProfilePackages(dshHome: string): Promise<void> {
   try {
     if (!hasProfile(dshHome)) return
+    const upgradedMarket = await ensureMinimumMarketBaseline(dshHome)
+    if (upgradedMarket) {
+      runtime.note(`[desktop] upgraded dshmarket baseline to ^${VERIFIED_MARKET_BASELINE} in profile manifest`)
+      await clearProfileInstallMarker(dshHome)
+    }
     const removed = await clearDamagedPackageDirectories(dshHome)
     // An install that never finished leaves nothing a damage scan can see: the
     // directories it did write are real packages, and the ones it never
