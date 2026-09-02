@@ -290,11 +290,12 @@ export async function resolveProfileRecoveryPlugins(
 
     // 1. Match an installed third-party root package directly, or prove that
     // a reported sub-package is owned by one configured third-party bundle.
+    const directlyConfiguredFailures = new Set<string>()
     const matchedPlugins = new Set<string>()
     for (const detected of detectedPlugins) {
       if (!PACKAGE_NAME_PATTERN.test(detected)) continue
       if (configuredSet.has(detected)) {
-        matchedPlugins.add(detected)
+        directlyConfiguredFailures.add(detected)
         continue
       }
       for (const configured of configuredPlugins) {
@@ -303,6 +304,7 @@ export async function resolveProfileRecoveryPlugins(
         }
       }
     }
+    if (directlyConfiguredFailures.size > 0) return [...directlyConfiguredFailures]
     if (matchedPlugins.size === 1) return [...matchedPlugins]
 
     // A frontend loader error often names an official leaf package that a

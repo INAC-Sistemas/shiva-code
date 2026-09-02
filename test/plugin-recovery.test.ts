@@ -476,6 +476,31 @@ describe('plugin-recovery', () => {
     expect(resolved).toEqual(['@linxin666/dsh-web-ui-all'])
   })
 
+  it('resolves multiple directly failing plugins concurrently for recovery', async () => {
+    const pkgPath = profilePackageJsonPath(testDir)
+    await writeFile(
+      pkgPath,
+      JSON.stringify({
+        dependencies: {
+          'plugin-alpha': '^1.0.0',
+          'plugin-beta': '^2.0.0',
+          'plugin-gamma': '^3.0.0'
+        },
+        dsh: {
+          profile: {
+            bundles: ['plugin-alpha', 'plugin-beta', 'plugin-gamma']
+          }
+        }
+      })
+    )
+
+    const resolved = await resolveProfileRecoveryPlugins(testDir, [
+      'plugin-alpha',
+      'plugin-beta'
+    ])
+    expect(resolved).toEqual(['plugin-alpha', 'plugin-beta'])
+  })
+
   it('resolves the specific plugin that declared a conflicting UI slot', async () => {
     const pkgPath = profilePackageJsonPath(testDir)
     const remoteDir = join(testDir, 'profiles', 'web', 'node_modules', 'dsh-full-remote')
