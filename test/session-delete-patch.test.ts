@@ -22,6 +22,7 @@ const patchedPackages = [
   },
   {
     name: 'dsh-workspace',
+    version: '0.1.2-alpha.4',
     file: 'lib/index.js',
     markers: ['forgetSession(sessionId)', 'archivedSessionIds: state.archivedSessionIds.filter']
   },
@@ -48,9 +49,9 @@ const patchedPackages = [
 ] as const
 
 describe('permanent session deletion dependency patches', () => {
-  it.each(patchedPackages)('$name patch is reproducible and installed', async ({ name, file, markers }) => {
+  it.each(patchedPackages)('$name patch is reproducible and installed', async ({ name, file, markers, version: entryVersion }) => {
     const [patch, installed] = await Promise.all([
-      readFile(path.join(projectRoot, 'patches', `@deepseek-ai+${name}+${version}.patch`), 'utf8'),
+      readFile(path.join(projectRoot, 'patches', `@deepseek-ai+${name}+${entryVersion ?? version}.patch`), 'utf8'),
       readFile(path.join(projectRoot, 'node_modules', '@deepseek-ai', name, file), 'utf8')
     ])
 
