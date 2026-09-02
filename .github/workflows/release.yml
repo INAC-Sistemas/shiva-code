@@ -850,12 +850,71 @@ jobs:
           tag = os.environ["PRERELEASE_TAG"]
           src = pathlib.Path("release-assets")
 
-          api.upload_folder(
-              repo_id=repo_id,
-              folder_path=str(src),
-              path_in_repo=f"releases/prerelease/{tag}",
-              commit_message=f"Pre-release {tag}",
-              token=token,
-          )
-          print(f"✅ Uploaded {src} -> {repo_id}/releases/prerelease/{tag}")
+          for path_in_repo in (f"releases/prerelease/{tag}", "releases/prerelease/latest"):
+              api.upload_folder(
+                  repo_id=repo_id,
+                  folder_path=str(src),
+                  path_in_repo=path_in_repo,
+                  commit_message=f"Pre-release {tag}",
+                  token=token,
+              )
+              print(f"✅ Uploaded {src} -> {repo_id}/{path_in_repo}")
           PY
+
+      - name: Build Feishu prerelease note prompt
+        env:
+          RELEASE_TAG: ${{ inputs.prerelease_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .github/release-artifacts
+          git fetch --force --tags
+          python3 .github/scripts/feishu_release_notes.py build-prompt \
+            --tag "$RELEASE_TAG" \
+            --prerelease \
+            --output .github/release-artifacts/feishu-release-prompt.txt
+
+      - name: Generate bilingual Feishu prerelease note
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
+          RELEASE_TAG: ${{ inputs.prerelease_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo "Generating prerelease notes via Copilot CLI..."
+            npm install -g @github/copilot@latest || true
+            prompt="$(cat .github/release-artifacts/feishu-release-prompt.txt)"
+            if copilot -p "$prompt" -s --model gpt-5.6-terra --no-ask-user > .github/release-artifacts/feishu-release-notes.md 2>/dev/null && \
+               python3 .github/scripts/feishu_release_notes.py validate --tag "$RELEASE_TAG" --prerelease --input .github/release-artifacts/feishu-release-notes.md; then
+              echo "✅ AI prerelease notes generated and validated."
+            else
+              echo "⚠️ AI generation fell back to deterministic release note generator."
+              python3 .github/scripts/feishu_release_notes.py generate-fallback \
+                --tag "$RELEASE_TAG" \
+                --prerelease \
+                --output .github/release-artifacts/feishu-release-notes.md
+            fi
+          else
+            echo "Generating prerelease notes from git evidence..."
+            python3 .github/scripts/feishu_release_notes.py generate-fallback \
+              --tag "$RELEASE_TAG" \
+              --prerelease \
+              --output .github/release-artifacts/feishu-release-notes.md
+          fi
+
+      - name: Send Feishu prerelease success notification
+        if: success()
+        env:
+          FEISHU_RELEASE_WEBHOOK: ${{ secrets.FEISHU_RELEASE_WEBHOOK }}
+          RELEASE_TAG: ${{ inputs.prerelease_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FEISHU_RELEASE_WEBHOOK:-}" ]; then
+            echo "⚠️ FEISHU_RELEASE_WEBHOOK secret not set; skipping notification."
+            exit 0
+          fi
+          python3 .github/scripts/feishu_release_notes.py send \
+            --tag "$RELEASE_TAG" \
+            --prerelease \
+            --notes .github/release-artifacts/feishu-release-notes.md \
+            --webhook "$FEISHU_RELEASE_WEBHOOK"
+
