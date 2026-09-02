@@ -74,10 +74,10 @@ describe('GitHub release contract', () => {
 
     for (const packageName of promotedClosurePackages) {
       expect(packageJson.dependencies[packageName]).toMatch(
-        /^file:packages\/harness-0\.1\.2-alpha\.3\/npm-dsh\/.+\.tgz$/
+        /^file:packages\/harness-0\.1\.2-alpha\.4\/npm-dsh\/.+\.tgz$/
       )
       expect(packageLock.packages[`node_modules/${packageName}`]?.resolved).toMatch(
-        /^file:packages\/harness-0\.1\.2-alpha\.3\/npm-dsh\//
+        /^file:packages\/harness-0\.1\.2-alpha\.4\/npm-dsh\//
       )
     }
 
@@ -100,6 +100,8 @@ describe('GitHub release contract', () => {
       '@deepseek-ai/dsh-agent-loop-testkit',
       '@deepseek-ai/dsh-client-test-runtime',
       '@deepseek-ai/dsh-client-web',
+      // upstream 0.1.2-alpha.4 moved this to packages/experimental/ (out of the
+      // dsh family tarball set); desktop continues not to bundle it.
       '@deepseek-ai/dsh-code-runtime-python',
       '@deepseek-ai/dsh-e2b',
       '@deepseek-ai/dsh-fs-e2b',
