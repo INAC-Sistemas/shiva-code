@@ -7,16 +7,18 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { describe, expect, it } from 'vitest'
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
-const version = '0.1.2-alpha.3'
 
+// version tracks the patch-filename suffix; bumped per-entry as Task 5b migrates each patch to alpha.4
 const patchedPackages = [
   {
     name: 'dsh-session-persistence',
+    version: '0.1.2-alpha.3',
     file: 'lib/index.js',
     markers: ['assertDeletable(id)', 'async delete(id)', 'await this.backend.deleteStored(id)']
   },
   {
     name: 'dsh-session-persistence-jsonl',
+    version: '0.1.2-alpha.3',
     file: 'lib/index.js',
     markers: ['delete(id) {', 'return this.coordinator.delete(id)', 'async deleteStored(id)']
   },
@@ -28,30 +30,34 @@ const patchedPackages = [
   },
   {
     name: 'dsh-api-session-controller',
+    version: '0.1.2-alpha.3',
     file: 'lib/index.js',
     markers: ['disposeOwned(sessionId)', 'await persistence.delete(request.sessionId)', 'workspaceRegistry.forgetSession(request.sessionId)']
   },
   {
     name: 'dsh-api-session-controller',
+    version: '0.1.2-alpha.3',
     file: 'lib/client.js',
     markers: ['SessionDeleteError', 'this.remote.session.delete({ sessionId })', 'if (this.watched === sessionId) this.watched = void 0']
   },
   {
     name: 'dsh-api-session-controller',
+    version: '0.1.2-alpha.3',
     file: 'lib/typert.host.js',
     markers: ["id: '@deepseek-ai/dsh-api-session-controller#session/delete'", "method: 'delete'"]
   },
   {
     name: 'dsh-client-ui-workspace',
+    version: '0.1.2-alpha.3',
     file: 'lib/client.js',
     markers: ['delete.session', 'danger: true', 'Workspace files are kept', 'await sessions.delete(sessionId)']
   }
 ] as const
 
 describe('permanent session deletion dependency patches', () => {
-  it.each(patchedPackages)('$name patch is reproducible and installed', async ({ name, file, markers, version: entryVersion }) => {
+  it.each(patchedPackages)('$name patch is reproducible and installed', async ({ name, file, markers, version }) => {
     const [patch, installed] = await Promise.all([
-      readFile(path.join(projectRoot, 'patches', `@deepseek-ai+${name}+${entryVersion ?? version}.patch`), 'utf8'),
+      readFile(path.join(projectRoot, 'patches', `@deepseek-ai+${name}+${version}.patch`), 'utf8'),
       readFile(path.join(projectRoot, 'node_modules', '@deepseek-ai', name, file), 'utf8')
     ])
 
