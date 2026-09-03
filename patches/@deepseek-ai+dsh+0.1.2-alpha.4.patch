@@ -20,7 +20,7 @@ index 28eaff9..2445f81 100644
 +    "dsh-i18n": "0.1.0",
 +    "dsh-login": "0.1.0",
 +    "dsh-mds": "0.1.0",
-+    "dsh-openviking": "0.1.0",
++    "dsh-openviking": "0.1.1",
 +    "dsh-profiles": "0.1.0",
 +    "dsh-prototype": "0.1.0",
 +    "dsh-skill-library": "0.1.0",
