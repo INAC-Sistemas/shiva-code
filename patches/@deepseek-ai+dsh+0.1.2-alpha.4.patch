@@ -2,7 +2,7 @@ diff --git a/node_modules/@deepseek-ai/dsh/package.json b/node_modules/@deepseek
 index 28eaff9..2445f81 100644
 --- a/node_modules/@deepseek-ai/dsh/package.json
 +++ b/node_modules/@deepseek-ai/dsh/package.json
-@@ -28,6 +28,25 @@
+@@ -28,6 +28,26 @@
    },
    "license": "MIT",
    "dependencies": {
@@ -20,6 +20,7 @@ index 28eaff9..2445f81 100644
 +    "dsh-i18n": "0.1.0",
 +    "dsh-login": "0.1.0",
 +    "dsh-mds": "0.1.0",
++    "dsh-openviking": "0.1.0",
 +    "dsh-profiles": "0.1.0",
 +    "dsh-prototype": "0.1.0",
 +    "dsh-skill-library": "0.1.0",

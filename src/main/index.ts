@@ -553,6 +553,19 @@ function bundledNodePath(): string {
 }
 
 /**
+ * The Python interpreter scripts/install-python-runtime.mjs stages for this
+ * build, if any. Only win32 packages currently carry one (see the script and
+ * the win.extraResources entry it feeds); every other platform and dev-mode
+ * launch returns undefined, which leaves dsh-openviking's own default
+ * interpreter search untouched.
+ */
+function bundledPythonPath(): string | undefined {
+  if (process.platform !== 'win32' || !app.isPackaged) return undefined
+  const candidate = join(process.resourcesPath, 'python-runtime', 'python', 'python.exe')
+  return existsSync(candidate) ? candidate : undefined
+}
+
+/**
  * The packaged lock-recovery runner. The Harness-side installer stages its own
  * copy into .desktop-bin; the desktop writes shims to that same directory, so
  * it points at the same runner rather than replacing them with a plain pnpm
@@ -2418,6 +2431,7 @@ async function bootstrap(): Promise<void> {
     dshPatchPath: desktopResourcePath('dsh-desktop.patch.yml'),
     dshHome: join(app.getPath('userData'), 'harness'),
     logPath: join(app.getPath('logs'), 'harness.log'),
+    pythonPath: bundledPythonPath(),
     launchProcess: (executablePath, args, options) =>
       process.platform === 'darwin'
         ? launchDisclaimedUtilityProcess(utilityProcess, args, options, {

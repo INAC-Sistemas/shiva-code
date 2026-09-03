@@ -13,6 +13,8 @@ export interface HarnessRuntimeOptions {
   dshPatchPath: string
   dshHome: string
   logPath: string
+  /** Absolute path to the bundled Python interpreter dsh-openviking should prefer; undefined where none is staged. */
+  pythonPath?: string
   launchProcess(
     executablePath: string,
     args: string[],
@@ -232,7 +234,8 @@ export function buildHarnessSpawnOptions(
   launchDirectory: string,
   dshHome: string,
   platform: NodeJS.Platform = process.platform,
-  environment: NodeJS.ProcessEnv = process.env
+  environment: NodeJS.ProcessEnv = process.env,
+  pythonPath?: string
 ): SpawnOptionsWithoutStdio {
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = environment
   const pathKey = platform === 'win32' ? 'Path' : 'PATH'
@@ -263,6 +266,15 @@ export function buildHarnessSpawnOptions(
       // wins, matching the "environment overrides config" contract
       // dsh-login itself documents for DSH_LOGIN_ENDPOINT.
       VPS_URL: parentEnvironment.VPS_URL ?? 'https://shivaplugins.grupoinac.com.br',
+      // dsh-openviking's cordis.patch.yml config.pythonCandidates reads this
+      // to prefer the Python bundled into this build (staged by
+      // scripts/install-python-runtime.mjs into the win32 package's
+      // extraResources) over searching the user's own machine — that search
+      // still runs as a fallback if this path is absent or the bundled
+      // interpreter fails, since the config only prepends it to the plugin's
+      // own default candidate list. undefined here (every platform besides a
+      // packaged win32 build) leaves the plugin's own defaults untouched.
+      ...(pythonPath === undefined ? {} : { DSH_OPENVIKING_PYTHON: pythonPath }),
       // package-import-method/child-concurrency are left at pnpm's defaults
       // (hardlink, auto concurrency): forcing clone-or-copy made every
       // install do a full physical file copy across the profile's 150+
@@ -408,7 +420,8 @@ export class HarnessRuntime {
           launchDirectory,
           this.options.dshHome,
           process.platform,
-          resolveShellEnvironment()
+          resolveShellEnvironment(),
+          this.options.pythonPath
         )
       )
     } catch (error) {

@@ -57,11 +57,15 @@
 # dsh-vps-status, dsh-prototype, and dsh-skill-library also authenticate
 # through dsh-login (each reads the session it records; none carries its own
 # credential) and are included on the same basis. dsh-mds, dsh-profiles, and
-# dsh-skill-manager carry no VPS dependency at all. Still excluded:
-# dsh-ssh-tunnel (pulls in a real third-party npm dependency, ssh2, not yet
-# verified to install cleanly on every packaged target) and dsh-openviking
-# (auto-installs a Python venv and spawns a Python server at runtime — a
-# platform dependency this Node/Electron-only executable does not carry).
+# dsh-skill-manager carry no VPS dependency at all. dsh-openviking (the
+# "Memory" sidebar tab) auto-installs a Python venv and spawns a Python
+# server at runtime — a platform dependency this Node/Electron-only
+# executable does not itself carry — so scripts/install-python-runtime.mjs
+# stages a portable, pip-ready CPython into win.extraResources for exactly
+# this plugin to use; see its own `config.pythonCandidates` entry below.
+# Still excluded: dsh-ssh-tunnel (pulls in a real third-party npm
+# dependency, ssh2, not yet verified to install cleanly on every packaged
+# target).
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
 # the base plugin reads first. dsh-flowglass is the published 0.4.4, not
@@ -125,3 +129,20 @@
       name: dsh-skill-library
       config:
         endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
+
+    # $DSH_OPENVIKING_PYTHON comes from harness-runtime.ts's
+    # buildHarnessSpawnOptions — set only on a packaged win32 build, where
+    # scripts/install-python-runtime.mjs staged a portable CPython into
+    # win.extraResources (src/main/index.ts's bundledPythonPath()). Listing
+    # it first (best candidate) still leaves the plugin's own default
+    # win32 search (the four entries after it, copied from
+    # PLATFORM_INTERPRETERS.win32 in dsh-openviking's own lib/index.js) as a
+    # fallback if that bundled interpreter is somehow absent or broken;
+    # config.pythonCandidates fully replaces the plugin's default candidate
+    # list when non-empty, so the fallback has to be spelled out here rather
+    # than left implicit. Everywhere else (dev, mac, unset env) this
+    # evaluates to [], which leaves the plugin's own default untouched.
+    - id: openviking
+      name: dsh-openviking
+      config:
+        pythonCandidates: !!js "process.env.DSH_OPENVIKING_PYTHON ? [process.env.DSH_OPENVIKING_PYTHON, 'py -3.12', 'py -3.11', 'py -3.10', 'python'] : []"

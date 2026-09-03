@@ -10,6 +10,10 @@ coverage/
 build/icon.iconset/
 build/app-icon.iconset/
 build/icon-1024.png
+# Staged by scripts/install-python-runtime.mjs; the pinned URL + SHA256 in
+# that script (not this checkout) is the source of truth, same reasoning as
+# dist/dist-dev above.
+build/python-runtime/
 .env
 .env.*
 !.env.example

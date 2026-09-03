@@ -36,11 +36,11 @@
     "package:dev:dir": "npm run build && electron-builder --dir --config electron-builder.dev.cjs",
     "package:dev:mac:arm64": "node scripts/verify-target.mjs darwin arm64 && npm run build && electron-builder --mac --arm64 --publish never --config electron-builder.dev.cjs",
     "package:dev:mac:x64": "node scripts/verify-target.mjs darwin x64 && npm run build && electron-builder --mac --x64 --publish never --config electron-builder.dev.cjs",
-    "package:dev:win": "node scripts/verify-target.mjs win32 x64 && npm run build && electron-builder --win --x64 --publish never --config electron-builder.dev.cjs",
+    "package:dev:win": "node scripts/verify-target.mjs win32 x64 && node scripts/install-python-runtime.mjs && npm run build && electron-builder --win --x64 --publish never --config electron-builder.dev.cjs",
     "package:mac": "npm run build && electron-builder --mac --publish never",
     "package:mac:arm64": "node scripts/verify-target.mjs darwin arm64 && npm run build && electron-builder --mac --arm64 --publish never",
     "package:mac:x64": "node scripts/verify-target.mjs darwin x64 && npm run build && electron-builder --mac --x64 --publish never",
-    "package:win": "node scripts/verify-target.mjs win32 x64 && npm run build && electron-builder --win --x64 --publish never"
+    "package:win": "node scripts/verify-target.mjs win32 x64 && node scripts/install-python-runtime.mjs && npm run build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "file:packages/harness-0.1.2-alpha.4/npm-vendor/deepseek-ai-cordis-4.0.2.tgz",
@@ -280,6 +280,7 @@
     "dsh-i18n": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-i18n-0.1.0.tgz",
     "dsh-login": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-login-0.1.0.tgz",
     "dsh-mds": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-mds-0.1.0.tgz",
+    "dsh-openviking": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-openviking-0.1.0.tgz",
     "dsh-profiles": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-profiles-0.1.0.tgz",
     "dsh-prototype": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-prototype-0.1.0.tgz",
     "dsh-shiva-theme": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-shiva-theme-0.1.0.tgz",
@@ -408,6 +409,12 @@
           "arch": [
             "x64"
           ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "build/python-runtime/win32-x64/python",
+          "to": "python-runtime/python"
         }
       ]
     },
