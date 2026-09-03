@@ -255,6 +255,14 @@ export function buildHarnessSpawnOptions(
       ...parentEnvironment,
       DSH_HOME: dshHome,
       NO_COLOR: '1',
+      // dsh-login's cordis.patch.yml composes its auth endpoints as
+      // `new URL('/api/auth/...', process.env.VPS_URL)` — an unset VPS_URL
+      // throws at profile composition, before the Harness even reaches
+      // "pending" state. This shipped build points at the production
+      // plugin-manager by default; a developer's own shell export still
+      // wins, matching the "environment overrides config" contract
+      // dsh-login itself documents for DSH_LOGIN_ENDPOINT.
+      VPS_URL: parentEnvironment.VPS_URL ?? 'https://shivaplugins.grupoinac.com.br',
       // package-import-method/child-concurrency are left at pnpm's defaults
       // (hardlink, auto concurrency): forcing clone-or-copy made every
       // install do a full physical file copy across the profile's 150+

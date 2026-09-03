@@ -278,6 +278,7 @@
     "dsh-docs-panel": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-docs-panel-0.1.0.tgz",
     "dsh-flowglass": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-flowglass-0.4.4.tgz",
     "dsh-i18n": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-i18n-0.1.0.tgz",
+    "dsh-login": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-login-0.1.0.tgz",
     "dsh-shiva-theme": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-shiva-theme-0.1.0.tgz",
     "dsh-sidebar-qa": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-sidebar-qa-0.4.0.tgz",
     "dsh-user-menu": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-user-menu-0.1.0.tgz",

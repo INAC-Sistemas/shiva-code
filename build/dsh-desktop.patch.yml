@@ -50,9 +50,13 @@
 
 # shiva-code's own generic UI plugins, packed into
 # packages/harness-0.1.2-alpha.4/npm-shiva-plugins/ the same way the
-# @deepseek-ai/dsh-* set is packed into npm-dsh/. Excludes every plugin that
-# authenticates against or depends on the plugin-manager VPS (dsh-login and
-# everything that peers on it) — those stay installable post-boot through the
+# @deepseek-ai/dsh-* set is packed into npm-dsh/. dsh-user-menu hard-injects
+# 'loginSession' (an inner feature, not its top-level dsh.client.inject row),
+# provided only by dsh-login — so dsh-login is included too, even though it
+# is the one plugin here that authenticates against the plugin-manager VPS.
+# Everything ELSE that peers on dsh-login (dsh-vps-status, dsh-ssh-tunnel,
+# dsh-prototype, dsh-skill-library, dsh-mds, dsh-openviking, dsh-profiles,
+# dsh-skill-manager) stays excluded — installable post-boot through the
 # ordinary authenticated flow instead of being baked into the executable.
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
@@ -76,3 +80,21 @@
       name: dsh-docs-panel
     - id: dsh-flowglass
       name: dsh-flowglass
+
+    # Config replicated verbatim from dsh-login's own cordis.patch.yml (the
+    # bundle patch a `dsh.profile.bundles` entry would apply automatically —
+    # this profile never adds one, so the shape is reproduced here instead).
+    # $VPS_URL comes from harness-runtime.ts's buildHarnessSpawnOptions,
+    # defaulting to the production plugin-manager
+    # (https://shivaplugins.grupoinac.com.br) for this shipped build.
+    - id: login
+      name: dsh-login
+      config:
+        endpoint: !!js "new URL('/api/auth/login', process.env.VPS_URL).href"
+        logoutEndpoint: !!js "new URL('/api/auth/logout', process.env.VPS_URL).href"
+        validateEndpoint: !!js "new URL('/api/auth/me', process.env.VPS_URL).href"
+        title: Entrar
+        subtitle: Faça login para usar o Shiva Code.
+        identifierLabel: E-mail
+        passwordLabel: Senha
+        submitLabel: Entrar
