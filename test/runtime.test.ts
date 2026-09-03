@@ -209,6 +209,7 @@ describe('Harness launch contract', () => {
           PATH: '/usr/bin',
           DSH_HOME: '/Users/tester/Library/Application Support/dsh-desktop/harness',
           NO_COLOR: '1',
+          VPS_URL: 'https://shivaplugins.grupoinac.com.br',
           npm_config_side_effects_cache: 'false',
           PNPM_CONFIG_SIDE_EFFECTS_CACHE: 'false'
         },
