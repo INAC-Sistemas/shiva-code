@@ -38,24 +38,6 @@ export function desktopHarnessUrl(
   }
 }
 
-export function externalHarnessUrl(url: string, authToken?: string): string {
-  // Same token-exchange requirement as desktopHarnessUrl (see its comment):
-  // `GET /?token=...` trades the launch token for the signed session cookie.
-  // This omits the embedded-shell chrome hints (dsh-desktop-mode/-platform/
-  // -titlebar-inset) on purpose — those describe a frameless BrowserWindow's
-  // reserved titlebar space, and this URL opens in the client's own system
-  // browser instead, which has no such reservation.
-  if (authToken === undefined) return url
-
-  try {
-    const parsed = new URL(url)
-    parsed.searchParams.set('token', authToken)
-    return parsed.toString()
-  } catch {
-    return url
-  }
-}
-
 interface HarnessCookieStore {
   get(filter: { url: string }): Promise<Array<{ name: string }>>
   remove(url: string, name: string): Promise<void>

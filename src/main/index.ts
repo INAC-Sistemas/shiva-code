@@ -95,7 +95,12 @@ import {
   auditLaunchAgents,
   quarantineAppBundleLaunchAgents
 } from './state/launch-agent-audit'
-import { externalHarnessUrl } from './window-navigation'
+import {
+  clearStaleHarnessAuthCookies,
+  desktopHarnessUrl,
+  isAbortedNavigationError,
+  shouldLoadHarnessUrl
+} from './window-navigation'
 import {
   raiseWindowWithoutStealingFocus,
   type WindowFocusIntent
@@ -947,51 +952,50 @@ function createWindow(): BrowserWindow {
   return window
 }
 
-/**
- * Opens the Harness UI in the client's default system browser instead of an
- * embedded BrowserWindow. `shell.openExternal` hands the URL to the OS's
- * registered handler; Electron has no further visibility or control over
- * that window once opened, so several embedded-window mechanisms
- * intentionally do not run on this path: `focusIntent` (kept only for
- * call-site signature stability — there is no external window to raise),
- * `mainWindowNavigationVersion` navigation-race guarding, the
- * Electron-session cookie cleanup (the system browser uses its own,
- * unrelated cookie jar), GPU render-health tracking (`markHarnessRendered`,
- * which asserts THIS process's own Chromium renderer stayed up), and the
- * profile boot-health confirmation gate (`normalProfileBootIsHealthy`
- * requires a live, non-destroyed `mainWindow`, so it now never confirms).
- * Restoring an equivalent readiness signal for that last one — e.g. an HTTP
- * poll against the Harness URL instead of a renderer heartbeat — is
- * follow-up work, not addressed here.
- */
 async function openHarness(
   url: string,
   focusIntent: WindowFocusIntent = 'automatic'
 ): Promise<void> {
-  const rendererUrl = externalHarnessUrl(url, runtime.snapshot().authToken)
-  // Unlike an embedded BrowserWindow's loadURL, this asks the OS to hand off
-  // to whatever it has registered as the default browser — there may be
-  // none (an unconfigured Linux host, a corrupted registry entry). Some
-  // openHarness call sites have no local `.catch`, and the shared
-  // showUnexpectedError fallback shows a native dialog that is not always
-  // safe to reach for this specific failure, so this catches and logs
-  // locally instead of letting the rejection propagate.
-  await shell.openExternal(rendererUrl).catch((error: unknown) => {
-    runtime.note(
-      `[desktop] failed to open the Harness URL in the system browser: ${error instanceof Error ? error.message : String(error)
-      }`
-    )
-  })
-  // The splash window (if still showing) previously got repurposed via
-  // loadURL to display the Harness content; now that content opens in the
-  // system browser instead, so it no longer has anything to show. Hide it
-  // rather than close(): 'window-all-closed' quits the whole app on every
-  // platform but darwin (see the app.on('window-all-closed', ...) handler)
-  // with no check for a tray, so closing this — currently the only
-  // BrowserWindow — would tear down the app (and the Harness process with
-  // it) right after opening it. A visible way back to this hidden window
-  // (tray/menu-bar entry, dock click) is deferred, tracked separately.
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow()
+  const rendererUrl = desktopHarnessUrl(url, process.platform, runtime.snapshot().authToken)
+  if (shouldLoadHarnessUrl(window.webContents.getURL(), url)) {
+    const navigationVersion = ++mainWindowNavigationVersion
+    rendererPluginFailureLogs = []
+    window.webContents.stop()
+    const clearedCookies = await clearStaleHarnessAuthCookies(
+      window.webContents.session.cookies,
+      rendererUrl,
+      runtime.snapshot().authToken
+    ).catch((error) => {
+      runtime.note(
+        `[desktop] stale Harness cookie cleanup failed: ${error instanceof Error ? error.message : String(error)
+        }`
+      )
+      return 0
+    })
+    if (clearedCookies > 0) {
+      runtime.note(`[desktop] cleared ${clearedCookies} stale Harness authentication cookie(s)`)
+    }
+    try {
+      await window.loadURL(rendererUrl)
+    } catch (error) {
+      if (navigationVersion !== mainWindowNavigationVersion) return
+      if (isAbortedNavigationError(error)) return
+      const snapshot = runtime.snapshot()
+      if (snapshot.phase !== 'ready' || snapshot.url !== url) return
+      throw error
+    }
+    if (navigationVersion !== mainWindowNavigationVersion) return
+  }
+  markHarnessRendered()
+  if (runtime.snapshot().url !== url || window.isDestroyed()) return
+  await syncNativeTheme(window)
+  raiseWindowWithoutStealingFocus(
+    window,
+    process.platform,
+    () => app.isActive(),
+    focusIntent
+  )
 }
 
 async function showSplash(): Promise<void> {
