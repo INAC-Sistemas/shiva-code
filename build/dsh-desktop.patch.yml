@@ -47,3 +47,32 @@
 - insert:
     - id: dsh-desktop-preset-transfer
       name: dsh-desktop-preset-transfer
+
+# shiva-code's own generic UI plugins, packed into
+# packages/harness-0.1.2-alpha.4/npm-shiva-plugins/ the same way the
+# @deepseek-ai/dsh-* set is packed into npm-dsh/. Excludes every plugin that
+# authenticates against or depends on the plugin-manager VPS (dsh-login and
+# everything that peers on it) — those stay installable post-boot through the
+# ordinary authenticated flow instead of being baked into the executable.
+# dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
+# ctx.get, never a hard `inject` row), so nothing here blocks on order, but
+# the base plugin reads first. dsh-flowglass is the published 0.4.4, not
+# shiva-code's local checkout — that copy's inject list is missing 'sessions'
+# and crashes boot; see the dsh-flowglass client.js fix from earlier.
+- insert:
+    - id: dsh-better-sidebar
+      name: dsh-better-sidebar
+    - id: dsh-i18n
+      name: dsh-i18n
+    - id: dsh-clock
+      name: dsh-clock
+    - id: dsh-shiva-theme
+      name: dsh-shiva-theme
+    - id: dsh-user-menu
+      name: dsh-user-menu
+    - id: dsh-sidebar-qa
+      name: dsh-sidebar-qa
+    - id: dsh-docs-panel
+      name: dsh-docs-panel
+    - id: dsh-flowglass
+      name: dsh-flowglass
