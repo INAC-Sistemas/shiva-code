@@ -54,10 +54,14 @@
 # 'loginSession' (an inner feature, not its top-level dsh.client.inject row),
 # provided only by dsh-login — so dsh-login is included too, even though it
 # is the one plugin here that authenticates against the plugin-manager VPS.
-# Everything ELSE that peers on dsh-login (dsh-vps-status, dsh-ssh-tunnel,
-# dsh-prototype, dsh-skill-library, dsh-mds, dsh-openviking, dsh-profiles,
-# dsh-skill-manager) stays excluded — installable post-boot through the
-# ordinary authenticated flow instead of being baked into the executable.
+# dsh-vps-status, dsh-prototype, and dsh-skill-library also authenticate
+# through dsh-login (each reads the session it records; none carries its own
+# credential) and are included on the same basis. dsh-mds, dsh-profiles, and
+# dsh-skill-manager carry no VPS dependency at all. Still excluded:
+# dsh-ssh-tunnel (pulls in a real third-party npm dependency, ssh2, not yet
+# verified to install cleanly on every packaged target) and dsh-openviking
+# (auto-installs a Python venv and spawns a Python server at runtime — a
+# platform dependency this Node/Electron-only executable does not carry).
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
 # the base plugin reads first. dsh-flowglass is the published 0.4.4, not
@@ -98,3 +102,26 @@
         identifierLabel: E-mail
         passwordLabel: Senha
         submitLabel: Entrar
+
+    - id: mds
+      name: dsh-mds
+    - id: profiles
+      name: dsh-profiles
+    - id: skill-manager
+      name: dsh-skill-manager
+
+    # The three rows below read the session dsh-login records (no credential
+    # of their own), same $VPS_URL contract as the login row above — config
+    # replicated verbatim from each plugin's own cordis.patch.yml.
+    - id: prototype
+      name: dsh-prototype
+      config:
+        endpoint: !!js "new URL('/api/plugins/prototype', process.env.VPS_URL).href"
+    - id: vps-status
+      name: dsh-vps-status
+      config:
+        endpoint: !!js "new URL('/api/plugins/host-info', process.env.VPS_URL).href"
+    - id: skill-library
+      name: dsh-skill-library
+      config:
+        endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
