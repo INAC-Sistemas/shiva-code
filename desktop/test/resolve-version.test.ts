@@ -90,7 +90,11 @@ async function resolve(
   )
 }
 
-describe('resolve-version', () => {
+// The step under test runs on ubuntu-24.04 and is POSIX shell throughout, so
+// there is no Windows behaviour to cover — only Git Bash's path handling to
+// trip over. The suite also runs on the Windows packaging runner, where that
+// would block a release for no signal.
+describe.skipIf(process.platform === 'win32')('resolve-version', () => {
   it('seeds the sequence from package.json when no release tag exists', async () => {
     const work = await repository('0.1.1', [])
     expect(await resolve(work)).toMatchObject({
