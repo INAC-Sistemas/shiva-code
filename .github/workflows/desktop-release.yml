@@ -94,9 +94,12 @@ jobs:
           set -euo pipefail
           git fetch --force --tags --quiet
           package_version="$(node -p "require('./package.json').version")"
+          # `grep` exits 1 when nothing matches, which under `pipefail` would
+          # kill the step on the very first release, when no tag exists yet.
+          # Prereleases and the harness's own `dsh-v*` tags are filtered out.
           highest="$(git tag --list 'shiva-desktop-v*' \
             | sed 's/^shiva-desktop-v//' \
-            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | { grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true; } \
             | sort -V | tail -n1)"
           highest="${highest:-0.0.0}"
 
