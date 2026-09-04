@@ -181,7 +181,11 @@ export async function installSpecificVersion(version: unknown): Promise<UpdateSt
   }
 
   pendingDowngrade = compareVersions(version, app.getVersion()) < 0
-  autoUpdater.setFeedURL({ provider: 'generic', url: archiveFeedUrl(version) })
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: archiveFeedUrl(version),
+    useMultipleRangeRequest: false
+  })
   autoUpdater.allowDowngrade = true
   manualCheck = true
   transition({ type: 'check', manual: true })
@@ -201,7 +205,11 @@ export async function installSpecificVersion(version: unknown): Promise<UpdateSt
     scheduleReset()
   } finally {
     checkPromise = undefined
-    autoUpdater.setFeedURL({ provider: 'generic', url: STABLE_FEED_URL })
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: STABLE_FEED_URL,
+      useMultipleRangeRequest: false
+    })
     autoUpdater.allowDowngrade = false
     pendingDowngrade = false
   }

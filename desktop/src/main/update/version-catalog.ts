@@ -2,13 +2,40 @@ import type { AvailableRelease } from '../../shared/contracts'
 
 export type { AvailableRelease }
 
-export const STABLE_FEED_URL = 'https://dshdesktop.com/updates/latest/'
-export const VERSION_INDEX_URL = 'https://dshdesktop.com/updates/versions.json'
+/**
+ * Releases of this repository host the update feed. The desktop release
+ * workflow is the only thing here that publishes a GitHub Release, and it marks
+ * every one of them `--latest`, so `latest/download/` always resolves to a
+ * desktop release rather than to a harness or vendor tag.
+ *
+ * Every feed built from this base must set `useMultipleRangeRequest: false`.
+ * `electron-updater` enables multi-range downloads for any non-S3 URL, and
+ * GitHub's release-asset CDN answers a multi-range request with 501, which
+ * costs two blockmap fetches and a failed request before each update falls back
+ * to a full download. Single-range requests do work, so differential downloads
+ * stay available.
+ */
+const RELEASES = 'https://github.com/INAC-Sistemas/shiva-code/releases'
+
+/** Prefix of the release tags this app is published under; `dsh-v*` is the harness. */
+export const RELEASE_TAG_PREFIX = 'shiva-desktop-v'
+
+export const STABLE_FEED_URL = `${RELEASES}/latest/download/`
+export const VERSION_INDEX_URL = `${RELEASES}/latest/download/versions.json`
 
 const INDEX_TIMEOUT_MS = 8_000
 
+/**
+ * Feed base for one published version, used to install a specific release.
+ *
+ * The trailing slash is load-bearing: `electron-updater` resolves the installer
+ * name in `latest.yml` against this as a URL base.
+ *
+ * @param version Semver of the release, without the tag prefix.
+ * @returns Absolute URL of that release's asset directory.
+ */
 export function archiveFeedUrl(version: string): string {
-  return `https://dshdesktop.com/updates/archive/${version}/`
+  return `${RELEASES}/download/${RELEASE_TAG_PREFIX}${version}/`
 }
 
 /** Split "1.2.3-rc.1" into ([1,2,3], "rc.1"). Non-numeric segments read as 0. */

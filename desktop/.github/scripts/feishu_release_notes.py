@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Build, validate, and send user-facing bilingual release notes for Feishu."""
+"""Build and validate the user-facing bilingual release notes.
+
+Named for the Feishu card this once fed; the webhook is gone, and what
+remains is the release-evidence and note-generation half that
+`github_release_notes.py` imports.
+"""
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import re
 import subprocess
 import sys
 import textwrap
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -476,53 +478,6 @@ Enhances automatic plugin conflict diagnostics and self-healing, automatically p
 """)
 
 
-def send_feishu_notification(
-    webhook_url: str,
-    release_tag: str,
-    release_notes: str,
-    prerelease: bool = False,
-) -> None:
-    card_title = (
-        f"🧪 DSH Desktop {release_tag}（预发布）已发布"
-        if prerelease
-        else f"✅ DSH Desktop {release_tag} 发布成功"
-    )
-    card_template = "orange" if prerelease else "green"
-    payload = {
-        "msg_type": "interactive",
-        "card": {
-            "config": {"wide_screen_mode": True},
-            "header": {
-                "template": card_template,
-                "title": {
-                    "tag": "plain_text",
-                    "content": card_title,
-                },
-            },
-            "elements": [
-                {
-                    "tag": "div",
-                    "text": {"tag": "lark_md", "content": release_notes},
-                }
-            ],
-        },
-    }
-
-    req = urllib.request.Request(
-        webhook_url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        resp_data = json.loads(resp.read().decode("utf-8"))
-        code = resp_data.get("code", resp_data.get("StatusCode", -1))
-        if code != 0:
-            raise SystemExit(f"Feishu webhook failed: {resp_data}")
-        print(f"✅ Feishu notification sent successfully for {release_tag}")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Feishu release notes tool for DSH Desktop")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -559,19 +514,6 @@ def main() -> None:
         help="Generate pre-release fallback",
     )
 
-    # send
-    send_parser = subparsers.add_parser("send", help="Send Feishu interactive card webhook")
-    send_parser.add_argument("--tag", required=True, help="Release tag (e.g. shiva-desktop-v0.4.0), or a bare semver for --prerelease")
-    send_parser.add_argument("--notes", required=True, help="Path to release notes markdown file")
-    send_parser.add_argument(
-        "--webhook", default=os.getenv("FEISHU_RELEASE_WEBHOOK"), help="Feishu Webhook URL"
-    )
-    send_parser.add_argument(
-        "--prerelease",
-        action="store_true",
-        help="Send pre-release notification card",
-    )
-
     args = parser.parse_args()
 
     if args.command == "build-prompt":
@@ -593,15 +535,6 @@ def main() -> None:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
         Path(args.output).write_text(notes, encoding="utf-8")
         print(f"✅ Generated fallback release notes for {args.tag} -> {args.output}")
-
-    elif args.command == "send":
-        webhook = args.webhook
-        if not webhook:
-            raise SystemExit("Missing Feishu webhook URL (set FEISHU_RELEASE_WEBHOOK or use --webhook)")
-        notes = Path(args.notes).read_text(encoding="utf-8")
-        validate_release_note(args.tag, notes, prerelease=args.prerelease)
-        send_feishu_notification(webhook, args.tag, notes, prerelease=args.prerelease)
-
 
 if __name__ == "__main__":
     main()

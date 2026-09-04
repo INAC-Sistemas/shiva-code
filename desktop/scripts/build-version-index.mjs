@@ -17,10 +17,13 @@ function compare(a, b) {
   return preA < preB ? -1 : 1
 }
 
+const RELEASES = 'https://github.com/INAC-Sistemas/shiva-code/releases'
+const TAG_PREFIX = 'shiva-desktop-v'
+
 /**
- * Turn a list of `releases/archive/<name>` directory names into the version
- * index the desktop client reads from `dshdesktop.com/updates/versions.json`.
- * Non-semver names are dropped; the rest sort newest first.
+ * Turn a list of published version names into the version index the desktop
+ * client reads from `versions.json` on the latest release. Non-semver names are
+ * dropped; the rest sort newest first.
  */
 export function buildVersionIndex(archiveDirNames) {
   const versions = [...new Set(archiveDirNames)]
@@ -28,8 +31,8 @@ export function buildVersionIndex(archiveDirNames) {
     .sort((a, b) => compare(b, a))
     .map((version) => ({
       version,
-      tag: `v${version}`,
-      archiveUrl: `https://dshdesktop.com/updates/archive/${version}/`
+      tag: `${TAG_PREFIX}${version}`,
+      archiveUrl: `${RELEASES}/download/${TAG_PREFIX}${version}/`
     }))
   return { generatedAt: new Date().toISOString(), versions }
 }

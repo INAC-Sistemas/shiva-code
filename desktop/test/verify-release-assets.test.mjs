@@ -37,7 +37,41 @@ describe('release asset verification', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {
       await createFixture(root)
-      await expect(verifyReleaseAssets(root, '1.2.3', { minimumBytes })).resolves.toBeUndefined()
+      await expect(verifyReleaseAssets(root, '1.2.3', { minimumBytes, platforms: ['windows', 'mac'] })).resolves.toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('accepts a Windows-only release without any macOS asset', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
+    try {
+      const windows = await writeFixture(
+        root,
+        'dsh-desktop-windows-x64-setup.exe',
+        Buffer.from('MZ-win')
+      )
+      await Promise.all([
+        writeFile(path.join(root, 'dsh-desktop-windows-x64-setup.exe.blockmap'), 'blockmap'),
+        writeFile(
+          path.join(root, 'latest.yml'),
+          stringify({ version: '1.2.3', files: [windows] })
+        )
+      ])
+      await expect(
+        verifyReleaseAssets(root, '1.2.3', { minimumBytes })
+      ).resolves.toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a platform it cannot verify', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
+    try {
+      await expect(
+        verifyReleaseAssets(root, '1.2.3', { minimumBytes, platforms: ['linux'] })
+      ).rejects.toThrow('Unsupported platform: linux')
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -47,7 +81,7 @@ describe('release asset verification', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {
       await createFixture(root)
-      await expect(verifyReleaseAssets(root, '1.2.3')).rejects.toThrow('unexpectedly small')
+      await expect(verifyReleaseAssets(root, '1.2.3', { platforms: ['windows', 'mac'] })).rejects.toThrow('unexpectedly small')
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -59,7 +93,7 @@ describe('release asset verification', () => {
       await createFixture(root)
       await rm(path.join(root, 'dsh-desktop-mac-x64.dmg'))
       await expect(
-        verifyReleaseAssets(root, '1.2.3', { minimumBytes })
+        verifyReleaseAssets(root, '1.2.3', { minimumBytes, platforms: ['windows', 'mac'] })
       ).rejects.toThrow('Missing required release asset: dsh-desktop-mac-x64.dmg')
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -72,7 +106,7 @@ describe('release asset verification', () => {
       await createFixture(root)
       await writeFile(path.join(root, 'dsh-desktop-windows-x64-setup.exe'), 'not-an-exe')
       await expect(
-        verifyReleaseAssets(root, '1.2.3', { minimumBytes })
+        verifyReleaseAssets(root, '1.2.3', { minimumBytes, platforms: ['windows', 'mac'] })
       ).rejects.toThrow('is not a PE executable')
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -97,7 +131,7 @@ describe('release asset verification', () => {
         })
       )
       await expect(
-        verifyReleaseAssets(root, '1.2.3', { minimumBytes })
+        verifyReleaseAssets(root, '1.2.3', { minimumBytes, platforms: ['windows', 'mac'] })
       ).rejects.toThrow('latest.yml checksum or size does not match')
     } finally {
       await rm(root, { recursive: true, force: true })
