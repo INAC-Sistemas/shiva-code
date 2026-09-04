@@ -8,9 +8,13 @@ on:
   push:
     tags:
       - 'shiva-desktop-v*'
+  # A pull request builds the unsigned development installer and runs the
+  # packaged smoke test, so desktop changes are exercised before they merge.
+  # Both integration branches are listed: work lands on `rai` first.
   pull_request:
     branches:
       - master
+      - rai
     paths:
       - 'desktop/**'
       - '.github/workflows/desktop-release.yml'
