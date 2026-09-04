@@ -54,6 +54,8 @@ Only the vendor's own infrastructure was deleted: the ModelScope mirror, `deskto
 
 ## Consequences
 
+Releasing the desktop app is the only thing in this repository that now happens on its own: every harness workflow's automatic triggers are off, because they need upstream infrastructure this fork does not have and so only ever ran to fail. The desktop workflow lost its pull-request trigger with them, so nothing builds the app before a merge. The release run still guards itself — tests, typecheck, packaging and the packaged smoke test all precede the tag — so what is lost is the earlier warning, not the safety net.
+
 A push to `master` touching the desktop app ships a release, so version numbers advance with merges rather than with deliberate tagging. Doc, test, and Markdown-only paths are excluded from the trigger; anything else under `desktop/` publishes and shows an update card to every installed app within six hours.
 
 Windows installers are unsigned until `DESKTOP_WINDOWS_SIGNING` is set, so SmartScreen warns about an unknown publisher on first install. Updates themselves are unaffected: `win.verifyUpdateCodeSignature` was already `false`.

@@ -4,7 +4,9 @@
 
 A push to `master` that touches the desktop app releases it. Only the default branch releases, so a release is never cut from an integration branch by accident. The `resolve-version` job picks the version, the Windows job builds and smoke-tests the installer, and the `publish` job creates the tag `shiva-desktop-v<semver>` and the GitHub Release in one step. Nothing has to be tagged by hand.
 
-A pull request into `master` or `rai` builds the unsigned development installer and runs the packaged smoke test, so desktop changes are exercised before they merge; neither publishes.
+This is the only workflow in the repository that runs without being asked. The harness workflows need upstream infrastructure this fork does not have, so their automatic triggers are off and they run only from **Actions → Run workflow**.
+
+Nothing therefore builds the app before a merge. The release run still guards itself: `npm test`, `npm run typecheck`, the package step and the packaged smoke test all run in `windows-x64`, and the tag is only created afterwards, in `publish`. A broken build fails the run instead of publishing — what is lost is the earlier warning, not the safety net.
 
 Doc, test, and Markdown-only edits under `desktop/` are excluded from the trigger, so they do not push an update card to every installed app.
 

@@ -1,8 +1,9 @@
 name: CI master
 
 on:
-  push:
-    branches: [master]
+  # Automatic triggers are off in this fork: the harness workflows need
+  # upstream infrastructure this repository does not have, and only the
+  # desktop release runs on its own. Run this by hand when it is needed.
   workflow_dispatch:
     inputs:
       suite:
@@ -19,6 +20,7 @@ on:
 # push is exempt from cancellation (see ci-failover-runbook). workflow_dispatch
 # keeps cancelling: a re-dispatched runner benchmark holds up to 12 larger
 # runners for 15 minutes in this same group.
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
