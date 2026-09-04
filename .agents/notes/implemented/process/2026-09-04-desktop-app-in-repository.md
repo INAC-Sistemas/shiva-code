@@ -16,9 +16,9 @@ The tarball snapshot under `desktop/packages/harness-<version>/` is unchanged. D
 
 ### Continuous integration
 
-GitHub reads `.github/workflows/` only at the repository root, so the two desktop workflows live there as `desktop-release.yml` and `desktop-backfill-archive.yml`. Both set `defaults.run.working-directory: desktop`; action inputs resolve against the workspace root instead and carry the prefix explicitly, so artifact paths, `download-artifact` destinations, and `cache-dependency-path` name `desktop/`. The release workflow's pull-request trigger is scoped to `master` and to paths under `desktop/`.
+GitHub reads `.github/workflows/` only at the repository root, so the desktop workflow lives there as `desktop-release.yml`. It sets `defaults.run.working-directory: desktop`; action inputs resolve against the workspace root instead and carry the prefix explicitly, so artifact paths, `download-artifact` destinations, and `cache-dependency-path` name `desktop/`. The release workflow's pull-request trigger is scoped to `master` and to paths under `desktop/`.
 
-A release is cut by pushing `shiva-desktop-v<semver>`, and the 26 tags the standalone repository carried are not imported. The prefix names the product, because this repository also releases the harness under `dsh-v*`. The semver after it is the published application version and keys the ModelScope rollback archive at `releases/archive/<semver>/`, so it continues the sequence already published; `package.json` holds a stale version that the workflow overwrites from the tag. Every user-facing string still renders `v<semver>`, so release titles and note headings read as they did.
+A release carries the tag `shiva-desktop-v<semver>`, and the 26 tags the standalone repository carried are not imported. The prefix names the product, because this repository also releases the harness under `dsh-v*`. The semver after it is the published application version; `package.json` holds a stale version that the workflow overwrites from it. Every user-facing string still renders `v<semver>`, so release titles and note headings read as they did. What creates that tag, and where the installers are published, is settled by [Desktop updates ship from this repository's GitHub Releases](../architecture/2026-09-04-desktop-updates-from-github-releases.md).
 
 Release notes are generated from the commit range between two release tags. That range now also spans harness commits, so `feishu_release_notes.py` limits its `git log` and `git diff` to the current directory, which the workflow sets to `desktop/`.
 
@@ -44,7 +44,7 @@ One clone, one review history, and one revert unit cover the harness and the app
 
 Discarding the old tags costs the first release its predecessor: `find_previous_tag` matches nothing, so that release's notes come from the last 100 commits instead of a tag range. Every release after it recovers the range. The one test that read this repository's real tag history is gone, having been skipped since the fork; the synthetic-history test beside it covers the same previous-tag resolution deterministically.
 
-The self-hosted macOS runner that signs Windows installers is registered against the old repository and must be re-registered here before a release can complete. Branches left unmerged in `INAC-Sistemas/dsh-desktop` at the cut are not part of the import and have to be reapplied on top of `desktop/`.
+The self-hosted macOS runner that signs Windows installers is registered against the old repository; signing stays gated off here until it is re-registered. Branches left unmerged in `INAC-Sistemas/dsh-desktop` at the cut are not part of the import and have to be reapplied on top of `desktop/`.
 
 ## Testing
 

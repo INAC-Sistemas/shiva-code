@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -278,8 +278,16 @@ describe('GitHub release contract', () => {
     )
 
     expect(packageJson.dependencies['electron-updater']).toBeTruthy()
+    // The feed is this repository's own latest release. It stays on the
+    // `generic` provider because update-manager restores it that way after a
+    // rollback, and because GitHub's asset CDN answers a multi-range request
+    // with 501 — every feed must opt out of them.
     expect(packageJson.build.publish).toEqual([
-      { provider: 'generic', url: 'https://dshdesktop.com/updates/latest/' }
+      {
+        provider: 'generic',
+        url: 'https://github.com/INAC-Sistemas/shiva-code/releases/latest/download/',
+        useMultipleRangeRequest: false
+      }
     ])
     expect(packageJson.build.win.verifyUpdateCodeSignature).toBe(false)
     for (const asset of [
@@ -377,11 +385,52 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('name: windows-x64-dev')
     expect(workflow).toContain('dist-dev/dsh-desktop-dev-windows-x64-setup.exe')
     for (const asset of releaseAssets) expect(workflow).toContain(asset)
+    // One job resolves the version; every builder reads that output rather
+    // than re-deriving it from the ref.
     expect(
       workflow.match(
-        /npm version --no-git-tag-version --allow-same-version "\$\{GITHUB_REF_NAME#shiva-desktop-v\}"/g
+        /npm version --no-git-tag-version --allow-same-version "\$APP_VERSION"/g
       )
     ).toHaveLength(3)
+    expect(workflow).not.toContain('GITHUB_REF_NAME#shiva-desktop-v')
+    expect(
+      workflow.match(/APP_VERSION: \$\{\{ needs\.resolve-version\.outputs\.version \}\}/g)
+    ).toHaveLength(3)
+  })
+
+  it('resolves one version for the whole run and refuses to reuse a tag', async () => {
+    const workflow = await readFile(releaseWorkflow, 'utf8')
+
+    // A push to master releases; the patch digit is automatic and
+    // desktop/package.json is the minor/major knob that also seeds it.
+    expect(workflow).toMatch(/resolve-version:\r?\n\s+name: Resolve release version/)
+    expect(workflow).toContain("git tag --list 'shiva-desktop-v*'")
+    expect(workflow).toContain('package_version="$(node -p "require(\'./package.json\').version")"')
+    expect(workflow).toContain('$3 + 1')
+    expect(workflow).toContain('A published version is never')
+    // The job inherits defaults.run.working-directory: desktop, so it cannot
+    // run a single step without checking the repository out first.
+    expect(workflow).toMatch(/resolve-version:[\s\S]*?uses: actions\/checkout@v4[\s\S]*?id: resolve/)
+
+    // No tag trigger: `paths` on a push block filters tag pushes too, and the
+    // publish job is what creates the tag now.
+    const triggers = workflow.slice(0, workflow.indexOf('\npermissions:'))
+    expect(triggers).toContain('branches:\n      - master')
+    expect(triggers).not.toContain("tags:")
+    expect(triggers).toContain("- '!desktop/docs/**'")
+
+    // A pre-release is tagged with a bare semver; only a stable release carries
+    // the product prefix, and the update feed reads stable releases.
+    expect(workflow).toContain(
+      `if [ "$prerelease" = 'true' ]; then tag="$version"; else tag="shiva-desktop-v$version"; fi`
+    )
+
+    // github.ref_name is `master` on a push, not a tag, so no step may read it:
+    // release notes and the release title both name the resolved tag.
+    expect(workflow).not.toContain('github.ref_name')
+    expect(
+      workflow.match(/RELEASE_TAG: \$\{\{ needs\.resolve-version\.outputs\.tag \}\}/g)
+    ).toHaveLength(2)
   })
 
   it('signs and notarizes both macOS architectures on tag releases', async () => {
@@ -434,14 +483,65 @@ describe('GitHub release contract', () => {
     expect(workflow).not.toContain('security find-generic-password')
     expect(workflow).not.toContain('WINDOWS_SIGNING_KEYCHAIN_SERVICE')
     expect(workflow).toContain('finalize-windows-release.mjs')
-    // Version comes from the pre-release input on a dispatch, else the tag ref.
-    expect(workflow).toContain(
-      'version="${PRERELEASE_TAG:-${GITHUB_REF_NAME#shiva-desktop-v}}"'
-    )
+    expect(workflow).toContain('version="${RELEASE_VERSION#v}"')
     expect(workflow).toContain('pattern: macos-*')
+    // Signing needs a self-hosted runner and the UKey, neither of which this
+    // repository has yet. The job stays here in full behind a repository
+    // variable, so turning it back on is a configuration change.
     expect(workflow).toMatch(
-      /publish:[\s\S]*?needs\.sign-windows\.result == 'success'[\s\S]*?- sign-windows/
+      /sign-windows:[\s\S]*?vars\.DESKTOP_WINDOWS_SIGNING == 'true'/
     )
+    expect(workflow).toMatch(
+      /macos-apple-silicon:[\s\S]*?vars\.DESKTOP_MACOS_RELEASE == 'true'/
+    )
+    expect(workflow).toMatch(/macos-intel:[\s\S]*?vars\.DESKTOP_MACOS_RELEASE == 'true'/)
+    // A skipped signing job must not block an unsigned release, but a failed
+    // one still must.
+    expect(workflow).toMatch(
+      /publish:[\s\S]*?needs\.sign-windows\.result != 'failure'[\s\S]*?- sign-windows/
+    )
+    // Whichever job produced the installer last owns the artifact name.
+    expect(workflow).toContain("echo 'windows_artifact=windows-x64' >> \"$GITHUB_OUTPUT\"")
+    expect(workflow).toContain(
+      "echo 'windows_artifact=windows-x64-unsigned' >> \"$GITHUB_OUTPUT\""
+    )
+    expect(
+      workflow.match(
+        /name: \$\{\{ needs\.resolve-version\.outputs\.windows_artifact \}\}/g
+      )
+    ).toHaveLength(2)
+  })
+
+  it('pins the update feed to the desktop release', async () => {
+    const workflow = await readFile(releaseWorkflow, 'utf8')
+
+    // Clients read releases/latest/download/latest.yml. This repository shares
+    // its tag namespace with the harness, so "latest" must be stated, never
+    // left to GitHub's date heuristic — and a pre-release must never claim it.
+    const publishJob = workflow.slice(
+      workflow.indexOf('\n  publish:'),
+      workflow.indexOf('\n  publish-prerelease:')
+    )
+    expect(publishJob).toContain('--latest')
+    const prereleaseJob = workflow.slice(workflow.indexOf('\n  publish-prerelease:'))
+    expect(prereleaseJob).toContain('--prerelease')
+    expect(prereleaseJob).not.toContain('--latest')
+
+    // Any other release published from this repository would steal the feed.
+    const workflows = await readdir(path.resolve(projectRoot, '../.github/workflows'))
+    for (const file of workflows) {
+      const yml = await readFile(
+        path.resolve(projectRoot, '../.github/workflows', file),
+        'utf8'
+      )
+      for (const line of yml.split('\n')) {
+        if (!line.includes('gh release create')) continue
+        expect(
+          file === 'desktop-release.yml',
+          `${file} creates a GitHub Release and would retarget the update feed`
+        ).toBe(true)
+      }
+    }
   })
 
   it('routes the published download through the official website', async () => {
@@ -452,15 +552,14 @@ describe('GitHub release contract', () => {
     )
 
     for (const readme of readmes) {
-      expect(readme).toContain('https://www.dshdesktop.com/#download')
-      expect(readme).not.toContain('| Platform | Package | Download |')
-      expect(readme).not.toContain('| 平台 | 安装包 | 下载 |')
+      expect(readme).toContain(
+        'https://github.com/INAC-Sistemas/shiva-code/releases/latest'
+      )
+      // The vendor's site does not serve our builds.
+      expect(readme).not.toContain('dshdesktop.com/#download')
+      expect(readme).not.toContain('github.com/dataelement/dsh-desktop/releases')
       expect(readme).not.toContain('Coming soon')
       expect(readme).not.toContain('即将发布')
-      expect(readme).not.toContain('github.com/dataelement/dsh-desktop/releases')
-      for (const asset of releaseAssets) {
-        expect(readme).not.toContain(`releases/latest/download/${asset}`)
-      }
     }
   })
 })
@@ -476,17 +575,15 @@ describe('prerelease parity workflow', () => {
     expect(yml).not.toContain('Publish validated Windows development pre-release')
   })
 
-  it('gates signing and both publish jobs so prerelease and release never overlap', async () => {
+  it('gates both publish jobs so prerelease and release never overlap', async () => {
     const yml = await load()
     expect(yml).toContain('publish-prerelease:')
-    expect(yml).toMatch(/publish:[\s\S]*inputs\.prerelease_tag == ''/)
-    expect(yml).toMatch(/publish-prerelease:[\s\S]*inputs\.prerelease_tag != ''/)
-    expect(yml).toMatch(/sign-windows:[\s\S]*inputs\.prerelease_tag != ''/)
-  })
-
-  it('mirrors a prerelease to an isolated ModelScope directory', async () => {
-    const yml = await load()
-    expect(yml).toContain('releases/prerelease/')
+    expect(yml).toMatch(
+      /publish:[\s\S]*needs\.resolve-version\.outputs\.prerelease != 'true'/
+    )
+    expect(yml).toMatch(
+      /publish-prerelease:[\s\S]*needs\.resolve-version\.outputs\.prerelease == 'true'/
+    )
   })
 
   it('parametrises the Windows smoke test executable', async () => {
@@ -497,11 +594,17 @@ describe('prerelease parity workflow', () => {
 })
 
 describe('rollback catalog publication', () => {
-  it('archives each release and rebuilds the version index', async () => {
+  it('ships the version index as an asset of the release it describes', async () => {
     const yml = await readFile(releaseWorkflow, 'utf8')
-    expect(yml).toContain('releases/archive/')
+    // Each release is its own immutable archive, so the index is rebuilt from
+    // the releases that exist rather than from a mirror that could drift.
+    expect(yml).toContain('gh release list')
     expect(yml).toContain('scripts/build-version-index.mjs')
-    expect(yml).toContain('releases/versions.json')
+    expect(yml).toContain('release-assets/versions.json')
+    // Built before the release exists, so it uploads with everything else.
+    expect(yml).toMatch(
+      /Build the rollback version index[\s\S]*?Create the tag and the release/
+    )
   })
 })
 

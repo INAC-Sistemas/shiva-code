@@ -25,11 +25,11 @@
 DSH Desktop convierte la experiencia local de DeepSeek Harness en una aplicación de escritorio instalable. Inicia Harness automáticamente, guarda Profile, plugins, espacios de trabajo, ajustes de modelos y sesiones fuera del directorio de la aplicación y abre la interfaz completa cuando el Runtime local está listo.
 
 > [!IMPORTANT]
-> DSH Desktop es una versión preliminar basada en `@deepseek-ai/dsh@0.1.2-alpha.4`, que evoluciona rápidamente. Las versiones de macOS están firmadas y notarizadas por Apple. Los instaladores para Windows x64 también están firmados; las advertencias de seguridad de Windows pueden disminuir gradualmente a medida que el editor acumula reputación de descargas e instalaciones.
+> DSH Desktop es una versión preliminar basada en `@deepseek-ai/dsh@0.1.2-alpha.4`, que evoluciona rápidamente. Los instaladores para Windows x64 aún no están firmados, por lo que SmartScreen de Windows advierte sobre un editor desconocido en la primera instalación. Esto no afecta a las actualizaciones: una versión instalada busca, descarga e instala versiones nuevas con normalidad. Los paquetes para macOS todavía no se publican.
 
 ## Descarga
 
-Descarga DSH Desktop para macOS y Windows desde el [sitio web oficial](https://www.dshdesktop.com/#download).
+Descarga DSH Desktop para Windows desde la [versión más reciente](https://github.com/INAC-Sistemas/shiva-code/releases/latest).
 
 Las versiones instaladas comprueban actualizaciones poco después del inicio y cada seis horas. Cuando hay una versión nueva, DSH Desktop pregunta antes de descargarla; la instalación solo comienza al elegir **Restart and install**. También puedes comprobar manualmente o saltar una versión sin ocultar versiones posteriores.
 

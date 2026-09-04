@@ -91,7 +91,7 @@ The public tunnel is optional and forwards only the paired mobile surface; it do
 
 Installed macOS and Windows builds use `electron-updater`. The app checks shortly after startup, every six hours, and after a long system resume. A newly available version is offered before download. Download begins only after user consent, and installation begins only when the user chooses to restart and install. Users can skip one version without suppressing later releases.
 
-Update metadata and artifacts are produced by the native release workflow. macOS arm64 and x64 metadata is merged for the generic provider; the signed Windows installer has its blockmap and metadata regenerated after signing.
+Update metadata and artifacts are produced by the native release workflow, which publishes them as GitHub Release assets of this repository. The feed is the `generic` provider pointed at the permanent latest-release redirect; a rollback points it at one release's own asset directory. macOS arm64 and x64 metadata is merged into a single channel file. Signing, when enabled, rewrites the installer, so its blockmap and metadata are regenerated afterwards. See [release-runbook.md](release-runbook.md) for what pins the feed to a desktop release and why multi-range downloads are disabled.
 
 ## Desktop customization boundary
 

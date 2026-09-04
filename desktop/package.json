@@ -382,7 +382,8 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://dshdesktop.com/updates/latest/"
+        "url": "https://github.com/INAC-Sistemas/shiva-code/releases/latest/download/",
+        "useMultipleRangeRequest": false
       }
     ],
     "detectUpdateChannel": false,

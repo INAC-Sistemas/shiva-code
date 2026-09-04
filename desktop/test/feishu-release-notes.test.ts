@@ -210,16 +210,15 @@ Description here.
     expect(buildPrompt(['--tag', 'shiva-desktop-v0.8.0'])).toContain('Previous stable tag: shiva-desktop-v0.7.1')
   })
 
-  it('integrates Feishu release notification into GitHub Actions workflow', () => {
+  it('no longer notifies the upstream vendor’s webhook', () => {
     const workflow = readFileSync(workflowPath, 'utf8')
-    expect(workflow).toContain('feishu_release_notes.py build-prompt')
-    expect(workflow).toContain('feishu_release_notes.py validate')
-    expect(workflow).toContain('feishu_release_notes.py send')
-    expect(workflow).toContain('FEISHU_RELEASE_WEBHOOK')
-
-    // Check publish-prerelease job has Feishu notification steps
-    expect(workflow).toMatch(/publish-prerelease:[\s\S]*feishu_release_notes\.py build-prompt[\s\S]*--prerelease/)
-    expect(workflow).toMatch(/publish-prerelease:[\s\S]*feishu_release_notes\.py validate[\s\S]*--prerelease/)
-    expect(workflow).toMatch(/publish-prerelease:[\s\S]*feishu_release_notes\.py send[\s\S]*--prerelease/)
+    const script = readFileSync(scriptPath, 'utf8')
+    // The Feishu webhook belongs to the upstream vendor. This module survives
+    // because github_release_notes.py imports its release-evidence half, but
+    // nothing here may send anywhere.
+    expect(workflow).not.toContain('FEISHU_RELEASE_WEBHOOK')
+    expect(workflow).not.toContain('feishu_release_notes.py send')
+    expect(script).not.toContain('send_feishu_notification')
+    expect(script).not.toContain('urllib')
   })
 })

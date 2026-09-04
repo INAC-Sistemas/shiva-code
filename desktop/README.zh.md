@@ -24,11 +24,11 @@
 DSH Desktop 把本地 DeepSeek Harness 封装为可安装的桌面应用。它会自动启动 Harness，把 Profile、插件、工作区、模型配置和会话保存在应用安装目录之外，并在本地 Runtime 就绪后直接进入完整 Harness 界面。
 
 > [!IMPORTANT]
-> DSH Desktop 当前处于早期预览阶段，基于仍在快速迭代的 `@deepseek-ai/dsh@0.1.2-alpha.4`。macOS 正式包已完成代码签名并通过 Apple 公证；Windows x64 安装包也已完成代码签名。随着下载量、安装量和发行者信誉逐步积累，Windows 安全提示会逐渐减少，但不会立即消失。
+> DSH Desktop 当前处于早期预览阶段，基于仍在快速迭代的 `@deepseek-ai/dsh@0.1.2-alpha.4`。Windows x64 安装包尚未完成代码签名，因此首次安装时 Windows SmartScreen 会提示发行者未知。这不影响更新：已安装的版本仍可正常检查、下载并安装新版本。macOS 安装包暂未发布。
 
 ## 下载安装
 
-请前往 [DSH Desktop 官网](https://www.dshdesktop.com/#download)下载 macOS 和 Windows 安装包。
+请前往[最新发行版](https://github.com/INAC-Sistemas/shiva-code/releases/latest)下载 Windows 安装包。
 
 安装版会在启动后及每六小时检查更新。发现新版本时，DSH Desktop 会先询问用户；同意后才开始下载，只有选择“重新启动并安装”后才会进入安装。你也可以从应用菜单手动检查，或跳过当前版本而不影响后续版本提示。
 

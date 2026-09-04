@@ -102,7 +102,11 @@ describe('installing a specific version', () => {
     expect(manager).toContain('export async function installSpecificVersion')
     expect(manager).toContain('archiveFeedUrl(version)')
     expect(manager).toContain('autoUpdater.allowDowngrade = true')
-    expect(manager).toContain("setFeedURL({ provider: 'generic', url: STABLE_FEED_URL })")
+    expect(manager).toContain('url: STABLE_FEED_URL')
+    // GitHub's asset CDN answers a multi-range request with 501, so every feed
+    // this app sets must opt out of them or each update wastes a failed round
+    // trip before falling back to a full download.
+    expect(manager.match(/useMultipleRangeRequest: false/g)).toHaveLength(2)
     expect(manager).toContain('autoUpdater.allowDowngrade = false')
     expect(manager).toContain('downloadAvailableUpdate()')
   })

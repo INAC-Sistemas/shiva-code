@@ -9,13 +9,22 @@ import {
 } from '../src/main/update/version-catalog'
 
 describe('version-catalog constants', () => {
-  it('points the stable feed and index at the dshdesktop domain', () => {
-    expect(STABLE_FEED_URL).toBe('https://dshdesktop.com/updates/latest/')
-    expect(VERSION_INDEX_URL).toBe('https://dshdesktop.com/updates/versions.json')
+  it('points the stable feed and index at this repository’s latest release', () => {
+    expect(STABLE_FEED_URL).toBe(
+      'https://github.com/INAC-Sistemas/shiva-code/releases/latest/download/'
+    )
+    expect(VERSION_INDEX_URL).toBe(
+      'https://github.com/INAC-Sistemas/shiva-code/releases/latest/download/versions.json'
+    )
   })
 
   it('builds a per-version archive feed url with a trailing slash', () => {
-    expect(archiveFeedUrl('1.2.3')).toBe('https://dshdesktop.com/updates/archive/1.2.3/')
+    expect(archiveFeedUrl('1.2.3')).toBe(
+      'https://github.com/INAC-Sistemas/shiva-code/releases/download/shiva-desktop-v1.2.3/'
+    )
+    // The trailing slash is what makes electron-updater resolve the installer
+    // name from latest.yml as a sibling instead of replacing the last segment.
+    expect(archiveFeedUrl('1.2.3').endsWith('/')).toBe(true)
   })
 })
 
@@ -37,14 +46,14 @@ describe('parseVersionIndex', () => {
   it('keeps well-formed entries and drops the rest', () => {
     const raw = {
       versions: [
-        { version: '1.2.3', tag: 'v1.2.3', archiveUrl: 'https://dshdesktop.com/updates/archive/1.2.3/' },
-        { version: '', tag: 'v0', archiveUrl: 'x' },
+        { version: '1.2.3', tag: 'shiva-desktop-v1.2.3', archiveUrl: 'https://github.com/INAC-Sistemas/shiva-code/releases/download/shiva-desktop-v1.2.3/' },
+        { version: '', tag: 'shiva-desktop-v0', archiveUrl: 'x' },
         { nope: true },
         42
       ]
     }
     expect(parseVersionIndex(raw)).toEqual([
-      { version: '1.2.3', tag: 'v1.2.3', archiveUrl: 'https://dshdesktop.com/updates/archive/1.2.3/' }
+      { version: '1.2.3', tag: 'shiva-desktop-v1.2.3', archiveUrl: 'https://github.com/INAC-Sistemas/shiva-code/releases/download/shiva-desktop-v1.2.3/' }
     ])
   })
 
@@ -58,9 +67,9 @@ describe('parseVersionIndex', () => {
 describe('fetchAvailableReleases', () => {
   const index = {
     versions: [
-      { version: '1.0.0', tag: 'v1.0.0', archiveUrl: 'a' },
-      { version: '1.2.0', tag: 'v1.2.0', archiveUrl: 'b' },
-      { version: '1.1.0', tag: 'v1.1.0', archiveUrl: 'c' }
+      { version: '1.0.0', tag: 'shiva-desktop-v1.0.0', archiveUrl: 'a' },
+      { version: '1.2.0', tag: 'shiva-desktop-v1.2.0', archiveUrl: 'b' },
+      { version: '1.1.0', tag: 'shiva-desktop-v1.1.0', archiveUrl: 'c' }
     ]
   }
   const ok = () =>
