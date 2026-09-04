@@ -20,7 +20,7 @@ async function resolveScript(): Promise<string> {
   const workflow = parse(await readFile(releaseWorkflow, 'utf8')) as {
     jobs: Record<string, { steps: Array<{ id?: string; run?: string }> }>
   }
-  const step = workflow.jobs['resolve-version'].steps.find((s) => s.id === 'resolve')
+  const step = workflow.jobs['resolve-version']?.steps.find((s) => s.id === 'resolve')
   if (!step?.run) throw new Error('resolve-version has no step with id "resolve"')
   return step.run
 }

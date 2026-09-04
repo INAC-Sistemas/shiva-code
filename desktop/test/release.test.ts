@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
@@ -517,6 +518,24 @@ describe('GitHub release contract', () => {
         /name: \$\{\{ needs\.resolve-version\.outputs\.windows_artifact \}\}/g
       )
     ).toHaveLength(2)
+  })
+
+  it('declares a shell for every POSIX step in the Windows job', async () => {
+    const workflow = parse(await readFile(releaseWorkflow, 'utf8')) as {
+      jobs: Record<string, { steps: Array<{ name?: string; run?: string; shell?: string }> }>
+    }
+
+    // The Windows runner defaults to PowerShell, where `$VAR` is an undefined
+    // variable that expands to nothing instead of reading the environment. A
+    // step written as shell script must therefore say which shell it wants.
+    const windows = workflow.jobs['windows-x64']
+    if (!windows) throw new Error('the workflow has no windows-x64 job')
+    const undeclared = windows.steps
+      .filter((step) => step.run && !step.shell)
+      .filter((step) => /\$\{?[A-Za-z_]|\bset -|\|\||&&/.test(step.run ?? ''))
+      .map((step) => step.name ?? '(unnamed)')
+
+    expect(undeclared).toEqual([])
   })
 
   it('pins the update feed to the desktop release', async () => {

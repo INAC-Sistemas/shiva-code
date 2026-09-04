@@ -176,6 +176,10 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Set app version
         if: needs.resolve-version.outputs.publish == 'true'
+        # The Windows runner defaults to PowerShell, where `$APP_VERSION` is an
+        # undefined variable that expands to nothing rather than an env lookup.
+        # The three jobs keep one spelling, so this is declared in all of them.
+        shell: bash
         env:
           APP_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: npm version --no-git-tag-version --allow-same-version "$APP_VERSION"
@@ -316,6 +320,10 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Set app version
         if: needs.resolve-version.outputs.publish == 'true'
+        # The Windows runner defaults to PowerShell, where `$APP_VERSION` is an
+        # undefined variable that expands to nothing rather than an env lookup.
+        # The three jobs keep one spelling, so this is declared in all of them.
+        shell: bash
         env:
           APP_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: npm version --no-git-tag-version --allow-same-version "$APP_VERSION"
@@ -455,6 +463,10 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Set app version
         if: needs.resolve-version.outputs.publish == 'true'
+        # The Windows runner defaults to PowerShell, where `$APP_VERSION` is an
+        # undefined variable that expands to nothing rather than an env lookup.
+        # The three jobs keep one spelling, so this is declared in all of them.
+        shell: bash
         env:
           APP_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: npm version --no-git-tag-version --allow-same-version "$APP_VERSION"
