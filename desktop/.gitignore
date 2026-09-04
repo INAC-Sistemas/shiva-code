@@ -20,6 +20,11 @@ build/python-runtime/
 .coaligne/
 .coaligneignore
 
+# The repository root ignores every `lib/` because harness packages build into
+# one. dshmarket ships its runtime checked in, so re-include the directory here
+# (a deeper .gitignore overrides the root's pattern).
+!packages/*/lib/
+
 
 # Python bytecode from release-note scripts / tests
 __pycache__/

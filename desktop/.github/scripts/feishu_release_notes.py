@@ -34,6 +34,12 @@ MAX_COMMIT_DETAILS_LENGTH = 24_000
 MAX_CODE_DIFF_LENGTH = 48_000
 MAX_OUTPUT_LENGTH = 12_000
 
+# The desktop app is one subtree of a repository that also carries the harness,
+# so every release range is read under the current directory. Without it a
+# release note between two `v*` tags also describes the harness commits that
+# landed in between.
+SUBTREE_PATHSPEC = ("--", ".")
+
 PROMPT_TEMPLATE = """\
 You are DSH Desktop's Release Bot. Rewrite the source release note as polished,
 {role_desc} in Chinese and English.
@@ -213,8 +219,9 @@ def collect_range_evidence(release_tag: str, previous_tag: str) -> tuple[str, st
             "--no-merges",
             "--pretty=format:---%nSubject: %s%nBody:%n%b",
             release_range,
+            *SUBTREE_PATHSPEC,
         )
-        diff_summary = git_output("diff", "--stat", release_range)
+        diff_summary = git_output("diff", "--stat", release_range, *SUBTREE_PATHSPEC)
         code_diff = git_output(
             "diff",
             "--unified=1",
@@ -235,7 +242,7 @@ def collect_range_evidence(release_tag: str, previous_tag: str) -> tuple[str, st
             "100",
             ref,
         )
-        diff_summary = git_output("show", "--stat", "--format=", ref)
+        diff_summary = git_output("show", "--stat", "--format=", ref, *SUBTREE_PATHSPEC)
         code_diff = git_output(
             "show",
             "--format=",

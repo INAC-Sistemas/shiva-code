@@ -4,6 +4,13 @@ import { describe, expect, it } from 'vitest'
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
 
+// GitHub only reads .github/workflows/ at the repository root, so the desktop
+// release workflow sits one level above this npm project.
+const releaseWorkflow = path.resolve(
+  projectRoot,
+  '../.github/workflows/desktop-release.yml'
+)
+
 const releaseAssets = [
   'dsh-desktop-mac-arm64.dmg',
   'dsh-desktop-mac-x64.dmg',
@@ -266,7 +273,7 @@ describe('GitHub release contract', () => {
       }
     }
     const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      releaseWorkflow,
       'utf8'
     )
 
@@ -345,7 +352,7 @@ describe('GitHub release contract', () => {
 
   it('builds and publishes every supported platform', async () => {
     const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      releaseWorkflow,
       'utf8'
     )
 
@@ -379,7 +386,7 @@ describe('GitHub release contract', () => {
 
   it('signs and notarizes both macOS architectures on tag releases', async () => {
     const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      releaseWorkflow,
       'utf8'
     )
 
@@ -411,7 +418,7 @@ describe('GitHub release contract', () => {
 
   it('signs Windows installers on the local UKey runner before publishing', async () => {
     const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      releaseWorkflow,
       'utf8'
     )
 
@@ -458,7 +465,7 @@ describe('GitHub release contract', () => {
 
 describe('prerelease parity workflow', () => {
   const load = () =>
-    readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+    readFile(releaseWorkflow, 'utf8')
 
   it('replaces the windows-only prerelease input with a general one', async () => {
     const yml = await load()
@@ -489,10 +496,7 @@ describe('prerelease parity workflow', () => {
 
 describe('rollback catalog publication', () => {
   it('archives each release and rebuilds the version index', async () => {
-    const yml = await readFile(
-      path.join(projectRoot, '.github/workflows/release.yml'),
-      'utf8'
-    )
+    const yml = await readFile(releaseWorkflow, 'utf8')
     expect(yml).toContain('releases/archive/')
     expect(yml).toContain('scripts/build-version-index.mjs')
     expect(yml).toContain('releases/versions.json')
@@ -501,7 +505,7 @@ describe('rollback catalog publication', () => {
 
 describe('AI-organized GitHub release body', () => {
   const load = () =>
-    readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+    readFile(releaseWorkflow, 'utf8')
 
   it('drops --generate-notes for the real release and uses a notes file', async () => {
     const yml = await load()

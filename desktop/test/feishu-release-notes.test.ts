@@ -7,7 +7,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 describe('Feishu release notes pipeline', () => {
   const pythonTestTimeoutMs = 15_000
   const scriptPath = join(process.cwd(), '.github', 'scripts', 'feishu_release_notes.py')
-  const workflowPath = join(process.cwd(), '.github', 'workflows', 'release.yml')
+  // GitHub only reads .github/workflows/ at the repository root, so the desktop
+  // release workflow sits one level above this npm project.
+  const workflowPath = join(
+    process.cwd(),
+    '..',
+    '.github',
+    'workflows',
+    'desktop-release.yml'
+  )
 
   const pythonEnv = { ...process.env, PYTHONIOENCODING: 'utf-8' }
 

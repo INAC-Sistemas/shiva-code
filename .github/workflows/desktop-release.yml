@@ -1,12 +1,17 @@
 name: Release desktop installers
 
+# Desktop releases keep the bare `v*` tag namespace they had as a standalone
+# repository; the harness releases under `dsh-v*`, so the two never collide.
 on:
   push:
     tags:
       - 'v*'
   pull_request:
     branches:
-      - main
+      - master
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
     inputs:
       target:
@@ -30,6 +35,14 @@ concurrency:
   group: desktop-release-${{ github.ref }}
   cancel-in-progress: false
 
+# The desktop app is a self-contained npm project under desktop/. Every `run`
+# step below is one of its scripts, so the whole workflow takes that as its
+# directory; action inputs (`path:`, `cache-dependency-path:`) are resolved
+# against the workspace root instead and carry the prefix explicitly.
+defaults:
+  run:
+    working-directory: desktop
+
 jobs:
   macos-apple-silicon:
     name: macOS Apple Silicon
@@ -45,6 +58,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - name: Set app version from release tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm version --no-git-tag-version --allow-same-version "${{ github.ref_name }}"
@@ -152,19 +166,19 @@ jobs:
         with:
           name: macos-apple-silicon
           path: |
-            dist/dsh-desktop-mac-arm64.dmg
-            dist/dsh-desktop-mac-arm64.zip
-            dist/dsh-desktop-mac-arm64.zip.blockmap
-            dist/latest-mac-arm64.yml
+            desktop/dist/dsh-desktop-mac-arm64.dmg
+            desktop/dist/dsh-desktop-mac-arm64.zip
+            desktop/dist/dsh-desktop-mac-arm64.zip.blockmap
+            desktop/dist/latest-mac-arm64.yml
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.prerelease_tag == '' }}
         with:
           name: macos-apple-silicon-dev
           path: |
-            dist-dev/dsh-desktop-dev-mac-arm64.dmg
-            dist-dev/dsh-desktop-dev-mac-arm64.zip
-            dist-dev/dsh-desktop-dev-mac-arm64.zip.blockmap
+            desktop/dist-dev/dsh-desktop-dev-mac-arm64.dmg
+            desktop/dist-dev/dsh-desktop-dev-mac-arm64.zip
+            desktop/dist-dev/dsh-desktop-dev-mac-arm64.zip.blockmap
           if-no-files-found: error
 
   macos-intel:
@@ -181,6 +195,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - name: Set app version from release tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm version --no-git-tag-version --allow-same-version "${{ github.ref_name }}"
@@ -288,19 +303,19 @@ jobs:
         with:
           name: macos-intel
           path: |
-            dist/dsh-desktop-mac-x64.dmg
-            dist/dsh-desktop-mac-x64.zip
-            dist/dsh-desktop-mac-x64.zip.blockmap
-            dist/latest-mac-x64.yml
+            desktop/dist/dsh-desktop-mac-x64.dmg
+            desktop/dist/dsh-desktop-mac-x64.zip
+            desktop/dist/dsh-desktop-mac-x64.zip.blockmap
+            desktop/dist/latest-mac-x64.yml
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.prerelease_tag == '' }}
         with:
           name: macos-intel-dev
           path: |
-            dist-dev/dsh-desktop-dev-mac-x64.dmg
-            dist-dev/dsh-desktop-dev-mac-x64.zip
-            dist-dev/dsh-desktop-dev-mac-x64.zip.blockmap
+            desktop/dist-dev/dsh-desktop-dev-mac-x64.dmg
+            desktop/dist-dev/dsh-desktop-dev-mac-x64.zip
+            desktop/dist-dev/dsh-desktop-dev-mac-x64.zip.blockmap
           if-no-files-found: error
 
   windows-x64:
@@ -319,6 +334,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - name: Set app version from release tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm version --no-git-tag-version --allow-same-version "${{ github.ref_name }}"
@@ -433,9 +449,9 @@ jobs:
         with:
           name: windows-x64-unsigned
           path: |
-            dist/dsh-desktop-windows-x64-setup.exe
-            dist/dsh-desktop-windows-x64-setup.exe.blockmap
-            dist/latest.yml
+            desktop/dist/dsh-desktop-windows-x64-setup.exe
+            desktop/dist/dsh-desktop-windows-x64-setup.exe.blockmap
+            desktop/dist/latest.yml
           if-no-files-found: error
           retention-days: 1
       - uses: actions/upload-artifact@v4
@@ -443,9 +459,9 @@ jobs:
         with:
           name: windows-x64-dev
           path: |
-            dist-dev/dsh-desktop-dev-windows-x64-setup.exe
-            dist-dev/dsh-desktop-dev-windows-x64-setup.exe.blockmap
-            dist-dev/latest.yml
+            desktop/dist-dev/dsh-desktop-dev-windows-x64-setup.exe
+            desktop/dist-dev/dsh-desktop-dev-windows-x64-setup.exe.blockmap
+            desktop/dist-dev/latest.yml
           if-no-files-found: error
 
   sign-windows:
@@ -466,6 +482,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -574,16 +591,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - run: npm ci --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: macos-*
-          path: release-assets
+          path: desktop/release-assets
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: windows-x64
-          path: release-assets
+          path: desktop/release-assets
       - name: Merge macOS update metadata
         run: |
           set -euo pipefail
@@ -798,16 +816,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - run: npm ci --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: macos-*
-          path: release-assets
+          path: desktop/release-assets
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: windows-x64
-          path: release-assets
+          path: desktop/release-assets
       - name: Merge macOS update metadata
         run: |
           set -euo pipefail

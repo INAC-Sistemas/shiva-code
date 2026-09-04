@@ -182,6 +182,12 @@ export function buildProfilePluginCommandEnvironment(
   result.NO_COLOR = '1'
   result.npm_config_side_effects_cache = 'false'
   result.PNPM_CONFIG_SIDE_EFFECTS_CACHE = 'false'
+  // The shim on PATH resolves to the pnpm this app bundles and is tested
+  // against. pnpm 10 otherwise reads the `packageManager` field of the nearest
+  // package.json above the profile directory and replaces itself with that
+  // version — which, in a checkout, is the harness root's pnpm.
+  result.npm_config_manage_package_manager_versions = 'false'
+  result.PNPM_CONFIG_MANAGE_PACKAGE_MANAGER_VERSIONS = 'false'
   return result
 }
 

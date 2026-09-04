@@ -1,4 +1,4 @@
-name: Backfill release archive
+name: Backfill desktop release archive
 
 # One-shot: copy an existing GitHub Release into the ModelScope rollback
 # archive (releases/archive/<version>/) and rebuild releases/versions.json,
@@ -17,8 +17,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: backfill-archive
+  group: desktop-backfill-archive
   cancel-in-progress: false
+
+# The desktop app is a self-contained npm project under desktop/; every step
+# here runs its scripts, so the whole workflow takes that as its directory.
+defaults:
+  run:
+    working-directory: desktop
 
 jobs:
   backfill:

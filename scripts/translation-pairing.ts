@@ -165,6 +165,7 @@ export const TRANSLATION_SCOPE_GLOB_EXCLUDES = [
   '**/__pycache__/**',
   '**/.pytest_cache/**',
   'apps/web/dist/**',
+  'desktop/**',
   '.artifacts/**',
   'python/sdk-runtime/src/deepseek_harness_runtime/runtime/dsh-jsonrpc-agent-*/**',
   'python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/**',
@@ -178,6 +179,10 @@ function isTranslationSourceExcluded(file: string): boolean {
       || segment.startsWith('.doc-typecheck-')
     || segment.startsWith('.node-next-types-'))
     || file.startsWith('apps/web/dist/')
+    // The desktop app translates its own READMEs into six languages under its
+    // own naming (README.zh.md, README.pt.md, …), enforced by its
+    // readme-parity test. It has no .i18n.yaml records and no zh-only pairs.
+    || file.startsWith('desktop/')
     || file.startsWith('python/sdk-runtime/src/deepseek_harness_runtime/runtime/dsh-jsonrpc-agent-')
     || file.startsWith('python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/')
 }
