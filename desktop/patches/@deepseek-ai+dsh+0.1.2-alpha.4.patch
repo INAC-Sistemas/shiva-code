@@ -1,0 +1,31 @@
+diff --git a/node_modules/@deepseek-ai/dsh/package.json b/node_modules/@deepseek-ai/dsh/package.json
+index 28eaff9..2445f81 100644
+--- a/node_modules/@deepseek-ai/dsh/package.json
++++ b/node_modules/@deepseek-ai/dsh/package.json
+@@ -28,6 +28,26 @@
+   },
+   "license": "MIT",
+   "dependencies": {
++    "dsh-desktop-client-ui": "0.1.0",
++    "dsh-desktop-hmr-fallback": "0.1.0",
++    "dsh-desktop-market-installer": "0.1.0",
++    "dsh-desktop-preset-transfer": "0.1.0",
++    "dsh-better-sidebar": "0.15.2",
++    "dsh-clock": "0.1.0",
++    "dsh-shiva-theme": "0.1.0",
++    "dsh-user-menu": "0.1.0",
++    "dsh-sidebar-qa": "0.4.0",
++    "dsh-docs-panel": "0.1.0",
++    "dsh-flowglass": "0.4.4",
++    "dsh-i18n": "0.1.0",
++    "dsh-login": "0.1.0",
++    "dsh-mds": "0.1.0",
++    "dsh-openviking": "0.1.1",
++    "dsh-profiles": "0.1.0",
++    "dsh-prototype": "0.1.0",
++    "dsh-skill-library": "0.1.0",
++    "dsh-skill-manager": "0.1.0",
++    "dsh-vps-status": "0.1.0",
+     "commander": "^15.0.0",
+     "js-yaml": "^4.2.0",
+     "node-addon-require-builtin": "^0.1.4",
