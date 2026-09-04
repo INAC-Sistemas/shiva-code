@@ -34,6 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
+# O compose de produção carrega POSTGRES_PASSWORD, SESSION_SECRET e DATABASE_URL
+# escritos no próprio arquivo, em vez de lê-los de .env ou de um cofre. Ele é
+# local do deploy e nunca pode entrar no versionamento.
+docker-compose.prod.yml
+
 # vercel
 .vercel
 
