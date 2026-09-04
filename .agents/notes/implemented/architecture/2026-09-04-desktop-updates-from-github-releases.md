@@ -12,7 +12,9 @@ Publishing was also unreachable. A release required pushing a `shiva-desktop-v*`
 
 ## Decision
 
-Updates ship from GitHub Releases of `INAC-Sistemas/shiva-code`, and a push to `rai` publishes one. `rai` is the product's integration branch: `master` tracks the upstream harness and does not carry the desktop app at all, so it is not a release branch. The cost is that `workflow_dispatch` — the re-cut and pre-release paths — stays absent from the Actions UI until this workflow also exists on the default branch.
+Updates ship from GitHub Releases of `INAC-Sistemas/shiva-code`, and a push to `master` publishes one. Only the default branch releases, so a release is never cut from an integration branch by accident, and `workflow_dispatch` — the re-cut and pre-release paths — is offered in the Actions UI, which it is not for a workflow absent from the default branch.
+
+This required moving the fork's `master` onto the product line. It had been left at the commit `rai` branched from while local checkouts fast-forwarded it to the upstream harness's own master, so it carried no desktop app; `origin/master` was a strict ancestor of `rai`, and the move was a fast-forward.
 
 ### The feed stays on the `generic` provider
 
@@ -52,7 +54,7 @@ Only the vendor's own infrastructure was deleted: the ModelScope mirror, `deskto
 
 ## Consequences
 
-A push to `rai` touching the desktop app ships a release, so version numbers advance with merges rather than with deliberate tagging. Doc, test, and Markdown-only paths are excluded from the trigger; anything else under `desktop/` publishes and shows an update card to every installed app within six hours.
+A push to `master` touching the desktop app ships a release, so version numbers advance with merges rather than with deliberate tagging. Doc, test, and Markdown-only paths are excluded from the trigger; anything else under `desktop/` publishes and shows an update card to every installed app within six hours.
 
 Windows installers are unsigned until `DESKTOP_WINDOWS_SIGNING` is set, so SmartScreen warns about an unknown publisher on first install. Updates themselves are unaffected: `win.verifyUpdateCodeSignature` was already `false`.
 

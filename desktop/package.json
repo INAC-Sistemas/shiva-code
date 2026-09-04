@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A cross-platform desktop shell for DeepSeek Harness.",
   "private": true,
   "type": "module",

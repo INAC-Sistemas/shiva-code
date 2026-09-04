@@ -12,7 +12,9 @@ Status: implemented
 
 ## Decision
 
-更新从 `INAC-Sistemas/shiva-code` 的 GitHub Releases 发布，并且向 `rai` 推送即发布一个版本。`rai` 是产品的集成分支：`master` 跟踪上游 harness，根本不含桌面应用，因此不是发布分支。代价是在本工作流也存在于默认分支之前，`workflow_dispatch`——即重新发布与预发布路径——不会出现在 Actions 界面中。
+更新从 `INAC-Sistemas/shiva-code` 的 GitHub Releases 发布，并且向 `master` 推送即发布一个版本。只有默认分支才发布，因此不会有人从集成分支上误切一个版本；而 `workflow_dispatch`——即重新发布与预发布路径——也会出现在 Actions 界面中，这对不在默认分支上的工作流是不成立的。
+
+这需要把 fork 的 `master` 移到产品线上。它此前一直停在 `rai` 的分叉点，而本地检出又把它快进到了上游 harness 自己的 master，因此它不含桌面应用；`origin/master` 是 `rai` 的严格祖先，这次移动是一次快进。
 
 ### 更新源仍使用 `generic` provider
 
@@ -52,7 +54,7 @@ Status: implemented
 
 ## Consequences
 
-向 `rai` 推送并触及桌面应用即发布一个版本，因此版本号随合并推进，而非随刻意打标签推进。文档、测试和仅 Markdown 的路径已排除在触发器之外；`desktop/` 下的其他改动都会发布，并在六小时内向每个已安装的应用弹出更新卡片。
+向 `master` 推送并触及桌面应用即发布一个版本，因此版本号随合并推进，而非随刻意打标签推进。文档、测试和仅 Markdown 的路径已排除在触发器之外；`desktop/` 下的其他改动都会发布，并在六小时内向每个已安装的应用弹出更新卡片。
 
 在设置 `DESKTOP_WINDOWS_SIGNING` 之前，Windows 安装包未签名，因此首次安装时 SmartScreen 会提示发行者未知。更新本身不受影响：`win.verifyUpdateCodeSignature` 本就为 `false`。
 

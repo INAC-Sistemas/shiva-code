@@ -7,14 +7,13 @@ name: Release desktop installers
 # on an already-pushed commit has a degenerate diff, which would silently
 # swallow the release.
 on:
-  # A push to rai ships a release. rai is the product's integration branch:
-  # master tracks the upstream harness and carries no desktop app. The patch
-  # digit is automatic; bump desktop/package.json in a reviewed commit to cut a
-  # minor or major. Doc, test, and Markdown edits are excluded so they do not
-  # push an update card to every installed app.
+  # A push to master ships a release. The patch digit is automatic; bump
+  # desktop/package.json in a reviewed commit to cut a minor or major. Doc,
+  # test, and Markdown edits are excluded so they do not push an update card to
+  # every installed app.
   push:
     branches:
-      - rai
+      - master
     paths:
       - 'desktop/**'
       - '!desktop/docs/**'
@@ -23,7 +22,8 @@ on:
       - '.github/workflows/desktop-release.yml'
   # A pull request builds the unsigned development installer and runs the
   # packaged smoke test, so desktop changes are exercised before they merge.
-  # Both integration branches are listed: work lands on `rai` first.
+  # `rai` is listed alongside `master` because work can land there first; only
+  # `master` releases.
   pull_request:
     branches:
       - master

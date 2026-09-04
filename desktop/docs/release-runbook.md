@@ -2,9 +2,9 @@
 
 ## Cutting a release
 
-A push to `rai` that touches the desktop app releases it. `rai` is the product's integration branch; `master` tracks the upstream harness and carries no desktop app, so it never releases. The `resolve-version` job picks the version, the Windows job builds and smoke-tests the installer, and the `publish` job creates the tag `shiva-desktop-v<semver>` and the GitHub Release in one step. Nothing has to be tagged by hand.
+A push to `master` that touches the desktop app releases it. Only the default branch releases, so a release is never cut from an integration branch by accident. The `resolve-version` job picks the version, the Windows job builds and smoke-tests the installer, and the `publish` job creates the tag `shiva-desktop-v<semver>` and the GitHub Release in one step. Nothing has to be tagged by hand.
 
-Because the release branch is not the repository's default branch, `workflow_dispatch` does not appear in the Actions UI until this workflow also exists on `master`. Until then the push trigger is the only way to release, and the re-cut and pre-release paths below are unavailable.
+A pull request into `master` or `rai` builds the unsigned development installer and runs the packaged smoke test, so desktop changes are exercised before they merge; neither publishes.
 
 Doc, test, and Markdown-only edits under `desktop/` are excluded from the trigger, so they do not push an update card to every installed app.
 
@@ -72,7 +72,7 @@ To enable:
 
 The workflow pins Jsign 7.5 by SHA-256 and uses the SafeNet `ETOKEN` store, SHA-256 signing, and a DigiCert RFC 3161 timestamp. GitHub injects the PIN only into the signing step, which copies it to a mode-`600` temporary file, removes it from the shell environment, and deletes the file when the step exits. The PIN is never printed or passed as a command-line argument.
 
-Rehearse the first signed release with a `prerelease_tag` dispatch before letting one reach `rai`. Afterwards, verify that the installer shows the expected publisher and a valid RFC 3161 timestamp in its Digital Signatures properties.
+Rehearse the first signed release with a `prerelease_tag` dispatch before letting one reach `master`. Afterwards, verify that the installer shows the expected publisher and a valid RFC 3161 timestamp in its Digital Signatures properties.
 
 ### macOS: `vars.DESKTOP_MACOS_RELEASE`
 
