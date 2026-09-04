@@ -35,6 +35,22 @@ Installed apps read `https://github.com/INAC-Sistemas/shiva-code/releases/latest
 
 Feeds built from these URLs must also set `useMultipleRangeRequest: false`. `electron-updater` enables multi-range downloads for any non-S3 URL, and GitHub's asset CDN answers a multi-range request with `501`, which costs a failed round trip before each update falls back to a full download. Single-range requests work, so differential downloads remain available.
 
+## Diagnosing an update that did not happen
+
+An automatic check is silent unless it finds a version: no card when it is up to date, and no card
+when it fails. Use **Harness → Show Harness Log** and grep for `[updater]`.
+
+| Line | Meaning |
+|---|---|
+| no `[updater]` line at all | The manager never armed — a development build, or an unpackaged one |
+| `armed ... first check in Ns` | Scheduled; the delay is counted from when the Harness finished starting |
+| `checking` then `up-to-date` | Working, nothing to offer |
+| `checking` then `error - ...` | The check failed; the line names the cause |
+| `error ENOENT ... app-update.yml` | The build was packaged without a publish config |
+
+A manual check through the menu is the same request with `manual` in the line, and unlike an
+automatic one it also shows its outcome on screen.
+
 ## Code signing
 
 Signing is **not enabled**. Windows installers ship unsigned, so SmartScreen warns about an unknown publisher on first install. Updates are unaffected: `win.verifyUpdateCodeSignature` is `false`, and an installed build checks for, downloads, and installs new versions normally.

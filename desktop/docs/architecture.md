@@ -89,7 +89,9 @@ The public tunnel is optional and forwards only the paired mobile surface; it do
 
 ## Updates
 
-Installed macOS and Windows builds use `electron-updater`. The app checks shortly after startup, every six hours, and after a long system resume. A newly available version is offered before download. Download begins only after user consent, and installation begins only when the user chooses to restart and install. Users can skip one version without suppressing later releases.
+Installed macOS and Windows builds use `electron-updater`. The app checks 15 to 30 seconds after the Harness has finished starting — not after launch, which on a slow machine is a minute or more earlier — then every six hours, and after a long system resume. A newly available version is offered before download. Download begins only after user consent, and installation begins only when the user chooses to restart and install. Users can skip one version without suppressing later releases.
+
+An automatic check shows nothing unless it finds a version: no card appears when it is up to date, and none appears when it fails. Every step it takes is therefore recorded in the Harness log — when the manager arms and when its first check is due, each state it reaches, and the updater library's own errors — so a failed check is distinguishable from one that never ran. Download progress is not recorded.
 
 Update metadata and artifacts are produced by the native release workflow, which publishes them as GitHub Release assets of this repository. The feed is the `generic` provider pointed at the permanent latest-release redirect; a rollback points it at one release's own asset directory. macOS arm64 and x64 metadata is merged into a single channel file. Signing, when enabled, rewrites the installer, so its blockmap and metadata are regenerated afterwards. See [release-runbook.md](release-runbook.md) for what pins the feed to a desktop release and why multi-range downloads are disabled.
 

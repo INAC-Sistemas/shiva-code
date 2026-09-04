@@ -12,8 +12,10 @@ import {
 import {
   initialUpdateStatus,
   reduceUpdateStatus,
+  updateLogLine,
   type UpdateStateEvent
 } from './update-state'
+import { appendHarnessLog } from '../harness-log'
 import {
   readSkippedVersion,
   shouldOfferUpdate,
@@ -105,10 +107,16 @@ export function startUpdateManager(options: { prepareToInstall: () => Promise<vo
   }
 
   configureUpdater()
-  startupTimer = setTimeout(
-    () => void checkForUpdates(),
-    UPDATE_STARTUP_DELAY_MS + Math.random() * UPDATE_STARTUP_JITTER_MS
+  const firstCheckMs = UPDATE_STARTUP_DELAY_MS + Math.random() * UPDATE_STARTUP_JITTER_MS
+  // The delay is counted from here, which is after the Harness has finished
+  // starting — not from launch. Recording it is what distinguishes "the check
+  // is still pending" from "the check ran and found nothing".
+  appendHarnessLog(
+    `[desktop] [updater] armed current=${app.getVersion()}` +
+      ` first check in ${Math.round(firstCheckMs / 1000)}s,` +
+      ` then every ${Math.round(UPDATE_CHECK_INTERVAL_MS / 3_600_000)}h`
   )
+  startupTimer = setTimeout(() => void checkForUpdates(), firstCheckMs)
   intervalTimer = setInterval(() => void checkForUpdates(), UPDATE_CHECK_INTERVAL_MS)
   powerMonitor.on('resume', checkAfterResume)
 }
@@ -252,8 +260,16 @@ function configureUpdater(): void {
   autoUpdater.allowPrerelease = false
   autoUpdater.logger = {
     info: (...args: unknown[]) => console.info('[updater]', ...args),
-    warn: (...args: unknown[]) => console.warn('[updater]', ...args),
-    error: (...args: unknown[]) => console.error('[updater]', ...args),
+    // The library's own diagnosis is often the only thing that names a cause,
+    // such as a 404 on the channel file or a missing app-update.yml.
+    warn: (...args: unknown[]) => {
+      console.warn('[updater]', ...args)
+      appendHarnessLog(`[desktop] [updater] warn ${args.join(' ')}`)
+    },
+    error: (...args: unknown[]) => {
+      console.error('[updater]', ...args)
+      appendHarnessLog(`[desktop] [updater] error ${args.join(' ')}`)
+    },
     debug: (...args: unknown[]) => console.debug('[updater]', ...args)
   }
 
@@ -297,6 +313,11 @@ function transition(event: UpdateStateEvent, manualOverride?: boolean): void {
   if (pendingDowngrade && event.type !== 'reset') status.downgrade = true
 
   console.info('[updater] status', status.phase, status.percent ?? '')
+  // Download progress fires many times a second, and a reset only records that
+  // a transient card went away. Everything else is one line per lifecycle step.
+  if (event.type !== 'progress' && event.type !== 'reset') {
+    appendHarnessLog(updateLogLine(status))
+  }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send('updates:status-changed', getUpdateStatus())
   }

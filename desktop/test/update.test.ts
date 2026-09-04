@@ -130,3 +130,42 @@ function metadata(architecture: 'arm64' | 'x64', releaseDate: string) {
     releaseDate
   }
 }
+
+describe('updater evidence in the Harness log', () => {
+  it('records arming, every lifecycle step, and the library’s own errors', async () => {
+    const manager = await readFile(
+      path.join(projectRoot, 'src/main/update/update-manager.ts'),
+      'utf8'
+    )
+
+    // A packaged main process logs to nothing the user can open, and an
+    // automatic check that fails shows no card, so without these lines a
+    // failed check and a check that never ran are indistinguishable.
+    expect(manager).toContain("import { appendHarnessLog } from '../harness-log'")
+    expect(manager).toContain('[updater] armed current=')
+    expect(manager).toContain('appendHarnessLog(updateLogLine(status))')
+    expect(manager).toContain('[updater] error ${args.join(\' \')}')
+
+    // Download progress fires many times a second; a reset only records that a
+    // transient card went away. Neither belongs in a log read by a human.
+    expect(manager).toMatch(
+      /if \(event\.type !== 'progress' && event\.type !== 'reset'\) \{\s*\n\s*appendHarnessLog/
+    )
+  })
+
+  it('keeps one home for appending to the Harness log', async () => {
+    const helper = await readFile(
+      path.join(projectRoot, 'src/main/harness-log.ts'),
+      'utf8'
+    )
+    const main = await readFile(path.join(projectRoot, 'src/main/index.ts'), 'utf8')
+
+    expect(helper).toContain("join(app.getPath('logs'), 'harness.log')")
+    // Recording evidence must never take down what it was recording.
+    expect(helper).toContain('catch (error)')
+    // index.ts open-coded this append twice before the updater became the
+    // third caller. It still names the path to reveal the file and to hand it
+    // to the runtime; what it must not do again is write to it directly.
+    expect(main).not.toContain('appendFileSync')
+  })
+})

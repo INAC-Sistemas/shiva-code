@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import {
   app,
@@ -16,6 +16,7 @@ import {
   type IpcMainInvokeEvent,
   type MessageBoxOptions
 } from 'electron'
+import { appendHarnessLog } from './harness-log'
 import { extractFailureCause, HarnessRuntime } from './runtime/harness-runtime'
 import { launchDisclaimedUtilityProcess } from './runtime/disclaimed-utility-process'
 import {
@@ -251,10 +252,8 @@ function appendRendererPluginRecoveryLog(logs: readonly string[]): void {
       .split(/\r?\n/)
       .map((line) => `[renderer] ${line}`)
       .join('\n')
-    appendFileSync(
-      join(app.getPath('logs'), 'harness.log'),
-      `\n[desktop] frontend plugin recovery ${new Date().toISOString()}\n${evidence}\n`,
-      'utf8'
+    appendHarnessLog(
+      `\n[desktop] frontend plugin recovery ${new Date().toISOString()}\n${evidence}`
     )
   } catch (error) {
     console.warn('[desktop] failed to persist frontend plugin recovery evidence', error)
@@ -264,11 +263,7 @@ function appendRendererPluginRecoveryLog(logs: readonly string[]): void {
 function appendPluginRecoveryDetectionLog(plugins: readonly string[]): void {
   try {
     const result = plugins.length > 0 ? plugins.join(', ') : 'unresolved'
-    appendFileSync(
-      join(app.getPath('logs'), 'harness.log'),
-      `[desktop] plugin recovery detection: ${result}\n`,
-      'utf8'
-    )
+    appendHarnessLog(`[desktop] plugin recovery detection: ${result}`)
   } catch (error) {
     console.warn('[desktop] failed to persist plugin recovery detection', error)
   }
