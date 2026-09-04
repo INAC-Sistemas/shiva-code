@@ -12,7 +12,7 @@ Publishing was also unreachable. A release required pushing a `shiva-desktop-v*`
 
 ## Decision
 
-Updates ship from GitHub Releases of `INAC-Sistemas/shiva-code`, and a push to `master` publishes one.
+Updates ship from GitHub Releases of `INAC-Sistemas/shiva-code`, and a push to `rai` publishes one. `rai` is the product's integration branch: `master` tracks the upstream harness and does not carry the desktop app at all, so it is not a release branch. The cost is that `workflow_dispatch` — the re-cut and pre-release paths — stays absent from the Actions UI until this workflow also exists on the default branch.
 
 ### The feed stays on the `generic` provider
 
@@ -30,7 +30,7 @@ Every feed built from these URLs sets `useMultipleRangeRequest: false`. `electro
 
 The version rule is `package.json` when it exceeds the highest `shiva-desktop-v*` tag, otherwise that tag with the patch digit incremented. CI owns the patch digit; `package.json` is the reviewed minor/major knob, and it seeds the sequence — no such tag existed when this landed, so "highest tag plus one" alone would have resolved to nothing. The job refuses to run if the tag it resolved already exists.
 
-There is no tag trigger. `paths` on a `push` block filters tag pushes as well, and a tag placed on an already-pushed commit has a degenerate diff, so a tag trigger beside the `master` path filter would silently swallow releases. `publish` creates the tag itself, at the point where the assets are ready; a tag pushed with `GITHUB_TOKEN` does not re-trigger workflows, so this cannot loop.
+There is no tag trigger. `paths` on a `push` block filters tag pushes as well, and a tag placed on an already-pushed commit has a degenerate diff, so a tag trigger beside the branch path filter would silently swallow releases. `publish` creates the tag itself, at the point where the assets are ready; a tag pushed with `GITHUB_TOKEN` does not re-trigger workflows, so this cannot loop.
 
 ### Signing is preserved, not removed
 
@@ -46,13 +46,13 @@ Only the vendor's own infrastructure was deleted: the ModelScope mirror, `deskto
 
 **A dedicated public repository for installers.** This removes the shared-tag-namespace hazard outright, since nothing else would ever be the latest release there. Rejected as premature: it needs a second repository and a cross-repository token, and it splits the release notes and tag history that [the desktop import](../process/2026-09-04-desktop-app-in-repository.md) had just consolidated. The `--latest` flag plus a guard test covers the hazard at far lower cost, and the escape hatch is recorded below.
 
-**Commit the version bump back to `master` from CI.** This would give `package.json` a single truthful value. Rejected: it needs a token that can push to a protected default branch, a `GITHUB_TOKEN` push adds a commit that itself touches `desktop/` and would need excluding, and a PAT push re-triggers `on: push`, which is an infinite release loop. The tag is the source of truth instead.
+**Commit the version bump back to the release branch from CI.** This would give `package.json` a single truthful value. Rejected: it needs a token that can push to a protected branch, a `GITHUB_TOKEN` push adds a commit that itself touches `desktop/` and would need excluding, and a PAT push re-triggers `on: push`, which is an infinite release loop. The tag is the source of truth instead.
 
 **Delete the signing jobs and restore them from git history later.** Rejected on the user's instruction, and it is the better call regardless: keeping them means the existing `release.test.ts` assertions about Jsign, the UKey, and notarization keep guarding that code against bitrot while it is unused.
 
 ## Consequences
 
-A push to `master` touching the desktop app ships a release, so version numbers advance with merges rather than with deliberate tagging. Doc, test, and Markdown-only paths are excluded from the trigger; anything else under `desktop/` publishes and shows an update card to every installed app within six hours.
+A push to `rai` touching the desktop app ships a release, so version numbers advance with merges rather than with deliberate tagging. Doc, test, and Markdown-only paths are excluded from the trigger; anything else under `desktop/` publishes and shows an update card to every installed app within six hours.
 
 Windows installers are unsigned until `DESKTOP_WINDOWS_SIGNING` is set, so SmartScreen warns about an unknown publisher on first install. Updates themselves are unaffected: `win.verifyUpdateCodeSignature` was already `false`.
 

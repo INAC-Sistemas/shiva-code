@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-更新从 `INAC-Sistemas/shiva-code` 的 GitHub Releases 发布，并且向 `master` 推送即发布一个版本。
+更新从 `INAC-Sistemas/shiva-code` 的 GitHub Releases 发布，并且向 `rai` 推送即发布一个版本。`rai` 是产品的集成分支：`master` 跟踪上游 harness，根本不含桌面应用，因此不是发布分支。代价是在本工作流也存在于默认分支之前，`workflow_dispatch`——即重新发布与预发布路径——不会出现在 Actions 界面中。
 
 ### 更新源仍使用 `generic` provider
 
@@ -30,7 +30,7 @@ Status: implemented
 
 版本规则是：当 `package.json` 大于最高的 `shiva-desktop-v*` 标签时取它，否则取该标签并递增补丁位。补丁位归 CI 所有；`package.json` 是经评审的次版本/主版本旋钮，同时也为序列提供起点——落地时尚不存在这类标签，仅靠"最高标签加一"会解析不出任何版本。若解析出的标签已存在，该作业拒绝运行。
 
-不设标签触发器。`push` 块上的 `paths` 同样会过滤标签推送，而打在已推送提交上的标签其差异是退化的，因此在 `master` 路径过滤旁再放一个标签触发器会静默吞掉发布。`publish` 在资产就绪处自行创建标签；用 `GITHUB_TOKEN` 推送的标签不会再次触发工作流，因此不会形成回环。
+不设标签触发器。`push` 块上的 `paths` 同样会过滤标签推送，而打在已推送提交上的标签其差异是退化的，因此在分支路径过滤旁再放一个标签触发器会静默吞掉发布。`publish` 在资产就绪处自行创建标签；用 `GITHUB_TOKEN` 推送的标签不会再次触发工作流，因此不会形成回环。
 
 ### 签名被保留而非移除
 
@@ -46,13 +46,13 @@ Status: implemented
 
 **为安装包单设一个公开仓库。** 这能彻底消除共用标签命名空间的隐患，因为那里不会有别的东西成为最新发行版。因过早而否决：它需要第二个仓库和跨仓库令牌，并会把[桌面端并入](../process/2026-09-04-desktop-app-in-repository.zh.md)刚刚合并的发布说明与标签历史再次拆开。`--latest` 加一个守卫测试以低得多的代价覆盖了该隐患，逃生方案记录于下文。
 
-**由 CI 把版本号回提到 `master`。** 这会让 `package.json` 有一个真实的值。否决原因：它需要能推送受保护默认分支的令牌；用 `GITHUB_TOKEN` 推送会产生一个自身触及 `desktop/` 的提交，还得再排除；而用 PAT 推送会重新触发 `on: push`，即无限发布回环。改以标签作为唯一真相来源。
+**由 CI 把版本号回提到发布分支。** 这会让 `package.json` 有一个真实的值。否决原因：它需要能推送受保护分支的令牌；用 `GITHUB_TOKEN` 推送会产生一个自身触及 `desktop/` 的提交，还得再排除；而用 PAT 推送会重新触发 `on: push`，即无限发布回环。改以标签作为唯一真相来源。
 
 **删除签名作业，日后再从 git 历史中恢复。** 依用户要求否决，且无论如何这都是更好的选择：保留它们意味着 `release.test.ts` 中关于 Jsign、UKey 和公证的既有断言，会在这段代码闲置期间持续守护它不腐坏。
 
 ## Consequences
 
-向 `master` 推送并触及桌面应用即发布一个版本，因此版本号随合并推进，而非随刻意打标签推进。文档、测试和仅 Markdown 的路径已排除在触发器之外；`desktop/` 下的其他改动都会发布，并在六小时内向每个已安装的应用弹出更新卡片。
+向 `rai` 推送并触及桌面应用即发布一个版本，因此版本号随合并推进，而非随刻意打标签推进。文档、测试和仅 Markdown 的路径已排除在触发器之外；`desktop/` 下的其他改动都会发布，并在六小时内向每个已安装的应用弹出更新卡片。
 
 在设置 `DESKTOP_WINDOWS_SIGNING` 之前，Windows 安装包未签名，因此首次安装时 SmartScreen 会提示发行者未知。更新本身不受影响：`win.verifyUpdateCodeSignature` 本就为 `false`。
 

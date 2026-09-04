@@ -412,12 +412,19 @@ describe('GitHub release contract', () => {
     // run a single step without checking the repository out first.
     expect(workflow).toMatch(/resolve-version:[\s\S]*?uses: actions\/checkout@v4[\s\S]*?id: resolve/)
 
+    // A push to rai releases: rai is the product's integration branch, and
+    // master tracks the upstream harness without the desktop app at all.
+    const triggers = workflow.slice(0, workflow.indexOf('\npermissions:'))
+    const pushTrigger = triggers.slice(
+      triggers.indexOf('\n  push:'),
+      triggers.indexOf('\n  pull_request:')
+    )
+    expect(pushTrigger).toContain('branches:\n      - rai')
+    expect(pushTrigger).not.toContain('master')
     // No tag trigger: `paths` on a push block filters tag pushes too, and the
     // publish job is what creates the tag now.
-    const triggers = workflow.slice(0, workflow.indexOf('\npermissions:'))
-    expect(triggers).toContain('branches:\n      - master')
-    expect(triggers).not.toContain("tags:")
-    expect(triggers).toContain("- '!desktop/docs/**'")
+    expect(triggers).not.toContain('tags:')
+    expect(pushTrigger).toContain("- '!desktop/docs/**'")
 
     // A pre-release is tagged with a bare semver; only a stable release carries
     // the product prefix, and the update feed reads stable releases.
