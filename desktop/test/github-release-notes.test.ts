@@ -39,7 +39,7 @@ describe('github_release_notes build-prompt', () => {
   it('emits the evidence blocks, the style reference, and the Chinese contract', async () => {
     const dir = await work()
     const out = path.join(dir, 'prompt.txt')
-    await run(['build-prompt', '--tag', 'v9.9.9', '--output', out])
+    await run(['build-prompt', '--tag', 'shiva-desktop-v9.9.9', '--output', out])
     const prompt = await readFile(out, 'utf8')
     for (const tag of ['<commit-details>', '<diff-statistics>', '<code-diff>', '<style-reference>']) {
       expect(prompt).toContain(tag)
@@ -57,7 +57,7 @@ describe('github_release_notes validate', () => {
     const dir = await work()
     const file = path.join(dir, 'n.md')
     await writeFile(file, VALID, 'utf8')
-    await expect(run(['validate', '--tag', 'v9.9.9', '--input', file])).resolves.toBeDefined()
+    await expect(run(['validate', '--tag', 'shiva-desktop-v9.9.9', '--input', file])).resolves.toBeDefined()
   })
 
   it('rejects a wrong title prefix, a stray H2, a link, and an empty file', async () => {
@@ -71,7 +71,7 @@ describe('github_release_notes validate', () => {
     for (const [name, body] of Object.entries(cases)) {
       const file = path.join(dir, name)
       await writeFile(file, body, 'utf8')
-      await expect(run(['validate', '--tag', 'v9.9.9', '--input', file])).rejects.toBeDefined()
+      await expect(run(['validate', '--tag', 'shiva-desktop-v9.9.9', '--input', file])).rejects.toBeDefined()
     }
   })
 })
@@ -80,10 +80,10 @@ describe('github_release_notes generate-fallback', () => {
   it('produces a note that passes validate and starts with the contract title', async () => {
     const dir = await work()
     const file = path.join(dir, 'fb.md')
-    await run(['generate-fallback', '--tag', 'v9.9.9', '--output', file])
+    await run(['generate-fallback', '--tag', 'shiva-desktop-v9.9.9', '--output', file])
     const body = await readFile(file, 'utf8')
     expect(body.startsWith('# DSH Desktop v9.9.9 — ')).toBe(true)
     expect(body).toContain('## 更新内容')
-    await expect(run(['validate', '--tag', 'v9.9.9', '--input', file])).resolves.toBeDefined()
+    await expect(run(['validate', '--tag', 'shiva-desktop-v9.9.9', '--input', file])).resolves.toBeDefined()
   })
 })

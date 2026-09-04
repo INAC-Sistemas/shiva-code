@@ -379,7 +379,7 @@ describe('GitHub release contract', () => {
     for (const asset of releaseAssets) expect(workflow).toContain(asset)
     expect(
       workflow.match(
-        /npm version --no-git-tag-version --allow-same-version "\$\{\{ github\.ref_name \}\}"/g
+        /npm version --no-git-tag-version --allow-same-version "\$\{GITHUB_REF_NAME#shiva-desktop-v\}"/g
       )
     ).toHaveLength(3)
   })
@@ -435,7 +435,9 @@ describe('GitHub release contract', () => {
     expect(workflow).not.toContain('WINDOWS_SIGNING_KEYCHAIN_SERVICE')
     expect(workflow).toContain('finalize-windows-release.mjs')
     // Version comes from the pre-release input on a dispatch, else the tag ref.
-    expect(workflow).toContain('version="${PRERELEASE_TAG:-${GITHUB_REF_NAME#v}}"')
+    expect(workflow).toContain(
+      'version="${PRERELEASE_TAG:-${GITHUB_REF_NAME#shiva-desktop-v}}"'
+    )
     expect(workflow).toContain('pattern: macos-*')
     expect(workflow).toMatch(
       /publish:[\s\S]*?needs\.sign-windows\.result == 'success'[\s\S]*?- sign-windows/

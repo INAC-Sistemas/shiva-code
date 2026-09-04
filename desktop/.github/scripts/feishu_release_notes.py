@@ -25,8 +25,12 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-SEMVER_TAG_PATTERN = re.compile(r"^v?\d+\.\d+\.\d+(?:[-+].+)?$")
-STABLE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
+# Desktop releases are tagged `shiva-desktop-v<semver>`: this repository also
+# releases the harness, under `dsh-v*`, so a bare `v*` would not say which
+# product a tag ships. A pre-release run passes its bare semver instead of a tag.
+TAG_PREFIX = "shiva-desktop-v"
+SEMVER_TAG_PATTERN = re.compile(r"^(?:shiva-desktop-v)?\d+\.\d+\.\d+(?:[-+].+)?$")
+STABLE_TAG_PATTERN = re.compile(r"^shiva-desktop-v\d+\.\d+\.\d+$")
 TOPIC_PATTERN = re.compile(r"^\*\*.+? (\d+)\. .+\*\*$", re.MULTILINE)
 LINK_PATTERN = re.compile(r"https?://|\[[^\]]+\]\([^)]+\)")
 MAX_TAG_NOTE_LENGTH = 24_000
@@ -36,7 +40,7 @@ MAX_OUTPUT_LENGTH = 12_000
 
 # The desktop app is one subtree of a repository that also carries the harness,
 # so every release range is read under the current directory. Without it a
-# release note between two `v*` tags also describes the harness commits that
+# release note between two release tags also describes the harness commits that
 # landed in between.
 SUBTREE_PATHSPEC = ("--", ".")
 
@@ -152,6 +156,11 @@ def git_output(*args: str, default: str = "") -> str:
         ).strip()
     except Exception:
         return default
+
+
+def release_version(release_tag: str) -> str:
+    """The semver a release tag names, which every user-facing heading renders as `v<semver>`."""
+    return release_tag.removeprefix(TAG_PREFIX)
 
 
 def read_annotated_tag_note(release_tag: str) -> str:
@@ -299,7 +308,7 @@ def collect_release_evidence(release_tag: str, prerelease: bool = False) -> Rele
 
 def build_prompt(release_tag: str, prerelease: bool = False) -> str:
     evidence = collect_release_evidence(release_tag, prerelease=prerelease)
-    version = release_tag.removeprefix("v")
+    version = release_version(release_tag)
     heading = (
         f"## DSH Desktop v{version}（预发布）Release Note"
         if prerelease
@@ -353,7 +362,7 @@ def extract_theme_numbers(section: str, language: str) -> list[int]:
 
 def validate_release_note(release_tag: str, text: str, prerelease: bool = False) -> str:
     text = text.strip()
-    version = release_tag.removeprefix("v")
+    version = release_version(release_tag)
     heading = (
         f"## DSH Desktop v{version}（预发布）Release Note"
         if prerelease
@@ -413,7 +422,7 @@ def validate_release_note(release_tag: str, text: str, prerelease: bool = False)
 
 def generate_deterministic_fallback(release_tag: str, prerelease: bool = False) -> str:
     """Generate a clean bilingual fallback release note directly from git evidence."""
-    version = release_tag.removeprefix("v")
+    version = release_version(release_tag)
     heading = (
         f"## DSH Desktop v{version}（预发布）Release Note"
         if prerelease
@@ -520,7 +529,7 @@ def main() -> None:
 
     # build-prompt
     build_parser = subparsers.add_parser("build-prompt", help="Build AI prompt for release notes")
-    build_parser.add_argument("--tag", required=True, help="Release tag (e.g. v0.4.0 or 0.7.2)")
+    build_parser.add_argument("--tag", required=True, help="Release tag (e.g. shiva-desktop-v0.4.0), or a bare semver for --prerelease")
     build_parser.add_argument("--output", help="Output file path (default: stdout)")
     build_parser.add_argument(
         "--prerelease",
@@ -530,7 +539,7 @@ def main() -> None:
 
     # validate
     validate_parser = subparsers.add_parser("validate", help="Validate Feishu release notes markdown")
-    validate_parser.add_argument("--tag", required=True, help="Release tag (e.g. v0.4.0 or 0.7.2)")
+    validate_parser.add_argument("--tag", required=True, help="Release tag (e.g. shiva-desktop-v0.4.0), or a bare semver for --prerelease")
     validate_parser.add_argument("--input", required=True, help="Input markdown file path")
     validate_parser.add_argument(
         "--prerelease",
@@ -542,7 +551,7 @@ def main() -> None:
     fallback_parser = subparsers.add_parser(
         "generate-fallback", help="Generate deterministic fallback release notes"
     )
-    fallback_parser.add_argument("--tag", required=True, help="Release tag (e.g. v0.4.0 or 0.7.2)")
+    fallback_parser.add_argument("--tag", required=True, help="Release tag (e.g. shiva-desktop-v0.4.0), or a bare semver for --prerelease")
     fallback_parser.add_argument("--output", required=True, help="Output markdown file path")
     fallback_parser.add_argument(
         "--prerelease",
@@ -552,7 +561,7 @@ def main() -> None:
 
     # send
     send_parser = subparsers.add_parser("send", help="Send Feishu interactive card webhook")
-    send_parser.add_argument("--tag", required=True, help="Release tag (e.g. v0.4.0 or 0.7.2)")
+    send_parser.add_argument("--tag", required=True, help="Release tag (e.g. shiva-desktop-v0.4.0), or a bare semver for --prerelease")
     send_parser.add_argument("--notes", required=True, help="Path to release notes markdown file")
     send_parser.add_argument(
         "--webhook", default=os.getenv("FEISHU_RELEASE_WEBHOOK"), help="Feishu Webhook URL"

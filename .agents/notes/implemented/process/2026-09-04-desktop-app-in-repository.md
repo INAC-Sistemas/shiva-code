@@ -16,9 +16,11 @@ The tarball snapshot under `desktop/packages/harness-<version>/` is unchanged. D
 
 ### Continuous integration
 
-GitHub reads `.github/workflows/` only at the repository root, so the two desktop workflows live there as `desktop-release.yml` and `desktop-backfill-archive.yml`. Both set `defaults.run.working-directory: desktop`; action inputs resolve against the workspace root instead and carry the prefix explicitly, so artifact paths, `download-artifact` destinations, and `cache-dependency-path` name `desktop/`. The release workflow keeps its `v*` tag trigger — the harness releases under `dsh-v*`, and no other workflow in this repository triggers on a tag — and its pull-request trigger is scoped to `master` and to paths under `desktop/`.
+GitHub reads `.github/workflows/` only at the repository root, so the two desktop workflows live there as `desktop-release.yml` and `desktop-backfill-archive.yml`. Both set `defaults.run.working-directory: desktop`; action inputs resolve against the workspace root instead and carry the prefix explicitly, so artifact paths, `download-artifact` destinations, and `cache-dependency-path` name `desktop/`. The release workflow's pull-request trigger is scoped to `master` and to paths under `desktop/`.
 
-Release notes are generated from the commit range between two `v*` tags. That range now also spans harness commits, so `feishu_release_notes.py` limits its `git log` and `git diff` to the current directory, which the workflow sets to `desktop/`.
+A release is cut by pushing `shiva-desktop-v<semver>`, and the 26 tags the standalone repository carried are not imported. The prefix names the product, because this repository also releases the harness under `dsh-v*`. The semver after it is the published application version and keys the ModelScope rollback archive at `releases/archive/<semver>/`, so it continues the sequence already published; `package.json` holds a stale version that the workflow overwrites from the tag. Every user-facing string still renders `v<semver>`, so release titles and note headings read as they did.
+
+Release notes are generated from the commit range between two release tags. That range now also spans harness commits, so `feishu_release_notes.py` limits its `git log` and `git diff` to the current directory, which the workflow sets to `desktop/`.
 
 ### Gates
 
@@ -34,9 +36,13 @@ The desktop bundles the pnpm version it is tested against. Because pnpm 10 repla
 
 **Delete the temporary tarball snapshot during the import.** Its own README marks it as temporary, pending an upstream npm publication that has not happened. Removing it breaks `npm ci`, and the blobs remain in history either way, so the tree stays as it is.
 
+**Keep the desktop's bare `v*` tags and import them.** This costs no code change and does not collide, since the harness releases under `dsh-v*` and no other workflow here triggers on a tag. It was rejected because a bare `v*` does not say which of two released products a tag ships, and importing 26 tags under a convention being retired would leave two schemes in one listing.
+
 ## Consequences
 
-One clone, one review history, and one revert unit cover the harness and the app. The repository pack grows by about 40 MB, and its tag namespace is now shared — `v*` belongs to the desktop, `dsh-v*` to the harness.
+One clone, one review history, and one revert unit cover the harness and the app. The repository pack grows by about 40 MB, and its tag namespace is now shared — `shiva-desktop-v*` belongs to the desktop, `dsh-v*` to the harness.
+
+Discarding the old tags costs the first release its predecessor: `find_previous_tag` matches nothing, so that release's notes come from the last 100 commits instead of a tag range. Every release after it recovers the range. The one test that read this repository's real tag history is gone, having been skipped since the fork; the synthetic-history test beside it covers the same previous-tag resolution deterministically.
 
 The self-hosted macOS runner that signs Windows installers is registered against the old repository and must be re-registered here before a release can complete. Branches left unmerged in `INAC-Sistemas/dsh-desktop` at the cut are not part of the import and have to be reapplied on top of `desktop/`.
 

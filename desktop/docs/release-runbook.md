@@ -1,5 +1,11 @@
 # Desktop release runbook
 
+## Release tags
+
+A release is cut by pushing `shiva-desktop-v<semver>`, for example `shiva-desktop-v0.7.2`. This repository also releases the harness, under `dsh-v*`, so the prefix says which product a tag ships. The semver after the prefix becomes the published application version and keys the ModelScope rollback archive at `releases/archive/<semver>/`, so it must continue the sequence already published rather than restart from the version in `package.json`, which the workflow overwrites from the tag.
+
+A production-parity pre-release skips tagging: dispatch the workflow with `prerelease_tag` set to a bare semver such as `2.1.0-rc.1`.
+
 ## Local Windows UKey signing runner
 
 Windows packaging and signing run as separate jobs. The GitHub-hosted Windows runner builds an unsigned NSIS installer and uploads a short-lived workflow artifact. A local macOS ARM64 runner downloads it, signs the installer with Jsign and the SafeNet UKey, regenerates the blockmap and `latest.yml`, and uploads the signed release set. The GitHub Release job cannot start unless signing succeeds.

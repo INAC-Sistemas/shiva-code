@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-from feishu_release_notes import LINK_PATTERN, collect_release_evidence
+from feishu_release_notes import LINK_PATTERN, collect_release_evidence, release_version
 
 for _stream in (sys.stdout, sys.stderr):
     if _stream.encoding and _stream.encoding.lower() != "utf-8":
@@ -22,7 +22,8 @@ H2_PATTERN = re.compile(r"^## .+$", re.MULTILINE)
 
 
 def title_prefix(tag: str) -> str:
-    return f"# DSH Desktop {tag} — "
+    """The heading the release body must open with, naming the version rather than the tag."""
+    return f"# DSH Desktop v{release_version(tag)} — "
 
 
 PROMPT_TEMPLATE = """\

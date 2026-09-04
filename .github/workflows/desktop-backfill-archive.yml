@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to backfill (e.g. v0.6.3)
+        description: Existing release tag to backfill (e.g. shiva-desktop-v0.6.3)
         required: true
         type: string
 
@@ -64,7 +64,7 @@ jobs:
           token = os.environ["MODELSCOPE_TOKEN"]
           repo_id = os.environ["MODELSCOPE_REPO_ID"]
           tag = os.environ["RELEASE_TAG"]
-          version = tag[1:] if tag.startswith("v") else tag
+          version = tag.removeprefix("shiva-desktop-v")
           src = pathlib.Path("release-assets")
 
           api.upload_folder(

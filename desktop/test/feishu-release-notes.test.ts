@@ -63,7 +63,7 @@ describe('Feishu release notes pipeline', () => {
   it(
     'builds a prompt with valid metadata and evidence blocks',
     () => {
-      const output = execFileSync('python3', [scriptPath, 'build-prompt', '--tag', 'v0.4.0'], {
+      const output = execFileSync('python3', [scriptPath, 'build-prompt', '--tag', 'shiva-desktop-v0.4.0'], {
         encoding: 'utf8',
         env: pythonEnv
       })
@@ -83,7 +83,7 @@ describe('Feishu release notes pipeline', () => {
   it('generates deterministic fallback release notes that pass validation', () => {
     const tempFile = join(process.cwd(), '.temp-feishu-test-notes.md')
     try {
-      execFileSync('python3', [scriptPath, 'generate-fallback', '--tag', 'v0.4.0', '--output', tempFile], {
+      execFileSync('python3', [scriptPath, 'generate-fallback', '--tag', 'shiva-desktop-v0.4.0', '--output', tempFile], {
         encoding: 'utf8',
         env: pythonEnv
       })
@@ -95,7 +95,7 @@ describe('Feishu release notes pipeline', () => {
       expect(content).toContain('---')
 
       // Validate passes without error
-      const validateOutput = execFileSync('python3', [scriptPath, 'validate', '--tag', 'v0.4.0', '--input', tempFile], {
+      const validateOutput = execFileSync('python3', [scriptPath, 'validate', '--tag', 'shiva-desktop-v0.4.0', '--input', tempFile], {
         encoding: 'utf8',
         env: pythonEnv
       })
@@ -132,7 +132,7 @@ Description here.
       writeFileSync(tempFile, invalidContent, 'utf8')
 
       expect(() => {
-        execFileSync('python3', [scriptPath, 'validate', '--tag', 'v0.4.0', '--input', tempFile], {
+        execFileSync('python3', [scriptPath, 'validate', '--tag', 'shiva-desktop-v0.4.0', '--input', tempFile], {
           encoding: 'utf8',
           stdio: 'pipe',
           env: pythonEnv
@@ -180,44 +180,13 @@ Description here.
     }
   })
 
-  // Skipped on this fork: unlike the synthetic-history test below, this one
-  // runs find_previous_tag's --sort=-creatordate walk against this repository's
-  // REAL tag history. There, the annotated v0.7.2 tag object was created
-  // (2026-09-02T23:51) about a day after the 0.7.2 tag object (2026-09-02T01:50),
-  // even though v0.7.2's commit is an ancestor of 0.7.2's commit — so sorting
-  // by tag-creation-date picks v0.7.2 first instead of the chronologically
-  // correct v0.7.1. That ordering is baked into the real, immutable tag
-  // objects upstream (dataelement/dsh-desktop); it is not something this
-  // fork's history rewrote, and this fork does not use the Feishu
-  // release-notes pipeline the test exercises.
-  it.skip(
-    'builds a prerelease prompt with previous tag and prerelease notices',
-    () => {
-      const output = execFileSync(
-        'python3',
-        [scriptPath, 'build-prompt', '--tag', '0.7.2', '--prerelease'],
-        {
-          encoding: 'utf8',
-          env: pythonEnv
-        }
-      )
-
-      expect(output).toContain("user-facing pre-release copy")
-      expect(output).toContain('## DSH Desktop v0.7.2（预发布）Release Note')
-      expect(output).toContain('⚠️ 本次为预发布版本，供测试与体验使用。')
-      expect(output).toContain('⚠️ This is a pre-release version for testing and preview.')
-      expect(output).toContain('Previous tag: v0.7.1')
-    },
-    pythonTestTimeoutMs
-  )
-
   it('differentiates previous tag resolution between prerelease and official release', () => {
     // A self-contained tag graph so this does not depend on which branch or
     // which fetched tags the checkout happens to carry:
     //   c0 (v0.7.0) -> c1 (v0.7.1) -> c2 (0.7.2, prerelease-style) -> c3 (HEAD, untagged)
     const repo = buildTagFixtureRepo([
-      { message: 'base', date: '2026-01-01T00:00:00', tag: 'v0.7.0' },
-      { message: 'stable work', date: '2026-02-01T00:00:00', tag: 'v0.7.1' },
+      { message: 'base', date: '2026-01-01T00:00:00', tag: 'shiva-desktop-v0.7.0' },
+      { message: 'stable work', date: '2026-02-01T00:00:00', tag: 'shiva-desktop-v0.7.1' },
       { message: 'prerelease cut', date: '2026-03-01T00:00:00', tag: '0.7.2' },
       { message: 'unreleased work', date: '2026-04-01T00:00:00' }
     ])
@@ -229,16 +198,16 @@ Description here.
       })
 
     // Official v0.7.1: previous stable tag is v0.7.0.
-    expect(buildPrompt(['--tag', 'v0.7.1'])).toContain('Previous stable tag: v0.7.0')
+    expect(buildPrompt(['--tag', 'shiva-desktop-v0.7.1'])).toContain('Previous stable tag: shiva-desktop-v0.7.0')
 
     // Prerelease 0.7.2: nearest tag of any kind before it is v0.7.1.
-    expect(buildPrompt(['--tag', '0.7.2', '--prerelease'])).toContain('Previous tag: v0.7.1')
+    expect(buildPrompt(['--tag', '0.7.2', '--prerelease'])).toContain('Previous tag: shiva-desktop-v0.7.1')
 
     // Future prerelease 0.8.0-rc.1 on HEAD: nearest tag is the 0.7.2 prerelease.
     expect(buildPrompt(['--tag', '0.8.0-rc.1', '--prerelease'])).toContain('Previous tag: 0.7.2')
 
     // Future official v0.8.0 on HEAD: must skip the 0.7.2 prerelease and pick v0.7.1.
-    expect(buildPrompt(['--tag', 'v0.8.0'])).toContain('Previous stable tag: v0.7.1')
+    expect(buildPrompt(['--tag', 'shiva-desktop-v0.8.0'])).toContain('Previous stable tag: shiva-desktop-v0.7.1')
   })
 
   it('integrates Feishu release notification into GitHub Actions workflow', () => {
