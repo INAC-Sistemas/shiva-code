@@ -240,6 +240,7 @@ export function apply(ctx) {
             preset: String(payload.preset ?? 'default'),
             plugins: Array.isArray(payload.plugins) ? payload.plugins.map(String) : [],
             skills: Array.isArray(payload.skills) ? payload.skills.map(String) : [],
+            hooks: Array.isArray(payload.hooks) ? payload.hooks.map(String) : [],
             createdAt: new Date().toISOString(),
           }
           store.profiles.push(profile)
@@ -256,6 +257,7 @@ export function apply(ctx) {
           if (payload.preset !== undefined) p.preset = String(payload.preset)
           if (payload.plugins !== undefined) p.plugins = Array.isArray(payload.plugins) ? payload.plugins.map(String) : []
           if (payload.skills !== undefined) p.skills = Array.isArray(payload.skills) ? payload.skills.map(String) : []
+          if (payload.hooks !== undefined) p.hooks = Array.isArray(payload.hooks) ? payload.hooks.map(String) : []
           await writeStore(store)
           return json(res, 200, { ok: true, profile: p })
         }
