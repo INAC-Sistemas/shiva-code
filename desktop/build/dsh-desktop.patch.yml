@@ -102,6 +102,8 @@
 
     - id: mds
       name: dsh-mds
+    - id: assets
+      name: dsh-assets
     - id: profiles
       name: dsh-profiles
     - id: skill-manager
