@@ -68,9 +68,8 @@
 # target).
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
-# the base plugin reads first. dsh-flowglass is the published 0.4.4, not
-# shiva-code's local checkout — that copy's inject list is missing 'sessions'
-# and crashes boot; see the dsh-flowglass client.js fix from earlier.
+# the base plugin reads first. Excluded by choice: dsh-flowglass (published
+# 0.4.4), dsh-sidebar-qa, and dsh-docs-panel.
 - insert:
     - id: dsh-better-sidebar
       name: dsh-better-sidebar
@@ -82,12 +81,6 @@
       name: dsh-shiva-theme
     - id: dsh-user-menu
       name: dsh-user-menu
-    - id: dsh-sidebar-qa
-      name: dsh-sidebar-qa
-    - id: dsh-docs-panel
-      name: dsh-docs-panel
-    - id: dsh-flowglass
-      name: dsh-flowglass
 
     # Config replicated verbatim from dsh-login's own cordis.patch.yml (the
     # bundle patch a `dsh.profile.bundles` entry would apply automatically —
@@ -146,3 +139,4 @@
       name: dsh-openviking
       config:
         pythonCandidates: !!js "process.env.DSH_OPENVIKING_PYTHON ? [process.env.DSH_OPENVIKING_PYTHON, 'py -3.12', 'py -3.11', 'py -3.10', 'python'] : []"
+
