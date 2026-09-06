@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "dsh-openviking",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native OpenViking memory for dsh: auto-installs and spawns the context database alongside the dsh server, registers its MCP tools on the model, and embeds the Web Studio in a better-sidebar tab",
   "type": "module",
   "license": "MIT",
