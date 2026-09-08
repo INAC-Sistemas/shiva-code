@@ -9,9 +9,16 @@ import { listSkills } from "@plugins/skill-library";
  *
  * O catálogo, sem corpo — o corpo sai por `/skills/<name>`.
  *
- * Não há ramificação por papel: toda sessão autenticada lê a mesma biblioteca,
- * e é isso que faz uma skill publicada no painel valer para todo mundo. Um
- * `403` aqui seria uma regra nova, não um refinamento.
+ * Continua sem ramificar por PAPEL: um admin e um guest com o mesmo perfil leem
+ * a mesma coisa, e continua não havendo 403 aqui. Ramifica por PERFIL — a
+ * resposta é a interseção entre o publicado e o selecionado no perfil ativo de
+ * quem chama. Sem perfil ativo o catálogo vem vazio, não completo: se "sem
+ * perfil" lesse tudo, bastaria uma casca nunca escolher perfil para o recorte
+ * virar decorativo.
+ *
+ * `x-skill-library-profile` deixa o estado degradado legível: um cliente que
+ * leia `none` sabe abrir o seletor em vez de mostrar uma lista vazia sem
+ * explicação.
  */
 export async function GET(request: Request) {
   const auth = await authenticateRequest(request);
@@ -19,7 +26,9 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   try {
-    const { revision, skills } = await listSkills();
+    const { revision, skills, profileId } = await listSkills({
+      userId: auth.session.userId,
+    });
 
     return NextResponse.json(
       { revision, skills },
@@ -29,6 +38,7 @@ export async function GET(request: Request) {
           // quando reler; um cache intermediário serviria uma biblioteca velha.
           "cache-control": "no-store",
           "x-skill-library-revision": String(revision),
+          "x-skill-library-profile": profileId ?? "none",
         },
       },
     );

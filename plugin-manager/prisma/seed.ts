@@ -6,6 +6,10 @@ import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role } from "../src/generated/prisma/client";
 import { parseSkillFile } from "../src/lib/skill-frontmatter";
+import {
+  DEFAULT_PROFILE_NAME,
+  DEFAULT_PROFILE_PLUGINS,
+} from "../src/lib/profiles";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -90,7 +94,52 @@ async function seedSkills(force: boolean) {
   }
 }
 
+/**
+ * Dá ao usuário um perfil "Padrão" com toda a biblioteca publicada, e o deixa
+ * ativo.
+ *
+ * Cria e nunca atualiza, pela mesma razão do {@link seedSkills}: o seed roda a
+ * cada start do container, e sobrescrever apagaria toda edição de perfil feita
+ * no painel. Só age quando o usuário não tem perfil nenhum — ficar sem perfil é
+ * ficar sem biblioteca, então esse é o estado que vale corrigir sozinho.
+ *
+ * Surpresa conhecida: quem apagar deliberadamente TODOS os próprios perfis
+ * ganha um de volta no próximo restart do container. Ficar preso sem nenhum é
+ * pior.
+ * @param userId - dono do perfil.
+ */
+async function seedDefaultProfile(userId: string) {
+  if ((await prisma.profile.count({ where: { userId } })) > 0) return;
+
+  const published = await prisma.librarySkill.findMany({
+    where: { published: true },
+    select: { id: true },
+  });
+
+  const profile = await prisma.profile.create({
+    data: {
+      userId,
+      name: DEFAULT_PROFILE_NAME,
+      plugins: [...DEFAULT_PROFILE_PLUGINS],
+      skills: { create: published.map(({ id }) => ({ skillId: id })) },
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { activeProfileId: profile.id },
+  });
+
+  console.log(
+    `seed: perfil ${profile.name} (${published.length} skills) ativo para ${userId}`,
+  );
+}
+
 async function main() {
+  // Antes do laço de usuários: o perfil padrão seleciona as skills publicadas,
+  // então elas precisam existir quando ele é criado.
+  await seedSkills(process.argv.includes("--force-skills"));
+
   for (const user of users) {
     const password = await bcrypt.hash(user.password, 10);
 
@@ -102,9 +151,9 @@ async function main() {
     });
 
     console.log(`seed: ${saved.email} (${saved.role})`);
-  }
 
-  await seedSkills(process.argv.includes("--force-skills"));
+    await seedDefaultProfile(saved.id);
+  }
 }
 
 main()

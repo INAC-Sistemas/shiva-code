@@ -59,8 +59,10 @@ export default async function SkillsPage() {
   const session = await requireSession();
   const isAdmin = session.role === "ADMIN";
 
-  // Sem filtro por usuário: a biblioteca é uma só, e todo mundo que entrou vê o
-  // que existe nela. O que separa admin de guest é poder escrever.
+  // Sem filtro por usuário: o PAINEL mostra a biblioteca inteira, e o que separa
+  // admin de guest aqui é poder escrever. A API diverge de propósito — lá a
+  // leitura é recortada pelo perfil ativo de quem chama. Esta tela é o catálogo
+  // do que existe; o perfil é o que cada agente recebe dele.
   const skills = await prisma.librarySkill.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -87,8 +89,8 @@ export default async function SkillsPage() {
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           {isAdmin
-            ? "A biblioteca compartilhada. Toda skill publicada aqui fica disponível para qualquer usuário autenticado com token válido."
-            : "A biblioteca compartilhada. Estas skills ficam disponíveis para você quando o seu token estiver válido."}
+            ? "A biblioteca compartilhada. Publicar deixa a skill disponível para ser selecionada em um perfil — é o perfil ativo de cada usuário que decide quais chegam ao agente dele."
+            : "A biblioteca compartilhada. Estas skills chegam ao seu agente quando estiverem selecionadas em um perfil seu."}
         </p>
       </div>
 

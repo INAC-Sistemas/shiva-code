@@ -2,12 +2,18 @@
 //
 // A escrita não passa por aqui: quem cadastra é o painel, por server action com
 // sessão de cookie (`src/app/actions/skills.ts`). Este módulo é só o lado que o
-// provider remoto do `dsh` consome com token Bearer, e por isso não ramifica em
-// papel nenhum — toda sessão autenticada lê a mesma biblioteca.
+// provider remoto do `dsh` consome com token Bearer.
+//
+// Não ramifica em PAPEL: um admin e um guest com o mesmo perfil leem a mesma
+// coisa. Ramifica em PERFIL — a leitura é a interseção entre as linhas
+// publicadas e as selecionadas no perfil ativo de quem chama. Um perfil só
+// estreita: nunca alcança uma linha despublicada, o que é o que torna seguro
+// deixar cada usuário editar os próprios perfis.
 
 import "server-only";
 import { prisma } from "@/lib/db";
 import { SKILL_NAME_PATTERN } from "@/lib/skills";
+import { type ProfileScope, readActiveProfileId } from "@plugins/profile";
 
 /**
  * Uma skill no catálogo: tudo que o modelo precisa para decidir carregá-la,
@@ -78,20 +84,52 @@ function toSummary(row: {
 }
 
 /**
- * O catálogo publicado, ordenado por nome.
+ * Cláusula que recorta a biblioteca ao perfil ativo.
+ *
+ * `userId` entra mesmo com `profileId` já único: custa nada (mesmo caminho de
+ * índice) e fecha o caso de um id que tenha sido apagado e recriado sob outro
+ * dono. É a mesma regra do `prototype` — o dono vem sempre do token.
+ */
+function scopedWhere(scope: ProfileScope, activeProfileId: string) {
+  return {
+    published: true,
+    profiles: {
+      some: { profile: { id: activeProfileId, userId: scope.userId } },
+    },
+  };
+}
+
+/**
+ * O catálogo do perfil ativo, ordenado por nome.
  *
  * Sem corpo, de propósito: o cliente relê o catálogo a cada refresh de
  * descoberta, e mandar as instruções inteiras nessa chamada colocaria a
  * biblioteca completa na requisição mais frequente. O corpo sai só pelo `get`,
  * que é uma escolha explícita do modelo.
- * @returns os sumários e a revisão máxima da biblioteca.
+ *
+ * Sem perfil ativo devolve um catálogo vazio sem tocar o banco. Fechar em vazio
+ * é o que torna o recorte obrigatório: se "sem perfil" lesse tudo, uma casca
+ * bastaria não escolher perfil para receber a biblioteca inteira. O cliente já
+ * trata catálogo vazio como estado de primeira classe, então isto degrada para
+ * "nenhuma skill", não para erro.
+ * @param scope - quem está lendo, vindo do token.
+ * @returns os sumários, a revisão da fatia, e o perfil que a recortou — `null`
+ * distingue "sem perfil ativo" de "perfil com seleção vazia", que a soma das
+ * revisões sozinha não separa.
  */
-export async function listSkills(): Promise<{
+export async function listSkills(scope: ProfileScope): Promise<{
   revision: number;
   skills: SkillLibrarySummary[];
+  profileId: string | null;
 }> {
+  const activeProfileId = await readActiveProfileId(scope);
+
+  if (activeProfileId === null) {
+    return { revision: 0, skills: [], profileId: null };
+  }
+
   const rows = await prisma.librarySkill.findMany({
-    where: { published: true },
+    where: scopedWhere(scope, activeProfileId),
     orderBy: { name: "asc" },
     select: {
       name: true,
@@ -100,33 +138,43 @@ export async function listSkills(): Promise<{
       modelInvocable: true,
       userInvocable: true,
       revision: true,
-      updatedAt: true,
     },
   });
 
-  // Revisão da biblioteca como um todo: soma das revisões das linhas publicadas.
+  // Revisão da fatia como um todo: soma das revisões das linhas servidas.
   // Muda quando qualquer skill muda, e também quando uma entra ou sai — o que um
   // `max()` não pegaria, já que remover a skill de maior revisão baixaria o
-  // número e pareceria um retrocesso.
+  // número e pareceria um retrocesso. Com o recorte por perfil, "entrar e sair"
+  // passa a incluir marcar e desmarcar no painel, que é justamente o que o
+  // cliente precisa detectar. Não é comparável ENTRE perfis, e não precisa ser:
+  // um cliente só compara leituras sucessivas dele mesmo. `0` é sentinela segura
+  // de "sem perfil": uma linha publicada tem `revision >= 1`, então uma fatia
+  // não-vazia nunca soma zero.
   const revision = rows.reduce((total, row) => total + row.revision, 0);
 
-  return { revision, skills: rows.map(toSummary) };
+  return { revision, skills: rows.map(toSummary), profileId: activeProfileId };
 }
 
 /**
- * Uma skill publicada, com o corpo.
+ * Uma skill do perfil ativo, com o corpo.
  *
- * Uma skill despublicada responde como inexistente: quem consome não precisa
- * distinguir "não existe" de "existe como rascunho", e distinguir vazaria a
- * existência de trabalho que ainda não foi liberado.
+ * Despublicada, fora do perfil ativo ou inexistente respondem igual: quem
+ * consome não precisa distinguir os três, e distinguir vazaria tanto a existência
+ * de trabalho ainda não liberado quanto o conteúdo da biblioteca fora do recorte.
+ * @param scope - quem está lendo, vindo do token.
  * @param name - nome já validado por {@link assertSkillName}.
- * @returns a skill, ou `null` quando não existe ou não está publicada.
+ * @returns a skill, ou `null` quando não alcançável por este perfil.
  */
 export async function readSkill(
+  scope: ProfileScope,
   name: string,
 ): Promise<SkillLibraryEntry | null> {
+  const activeProfileId = await readActiveProfileId(scope);
+
+  if (activeProfileId === null) return null;
+
   const row = await prisma.librarySkill.findFirst({
-    where: { name, published: true },
+    where: { name, ...scopedWhere(scope, activeProfileId) },
     select: {
       name: true,
       description: true,
