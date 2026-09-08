@@ -30,21 +30,49 @@ const BACKDROP: CSSProperties = {
   display: 'grid',
   placeItems: 'center',
   padding: 24,
-  background: 'var(--dsw-alias-bg-base)',
   fontFamily: 'var(--dsw-font-family)',
   overflow: 'auto',
 }
 
+/**
+ * Nothing materialized yet: this is a gate, not a dialog, so it covers the app
+ * outright the way the login screen does. There is nothing usable behind it.
+ */
+const BACKDROP_GATE: CSSProperties = {
+  ...BACKDROP,
+  background: 'var(--dsw-alias-bg-base)',
+}
+
+/**
+ * A deliberate switch: the app behind stays running and cancellable, so this is
+ * the shipped modal mask (`ui-primitives/Modal.module.css`) rather than an
+ * opaque cover.
+ */
+const BACKDROP_MASK: CSSProperties = {
+  ...BACKDROP,
+  background: 'var(--dsw-alias-bg-mask-1)',
+  backdropFilter: 'var(--dsw-mask-blur)',
+}
+
+/**
+ * The dialog card, filled with the shipped dialog tokens.
+ *
+ * The fill is not optional: without it the card is transparent and the picker
+ * reads as text floating on whatever is behind, which is exactly what a mask
+ * backdrop makes visible.
+ */
 const CARD: CSSProperties = {
+  position: 'relative',
   width: '100%',
   maxWidth: 480,
   display: 'flex',
   flexDirection: 'column',
   gap: 16,
   padding: 32,
-  borderRadius: 16,
-  border: '1px solid var(--dsw-alias-border-l1)',
-  boxShadow: 'var(--dsw-shadow-lv2)',
+  borderRadius: 24,
+  border: '1px solid var(--dsw-alias-border-inverted)',
+  background: 'var(--dsw-alias-bg-layer-2)',
+  boxShadow: 'var(--dsw-shadow-lv3)',
 }
 
 const TITLE: CSSProperties = {
@@ -69,7 +97,11 @@ const ROW: CSSProperties = {
   padding: '12px 16px',
   borderRadius: 12,
   border: '1px solid var(--dsw-alias-border-l2)',
-  background: 'transparent',
+  // Layer 3 over the card's layer 2: raised in dark, and in light every layer
+  // is the same solid neutral, so the border does the separating there. Never
+  // `transparent` — a row that borrowed whatever sat behind it is what the
+  // mask backdrop would expose.
+  background: 'var(--dsw-alias-bg-layer-3)',
   color: 'var(--dsw-alias-label-primary)',
   fontFamily: 'inherit',
   fontSize: 14,
@@ -265,7 +297,10 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
   if (phase.kind === 'reading' && !signedIn) return null
 
   return (
-    <div style={BACKDROP} data-dsh-profiles="gate">
+    <div
+      style={active === null ? BACKDROP_GATE : BACKDROP_MASK}
+      data-dsh-profiles={active === null ? 'gate' : 'switcher'}
+    >
       <div style={CARD}>
         {phase.kind === 'restart'
           ? (
