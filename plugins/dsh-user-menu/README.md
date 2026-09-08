@@ -4,7 +4,7 @@ The signed-in user's badge in the app's top-right corner: two letters in a circl
 
 ```
 ┌────────────────────────────────────────────────┐
-│  DSH Local Build                    (AD)  ▣ ▣  │
+│  ShivaCode                    (AD)  ▣ ▣  │
 │                              ┌──────────────┐  │
 │                              │ admin        │  │
 │                              │ Conta        │  │
@@ -20,12 +20,12 @@ The signed-in user's badge in the app's top-right corner: two letters in a circl
 
 Everything comes from `ctx.loginSession`, the session service [dsh-login](../dsh-login/README.md) publishes. This plugin holds no state and stores nothing.
 
-| Source | Used for |
-| --- | --- |
-| `getSnapshot().user.name` | the badge letters and the menu heading |
-| `getSnapshot().user.email` | the fallback name, cut at the `@` |
-| `subscribe()` | re-render on sign-in, sign-out, expiry, and another tab |
-| `signOut()` | the menu's one action |
+| Source                     | Used for                                                |
+| -------------------------- | ------------------------------------------------------- |
+| `getSnapshot().user.name`  | the badge letters and the menu heading                  |
+| `getSnapshot().user.email` | the fallback name, cut at the `@`                       |
+| `subscribe()`              | re-render on sign-in, sign-out, expiry, and another tab |
+| `signOut()`                | the menu's one action                                   |
 
 The `user` value is whatever the login service returned minus the token, so it is read field by field rather than cast: a missing, blank, or wrong-typed `name` falls back to the e-mail, and a value carrying neither renders `?`.
 
@@ -37,11 +37,11 @@ The frame-wide overlay layer (`shell.overlay`), pinned to the app's **top-right*
 
 The sidebar foot is where a user badge belongs, and it is not available. Measured in the running app:
 
-| element | x | width | right |
-| --- | --- | --- | --- |
-| sidebar | 0 | 280 | 280 |
-| `.footerActions` (the seat) | 12 | 256 | 268 |
-| `dsh-kanban`'s button | 8 | **264**, `flex: 0 0 auto` | 272 |
+| element                     | x   | width                     | right |
+| --------------------------- | --- | ------------------------- | ----- |
+| sidebar                     | 0   | 280                       | 280   |
+| `.footerActions` (the seat) | 12  | 256                       | 268   |
+| `dsh-kanban`'s button       | 8   | **264**, `flex: 0 0 auto` | 272   |
 
 `sidebar.footer.action` is a flex ROW, and Kanban's button is hardcoded to 264px and refuses to shrink — 8px wider than the row before anything else asks for space. A second occupant starts at x=268 and is clipped by the sidebar's 280px edge whatever width it declares; no CSS on the newcomer can reclaim space from a `flex: 0 0 auto` sibling.
 
