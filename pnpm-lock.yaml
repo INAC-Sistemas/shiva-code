@@ -8986,12 +8986,43 @@ importers:
 
   plugins/dsh-profiles:
     dependencies:
-      dsh-better-sidebar:
-        specifier: '>=0.12.0'
-        version: 0.16.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-agent@packages+core+agent)(@deepseek-ai/dsh-client-locale@packages+client+locale)(@deepseek-ai/dsh-client-runtime@packages+client+runtime)(@deepseek-ai/dsh-client-ui-conversation@packages+client+ui-conversation)(@deepseek-ai/dsh-client-ui-primitives@packages+client+ui-primitives)(@deepseek-ai/dsh-client-ui-settings@packages+client+ui-settings)(@deepseek-ai/dsh-client-ui-slots@packages+client+ui-slots)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-invariants@packages+runtime-diagnostics+invariants)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-subagent@packages+subagent+subagent)(@deepseek-ai/dsh-tools@packages+core+tools)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@deepseek-ai/schemastery':
+        specifier: link:../../vendor/schemastery
+        version: link:../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../vendor/cordis
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:^
+        version: link:../../packages/credentials/credentials
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../packages/util/home-paths
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../packages/host/webserver
+      '@types/node':
+        specifier: ^22.20.0
+        version: 22.20.0
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      dsh-login:
+        specifier: workspace:^
+        version: link:../dsh-login
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      tsdown:
+        specifier: ^0.22.2
+        version: 0.22.2(oxc-resolver@11.20.0)(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   plugins/dsh-prototype:
     dependencies:

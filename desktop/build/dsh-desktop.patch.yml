@@ -57,7 +57,28 @@
 # dsh-vps-status, dsh-prototype, and dsh-skill-library also authenticate
 # through dsh-login (each reads the session it records; none carries its own
 # credential) and are included on the same basis. dsh-mds, dsh-profiles, and
-# dsh-skill-manager carry no VPS dependency at all. dsh-openviking (the
+# dsh-skill-manager carry no VPS dependency at all.
+#
+# dsh-vps-status and dsh-skill-library are NOT rows here: they contribute only
+# to the `tools` and `skills` registries, so a host row files them into the
+# GLOBAL layer, which every agent reads regardless of preset. They moved to the
+# `profile` agent preset, where the same registration lands in that preset's
+# layer. `verify-cordis-config` fails the build if either comes back.
+#
+# Every remaining OPTIONAL row below carries a `disabled` expression over
+# `$DSH_PROFILE_PLUGINS`, the active profile's plugin list, injected by
+# harness-runtime.ts at spawn. A host-plane plugin serves routes and publishes
+# services, so it can only be turned off by not loading — which is decided at
+# boot, and is why changing these costs an app restart. ABSENT means everything
+# enabled: a first boot before any login, dev, and the CLI must all still work.
+# That fail-open is only acceptable because the plane the MODEL sees fails
+# closed — an agent that joins no preset resolves the empty global layer.
+#
+# Not gated, deliberately: dsh-better-sidebar (the chassis every other tab plugs
+# into), dsh-i18n, dsh-shiva-theme, dsh-clock, dsh-user-menu, login and
+# profiles — without the last two there is no way back to a picker.
+#
+# dsh-openviking (the
 # "Memory" sidebar tab) auto-installs a Python venv and spawns a Python
 # server at runtime — a platform dependency this Node/Electron-only
 # executable does not itself carry — so scripts/install-python-runtime.mjs
@@ -84,10 +105,13 @@
       name: dsh-user-menu
     - id: dsh-sidebar-qa
       name: dsh-sidebar-qa
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-sidebar-qa').split(',').includes('dsh-sidebar-qa')"
     - id: dsh-docs-panel
       name: dsh-docs-panel
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-docs-panel').split(',').includes('dsh-docs-panel')"
     - id: dsh-flowglass
       name: dsh-flowglass
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-flowglass').split(',').includes('dsh-flowglass')"
 
     # Config replicated verbatim from dsh-login's own cordis.patch.yml (the
     # bundle patch a `dsh.profile.bundles` entry would apply automatically —
@@ -109,26 +133,29 @@
 
     - id: mds
       name: dsh-mds
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
+
+    # `profiles` is never gated: it is the plugin that reads the roster and lets
+    # a person pick, so gating it would remove the only way out of a bad choice.
     - id: profiles
       name: dsh-profiles
+      config:
+        profilesEndpoint: !!js "new URL('/api/profiles', process.env.VPS_URL).href"
+        activeEndpoint: !!js "new URL('/api/profiles/active', process.env.VPS_URL).href"
+        specEndpoint: !!js "new URL('/api/plugins/profile', process.env.VPS_URL).href"
+
     - id: skill-manager
       name: dsh-skill-manager
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-skill-manager').split(',').includes('dsh-skill-manager')"
 
-    # The three rows below read the session dsh-login records (no credential
-    # of their own), same $VPS_URL contract as the login row above — config
-    # replicated verbatim from each plugin's own cordis.patch.yml.
+    # Reads the session dsh-login records (no credential of its own), same
+    # $VPS_URL contract as the login row above — config replicated verbatim from
+    # the plugin's own cordis.patch.yml.
     - id: prototype
       name: dsh-prototype
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-prototype').split(',').includes('dsh-prototype')"
       config:
         endpoint: !!js "new URL('/api/plugins/prototype', process.env.VPS_URL).href"
-    - id: vps-status
-      name: dsh-vps-status
-      config:
-        endpoint: !!js "new URL('/api/plugins/host-info', process.env.VPS_URL).href"
-    - id: skill-library
-      name: dsh-skill-library
-      config:
-        endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
 
     # $DSH_OPENVIKING_PYTHON comes from harness-runtime.ts's
     # buildHarnessSpawnOptions — set only on a packaged win32 build, where
@@ -144,5 +171,6 @@
     # evaluates to [], which leaves the plugin's own default untouched.
     - id: openviking
       name: dsh-openviking
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-openviking').split(',').includes('dsh-openviking')"
       config:
         pythonCandidates: !!js "process.env.DSH_OPENVIKING_PYTHON ? [process.env.DSH_OPENVIKING_PYTHON, 'py -3.12', 'py -3.11', 'py -3.10', 'python'] : []"

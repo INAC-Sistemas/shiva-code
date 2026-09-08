@@ -12,6 +12,7 @@ import {
   bundleManifestPaths,
   bundlePluginDependencyErrors,
   metadataExpressionErrors,
+  undeclaredDesktopRows,
 } from './verify-cordis-config.ts'
 
 describe('verify-cordis-config metadata expressions', () => {
@@ -84,5 +85,57 @@ describe('workspace Bundle discovery and product dependency closures', () => {
     ])).toEqual([
       `${file}: @deepseek-ai/dsh-missing-plugin must be declared in ${manifestPath} dependencies`,
     ])
+  })
+})
+
+describe('desktop composition plane declaration', () => {
+  /** One `- insert:` operation, the shape the desktop patch adds rows with. */
+  function insert(rows: unknown[]): unknown[] {
+    return [{ insert: rows }]
+  }
+
+  /** The gate expression a profile-gated row carries. */
+  function gate(name: string): { __jsExpr: string } {
+    return {
+      __jsExpr: `!(process.env.DSH_PROFILE_PLUGINS ?? '${name}').split(',').includes('${name}')`,
+    }
+  }
+
+  it('rejects a plain inserted row', () => {
+    // This is the leak the gate exists for: `dsh-skill-library` sat here as a
+    // bare row, filed its skill provider into the GLOBAL layer, and reached
+    // every agent in every profile with nothing anywhere saying so.
+    expect(undeclaredDesktopRows(insert([{ id: 'skill-library', name: 'dsh-skill-library' }])))
+      .toEqual([{ id: 'skill-library', name: 'dsh-skill-library' }])
+  })
+
+  it('accepts a row gated on the active profile', () => {
+    expect(undeclaredDesktopRows(insert([
+      { id: 'mds', name: 'dsh-mds', disabled: gate('dsh-mds') },
+    ]))).toEqual([])
+  })
+
+  it('accepts a row declared always-on', () => {
+    expect(undeclaredDesktopRows(insert([
+      { id: 'dsh-better-sidebar', name: 'dsh-better-sidebar' },
+    ]))).toEqual([])
+  })
+
+  it('rejects a gate that names another plugin', () => {
+    // Copy-paste between two rows is the realistic way this breaks, and it
+    // would silently tie one plugin's presence to another's.
+    expect(undeclaredDesktopRows(insert([
+      { id: 'mds', name: 'dsh-mds', disabled: gate('dsh-prototype') },
+    ]))).toEqual([{ id: 'mds', name: 'dsh-mds' }])
+  })
+
+  it('rejects a static disabled that cannot read the profile', () => {
+    expect(undeclaredDesktopRows(insert([
+      { id: 'mds', name: 'dsh-mds', disabled: true },
+    ]))).toEqual([{ id: 'mds', name: 'dsh-mds' }])
+  })
+
+  it('ignores operations that address an existing row instead of inserting one', () => {
+    expect(undeclaredDesktopRows([{ id: 'ui-brand-official', disabled: true }])).toEqual([])
   })
 })
