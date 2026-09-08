@@ -16,6 +16,19 @@ browser ──POST /profiles/api/select─▶ dsh-profiles (host) ──▶ POST
 
 **`dsh-login` must be mounted in the same profile.** Every call resolves the session that plugin records, per request and never cached — the same contract `dsh-skill-library` and `dsh-vps-status` follow. Without it there is no roster, and the picker stays behind the login gate.
 
+## Two surfaces
+
+| Surface | Seat | When it shows |
+| --- | --- | --- |
+| The picker | `shell.overlay`, order `9_999` | nothing materialized, or the badge asked for it |
+| The profile row | `sidebar.footer.below`, order `90` | always, once signed in |
+
+The picker's order sits just below `dsh-login`'s `10_000`, so when neither is satisfied the login screen is on top: choosing a profile requires being signed in.
+
+**The row in the sidebar foot is the only way to switch.** The picker opens itself only when there is nothing to materialize, so without that row a machine that already has a profile would never see it again, and changing profiles would mean the plugin manager's dashboard plus a reload. The two surfaces sit in different slots and never share a React tree, so they share a `ProfileStore` instead.
+
+Cancelling is offered only for a deliberate switch. With nothing materialized there is no state to go back to, so the gate has no way out but a choice.
+
 ## The active profile lives on the server
 
 `User.activeProfileId` on the plugin manager, not a claim in the token. Switching is a column write: no token is minted or revoked, and the next request from any device resolves the new profile.

@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { CSSProperties, ReactNode } from 'react'
 import { fetchState, selectProfile } from './api.ts'
 import type { LoginSessionFace } from './context-types.ts'
+import type { ProfileStore } from './store.ts'
 import type { ProfileState, ProfileSummary } from '../wire.ts'
 
 const BACKDROP: CSSProperties = {
@@ -82,6 +83,23 @@ const ROW_HINT: CSSProperties = {
   lineHeight: '18px',
 }
 
+/** The row of the profile already in force, so a switch shows what it moves from. */
+const ROW_CURRENT: CSSProperties = {
+  borderColor: 'var(--dsw-alias-state-business-primary)',
+}
+
+const SECONDARY: CSSProperties = {
+  alignSelf: 'flex-start',
+  padding: '6px 0',
+  border: 'none',
+  background: 'none',
+  color: 'var(--dsw-alias-label-secondary)',
+  fontFamily: 'inherit',
+  fontSize: 13,
+  lineHeight: '20px',
+  cursor: 'pointer',
+}
+
 const NOTE: CSSProperties = {
   margin: 0,
   color: 'var(--dsw-alias-label-secondary)',
@@ -108,6 +126,8 @@ type Phase =
 export interface ProfileGateProps {
   /** The read face of `ctx.loginSession`; the gate stays out of the way until it reports a session. */
   session: LoginSessionFace
+  /** Shared state with the sidebar badge, which is how a deliberate switch opens this. */
+  store: ProfileStore
 }
 
 /**
@@ -142,16 +162,33 @@ export function planFrom(state: ProfileState): {
  * @param props - the login session face.
  * @returns the cover, or null once a profile is materialized.
  */
-export function ProfileGate({ session }: ProfileGateProps): ReactNode {
+export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
   const signedIn = useSyncExternalStore(
     useCallback(listener => session.subscribe(listener), [session]),
     useCallback(() => session.getSnapshot() !== null, [session]),
     useCallback(() => false, []),
   )
+  const picking = useSyncExternalStore(
+    store.subscribe,
+    useCallback(() => store.getSnapshot().picking, [store]),
+    useCallback(() => false, [store]),
+  )
+  const active = useSyncExternalStore(
+    store.subscribe,
+    useCallback(() => store.getSnapshot().active, [store]),
+    useCallback(() => null, []),
+  )
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' })
   const pending = useRef<AbortController | undefined>(undefined)
 
+  /** What a finished selection does, whether it was automatic or deliberate. */
+  const settle = useCallback((result: { name: string; restartRequired: boolean }) => {
+    store.closePicker()
+    setPhase(result.restartRequired ? { kind: 'restart', name: result.name } : { kind: 'done' })
+  }, [store])
+
   const apply = useCallback(async (state: ProfileState) => {
+    store.setActive(state.signedIn ? state.active : null)
     const plan = planFrom(state)
     setPhase(plan.phase)
     if (plan.materialize === undefined) return
@@ -165,13 +202,13 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
         : { kind: 'done' })
       return
     }
-    setPhase(result.restartRequired
-      ? { kind: 'restart', name: result.active.name }
-      : { kind: 'done' })
-  }, [])
+    store.setActive(result.active)
+    settle({ name: result.active.name, restartRequired: result.restartRequired })
+  }, [store, settle])
 
   useEffect(() => {
     if (!signedIn) {
+      store.setActive(null)
       setPhase({ kind: 'done' })
       return
     }
@@ -183,7 +220,27 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
       if (!controller.signal.aborted) void apply(state)
     })
     return () => controller.abort()
-  }, [signedIn, apply])
+  }, [signedIn, apply, store])
+
+  // A deliberate switch: the badge asked for the picker, so the roster is read
+  // again rather than reused. It is the plugin manager's, it is small, and a
+  // stale one would offer a profile that no longer exists.
+  useEffect(() => {
+    if (!picking || !signedIn) return
+    const controller = new AbortController()
+    setPhase({ kind: 'reading' })
+    void fetchState(controller.signal).then(state => {
+      if (controller.signal.aborted) return
+      if (!state.signedIn) {
+        store.closePicker()
+        setPhase({ kind: 'done' })
+        return
+      }
+      store.setActive(state.active)
+      setPhase({ kind: 'choosing', profiles: state.profiles })
+    })
+    return () => controller.abort()
+  }, [picking, signedIn, store])
 
   const choose = useCallback(async (profileId: string) => {
     setPhase({ kind: 'selecting' })
@@ -195,10 +252,14 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
         : { kind: 'done' })
       return
     }
-    setPhase(result.restartRequired
-      ? { kind: 'restart', name: result.active.name }
-      : { kind: 'done' })
-  }, [])
+    store.setActive(result.active)
+    settle({ name: result.active.name, restartRequired: result.restartRequired })
+  }, [store, settle])
+
+  const cancel = useCallback(() => {
+    store.closePicker()
+    setPhase({ kind: 'done' })
+  }, [store])
 
   if (phase.kind === 'done') return null
   if (phase.kind === 'reading' && !signedIn) return null
@@ -218,6 +279,9 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
                 As skills do perfil já valem para as próximas sessões. As conversas
                 abertas continuam com os plugins com que começaram.
               </p>
+              <button type="button" style={SECONDARY} onClick={cancel}>
+                Continuar sem reiniciar
+              </button>
             </>
           )
           : null}
@@ -234,9 +298,14 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
         {phase.kind === 'choosing'
           ? (
             <>
-              <h1 style={TITLE}>Escolha um perfil</h1>
+              <h1 style={TITLE}>
+                {active === null ? 'Escolha um perfil' : 'Trocar de perfil'}
+              </h1>
               <p style={SUBTITLE}>
                 O perfil decide quais skills e plugins o agente enxerga.
+                {active === null
+                  ? ''
+                  : ' As conversas já abertas continuam com o perfil com que começaram.'}
               </p>
 
               {phase.error === undefined ? null : <p style={ERROR}>{phase.error}</p>}
@@ -252,15 +321,27 @@ export function ProfileGate({ session }: ProfileGateProps): ReactNode {
                   <button
                     key={profile.id}
                     type="button"
-                    style={ROW}
+                    style={profile.id === active?.id ? { ...ROW, ...ROW_CURRENT } : ROW}
                     onClick={() => void choose(profile.id)}
                   >
-                    <span>{profile.name}</span>
+                    <span>
+                      {profile.name}
+                      {profile.id === active?.id ? ' · atual' : ''}
+                    </span>
                     <span style={ROW_HINT}>
                       {profile.description ?? `${profile.skillCount} skills · ${profile.pluginCount} plugins`}
                     </span>
                   </button>
                 ))}
+
+              {/* Only for a deliberate switch: with nothing materialized there
+                  is no state to go back to, so the gate has no way out but a
+                  choice. */}
+              {active === null ? null : (
+                <button type="button" style={SECONDARY} onClick={cancel}>
+                  Cancelar
+                </button>
+              )}
             </>
           )
           : null}
