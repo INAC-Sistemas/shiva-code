@@ -315,7 +315,7 @@
   },
   "build": {
     "appId": "io.dsh.desktop",
-    "productName": "DSH Desktop",
+    "productName": "ShivaCode Desktop",
     "asar": false,
     "npmRebuild": false,
     "compression": "maximum",

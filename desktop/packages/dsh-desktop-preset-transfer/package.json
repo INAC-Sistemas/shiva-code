@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-preset-transfer",
   "version": "0.1.0",
-  "description": "Preset package export and import routes for DSH Desktop.",
+  "description": "Preset package export and import routes for Shivacode Desktop.",
   "private": true,
   "type": "module",
   "main": "./index.js",

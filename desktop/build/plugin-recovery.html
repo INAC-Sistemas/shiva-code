@@ -7,7 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
     />
-    <title>DSH Desktop</title>
+    <title>Shivacode Desktop</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -27,8 +27,16 @@
         --shadow: 0 12px 34px rgba(24, 24, 27, 0.1);
       }
 
-      * { box-sizing: border-box; }
-      html, body { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        min-width: 320px;
+        min-height: 100%;
+        margin: 0;
+      }
       body {
         min-height: 100vh;
         display: grid;
@@ -39,7 +47,9 @@
         background: var(--canvas);
       }
 
-      button { font: inherit; }
+      button {
+        font: inherit;
+      }
       .shell {
         width: min(700px, 100%);
         border: 1px solid var(--line);
@@ -55,9 +65,22 @@
         padding: 18px 26px;
         border-bottom: 1px solid var(--line);
       }
-      .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-      .brand img { width: 28px; height: 28px; border-radius: 8px; }
-      .brand-name { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+      }
+      .brand img {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+      }
+      .brand-name {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
       .badge {
         display: inline-flex;
         align-items: center;
@@ -69,8 +92,11 @@
         font-size: 11px;
         font-weight: 600;
       }
-      .content { padding: 30px 32px 22px; }
-      .progress, .notice {
+      .content {
+        padding: 30px 32px 22px;
+      }
+      .progress,
+      .notice {
         display: none;
         margin: 0 0 18px;
         padding: 11px 13px;
@@ -78,9 +104,19 @@
         font-size: 12px;
         line-height: 1.55;
       }
-      .progress { color: var(--ink); border: 1px solid var(--line); background: var(--surface-soft); }
-      .notice { color: var(--danger); background: rgba(195, 59, 56, 0.08); }
-      .progress.visible, .notice.visible { display: block; }
+      .progress {
+        color: var(--ink);
+        border: 1px solid var(--line);
+        background: var(--surface-soft);
+      }
+      .notice {
+        color: var(--danger);
+        background: rgba(195, 59, 56, 0.08);
+      }
+      .progress.visible,
+      .notice.visible {
+        display: block;
+      }
       h1 {
         margin: 0;
         max-width: 590px;
@@ -96,8 +132,12 @@
         font-size: 14px;
         line-height: 1.6;
       }
-      .summary:empty { display: none; }
-      .summary:empty + .conflict-card { margin-top: 30px; }
+      .summary:empty {
+        display: none;
+      }
+      .summary:empty + .conflict-card {
+        margin-top: 30px;
+      }
 
       .conflict-card {
         overflow: hidden;
@@ -127,7 +167,9 @@
         border-top: 1px solid var(--line);
         list-style: none;
       }
-      .plugins.visible { display: block; }
+      .plugins.visible {
+        display: block;
+      }
       .plugins li {
         display: flex;
         align-items: center;
@@ -136,7 +178,9 @@
         padding: 10px 19px;
         border-top: 1px solid var(--line);
       }
-      .plugins li:first-child { border-top: 0; }
+      .plugins li:first-child {
+        border-top: 0;
+      }
       .plugin-mark {
         width: 22px;
         height: 22px;
@@ -207,18 +251,35 @@
         cursor: pointer;
         font-size: 13px;
         font-weight: 620;
-        transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease,
+          transform 120ms ease;
       }
-      .button:hover { background: var(--surface-soft); }
-      .button:active { transform: translateY(1px); }
-      .button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+      .button:hover {
+        background: var(--surface-soft);
+      }
+      .button:active {
+        transform: translateY(1px);
+      }
+      .button:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
       .button.primary {
         border-color: var(--button);
         color: var(--primary-ink);
         background: var(--button);
       }
-      .button.primary:hover { border-color: var(--button-hover); background: var(--button-hover); }
-      .button[disabled] { opacity: 0.64; cursor: wait; transform: none; }
+      .button.primary:hover {
+        border-color: var(--button-hover);
+        background: var(--button-hover);
+      }
+      .button[disabled] {
+        opacity: 0.64;
+        cursor: wait;
+        transform: none;
+      }
 
       .advanced {
         margin-top: 24px;
@@ -234,7 +295,9 @@
         font-weight: 630;
         list-style: none;
       }
-      .advanced summary::-webkit-details-marker { display: none; }
+      .advanced summary::-webkit-details-marker {
+        display: none;
+      }
       .advanced summary::after {
         width: 6px;
         height: 6px;
@@ -245,8 +308,12 @@
         transform: rotate(-45deg);
         transform-origin: center;
       }
-      .advanced[open] summary::after { transform: rotate(45deg) translateY(-1px); }
-      .advanced-body { padding: 13px 0 2px; }
+      .advanced[open] summary::after {
+        transform: rotate(45deg) translateY(-1px);
+      }
+      .advanced-body {
+        padding: 13px 0 2px;
+      }
       .meta-label {
         margin: 0 0 6px;
         color: var(--faint);
@@ -255,7 +322,8 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-      .path, .technical {
+      .path,
+      .technical {
         margin: 0 0 14px;
         color: var(--muted);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -264,7 +332,11 @@
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
-      .advanced-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .advanced-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
       .text-button {
         min-height: 32px;
         padding: 5px 9px;
@@ -276,8 +348,14 @@
         font-size: 12px;
         font-weight: 600;
       }
-      .text-button:hover { color: var(--ink); background: var(--surface-soft); }
-      .text-button.danger:hover { color: var(--danger); background: rgba(195, 59, 56, 0.08); }
+      .text-button:hover {
+        color: var(--ink);
+        background: var(--surface-soft);
+      }
+      .text-button.danger:hover {
+        color: var(--danger);
+        background: rgba(195, 59, 56, 0.08);
+      }
       .footer {
         display: flex;
         align-items: center;
@@ -290,14 +368,37 @@
         font-size: 11px;
       }
       @media (max-width: 620px) {
-        body { display: block; padding: 46px 0 0; background: var(--surface); }
-        .shell { width: 100%; min-height: calc(100vh - 46px); border: 0; border-radius: 0; box-shadow: none; }
-        .header { padding-inline: 20px; }
-        .content { padding: 24px 20px 16px; }
-        .decision-row { align-items: stretch; }
-        .actions { align-items: stretch; flex-direction: column-reverse; }
-        .button { width: 100%; }
-        .footer { padding-inline: 20px; }
+        body {
+          display: block;
+          padding: 46px 0 0;
+          background: var(--surface);
+        }
+        .shell {
+          width: 100%;
+          min-height: calc(100vh - 46px);
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+        .header {
+          padding-inline: 20px;
+        }
+        .content {
+          padding: 24px 20px 16px;
+        }
+        .decision-row {
+          align-items: stretch;
+        }
+        .actions {
+          align-items: stretch;
+          flex-direction: column-reverse;
+        }
+        .button {
+          width: 100%;
+        }
+        .footer {
+          padding-inline: 20px;
+        }
       }
 
       :root[data-theme="dark"] {
@@ -335,7 +436,9 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .button { transition: none; }
+        .button {
+          transition: none;
+        }
       }
     </style>
   </head>
@@ -393,77 +496,84 @@
     </main>
 
     <script>
-      const params = new URLSearchParams(location.search)
-      const model = JSON.parse(params.get('state') || '{}')
-      document.documentElement.lang = model.locale === 'zh' ? 'zh-CN' : 'en'
-      document.documentElement.dataset.theme = params.get('theme') || 'system'
-      document.title = model.badge || 'DSH Desktop'
+      const params = new URLSearchParams(location.search);
+      const model = JSON.parse(params.get("state") || "{}");
+      document.documentElement.lang = model.locale === "zh" ? "zh-CN" : "en";
+      document.documentElement.dataset.theme = params.get("theme") || "system";
+      document.title = model.badge || "Shivacode Desktop";
 
       const setText = (id, value) => {
-        const node = document.getElementById(id)
-        if (node) node.textContent = value || ''
-      }
+        const node = document.getElementById(id);
+        if (node) node.textContent = value || "";
+      };
 
-      document.getElementById('icon').src = params.get('icon') || 'icon.png'
-      setText('brand', model.brand)
-      setText('badge', model.badge)
-      setText('heading', model.heading)
-      setText('summary', model.summary)
-      setText('reason-title', model.reasonTitle)
-      setText('reason-detail', model.reasonDetail)
-      setText('safety-note', model.safetyNote)
-      setText('primary', model.primaryLabel)
-      setText('advanced-label', model.advancedLabel)
-      setText('launch-directory-label', model.launchDirectoryLabel)
-      setText('launch-directory', model.launchDirectory || '—')
-      setText('error-label', model.errorLabel)
-      setText('technical', model.rawError)
-      setText('show-log', model.logLabel)
-      setText('quit', model.quitLabel)
+      document.getElementById("icon").src = params.get("icon") || "icon.png";
+      setText("brand", model.brand);
+      setText("badge", model.badge);
+      setText("heading", model.heading);
+      setText("summary", model.summary);
+      setText("reason-title", model.reasonTitle);
+      setText("reason-detail", model.reasonDetail);
+      setText("safety-note", model.safetyNote);
+      setText("primary", model.primaryLabel);
+      setText("advanced-label", model.advancedLabel);
+      setText("launch-directory-label", model.launchDirectoryLabel);
+      setText("launch-directory", model.launchDirectory || "—");
+      setText("error-label", model.errorLabel);
+      setText("technical", model.rawError);
+      setText("show-log", model.logLabel);
+      setText("quit", model.quitLabel);
 
-      const progress = document.getElementById('progress')
+      const progress = document.getElementById("progress");
       if (model.progress) {
-        progress.textContent = model.progress
-        progress.classList.add('visible')
+        progress.textContent = model.progress;
+        progress.classList.add("visible");
       }
-      const notice = document.getElementById('notice')
+      const notice = document.getElementById("notice");
       if (model.notice) {
-        notice.textContent = model.notice
-        notice.classList.add('visible')
+        notice.textContent = model.notice;
+        notice.classList.add("visible");
       }
 
-      const pluginList = document.getElementById('plugins')
+      const pluginList = document.getElementById("plugins");
       if (Array.isArray(model.plugins) && model.plugins.length > 0) {
-        pluginList.classList.add('visible')
+        pluginList.classList.add("visible");
         for (const plugin of model.plugins) {
-          const item = document.createElement('li')
-          const mark = document.createElement('span')
-          mark.className = 'plugin-mark'
-          mark.setAttribute('aria-hidden', 'true')
-          mark.textContent = '!'
-          const name = document.createElement('span')
-          name.className = 'plugin-name'
-          name.textContent = String(plugin)
-          item.append(mark, name)
-          pluginList.appendChild(item)
+          const item = document.createElement("li");
+          const mark = document.createElement("span");
+          mark.className = "plugin-mark";
+          mark.setAttribute("aria-hidden", "true");
+          mark.textContent = "!";
+          const name = document.createElement("span");
+          name.className = "plugin-name";
+          name.textContent = String(plugin);
+          item.append(mark, name);
+          pluginList.appendChild(item);
         }
       }
 
       const navigate = (action) => {
-        if (window.dshRecovery && typeof window.dshRecovery.action === 'function') {
-          void window.dshRecovery.action(action)
+        if (
+          window.dshRecovery &&
+          typeof window.dshRecovery.action === "function"
+        ) {
+          void window.dshRecovery.action(action);
         } else {
-          location.href = `dsh-recovery://${action}`
+          location.href = `dsh-recovery://${action}`;
         }
-      }
-      const primary = document.getElementById('primary')
-      primary.addEventListener('click', () => {
-        primary.disabled = true
-        primary.textContent = model.primaryBusyLabel
-        navigate(model.canUninstall ? 'uninstall' : 'safe-mode')
-      })
-      document.getElementById('show-log').addEventListener('click', () => navigate('show-log'))
-      document.getElementById('quit').addEventListener('click', () => navigate('quit'))
+      };
+      const primary = document.getElementById("primary");
+      primary.addEventListener("click", () => {
+        primary.disabled = true;
+        primary.textContent = model.primaryBusyLabel;
+        navigate(model.canUninstall ? "uninstall" : "safe-mode");
+      });
+      document
+        .getElementById("show-log")
+        .addEventListener("click", () => navigate("show-log"));
+      document
+        .getElementById("quit")
+        .addEventListener("click", () => navigate("quit"));
     </script>
   </body>
 </html>

@@ -1651,8 +1651,8 @@
    "page": "https://awesome-dsh-plugin.com/p/eomis/packhub-workbench-assistant/",
    "category": "ui",
    "description": {
-    "en": "Adds quick installation and switching for workbench templates in DSH Desktop.",
-    "zh": "为 DSH Desktop 提供工作台模板的快捷安装与切换。"
+    "en": "Adds quick installation and switching for workbench templates in Shivacode Desktop.",
+    "zh": "为 Shivacode Desktop 提供工作台模板的快捷安装与切换。"
    },
    "npm": null,
    "tarball": "https://github.com/eomis/packhub-workbench-assistant/releases/latest/download/packhub-workbench-assistant.tgz",
@@ -5013,7 +5013,7 @@
    "page": "https://awesome-dsh-plugin.com/p/TianYa-DAO/dsh-wallpaper-engine--packages-dsh-wallpaper-engine/",
    "category": "ui",
    "description": {
-    "en": "Wallpaper Engine local library, background layer, native Scene panel, and desktop-mode controls for the DSH desktop shell.",
+    "en": "Wallpaper Engine local library, background layer, native Scene panel, and desktop-mode controls for the Shivacode Desktop shell.",
     "zh": "面向 DSH 桌面壳的 Wallpaper Engine 本地库、背景层、原生 Scene 面板与桌面模式控件。"
    },
    "npm": null,
@@ -5630,8 +5630,8 @@
    "page": "https://awesome-dsh-plugin.com/p/wodongx123/dsh-desktop-tray/",
    "category": "ui",
    "description": {
-    "en": "Adds a system tray icon to DSH Desktop, with settings to hide the main window to the tray on minimize or close and self-healing after app updates.",
-    "zh": "为 DSH Desktop 增加系统托盘图标，可在设置中选择最小化或关闭时隐藏到托盘，应用更新后自动恢复。"
+    "en": "Adds a system tray icon to Shivacode Desktop, with settings to hide the main window to the tray on minimize or close and self-healing after app updates.",
+    "zh": "为 Shivacode Desktop 增加系统托盘图标，可在设置中选择最小化或关闭时隐藏到托盘，应用更新后自动恢复。"
    },
    "npm": null,
    "stars": 1,
@@ -12908,8 +12908,8 @@
    "page": "https://awesome-dsh-plugin.com/p/hajimimaodie8/DSH-Session-Sync/",
    "category": "session",
    "description": {
-    "en": "Bidirectionally synchronize sessions, workspaces, settings and plugins between the DSH web instance and the DSH Desktop instance.",
-    "zh": "双向同步网页版与 DSH Desktop 桌面版之间的会话、工作区、设置与插件。"
+    "en": "Bidirectionally synchronize sessions, workspaces, settings and plugins between the DSH web instance and the Shivacode Desktop instance.",
+    "zh": "双向同步网页版与 Shivacode Desktop 桌面版之间的会话、工作区、设置与插件。"
    },
    "npm": null,
    "stars": 1,
@@ -15426,7 +15426,7 @@
    "page": "https://awesome-dsh-plugin.com/p/Hua1Q1nG/dsh-hindsight-local-optimize/",
    "category": "memory",
    "description": {
-    "en": "Local-memory lifecycle for the official Hindsight plugin on DSH desktop: one-click start/stop of the hindsight-embed daemon, auto-start on boot, stop on exit, hides the uv.exe console window, and installs the vault/models to another drive.",
+    "en": "Local-memory lifecycle for the official Hindsight plugin on Shivacode Desktop: one-click start/stop of the hindsight-embed daemon, auto-start on boot, stop on exit, hides the uv.exe console window, and installs the vault/models to another drive.",
     "zh": "为 DSH 桌面端官方 Hindsight 插件补齐本地记忆生命周期：一键启停 hindsight-embed 守护进程、开机自启、退出随停、隐藏 uv.exe 黑框，并支持把档案柜与模型装到其它盘。"
    },
    "npm": null,
@@ -17937,7 +17937,7 @@
    "page": "https://awesome-dsh-plugin.com/p/Github-CJX/dsh-tool-imagegen/",
    "category": "tools",
    "description": {
-    "en": "OpenAI-compatible image generation in DSH Desktop chat: generate inline, edit reference images or chain-edit previous results directly (image-to-image) without re-uploading, with storage cleanup.",
+    "en": "OpenAI-compatible image generation in Shivacode Desktop chat: generate inline, edit reference images or chain-edit previous results directly (image-to-image) without re-uploading, with storage cleanup.",
     "zh": "对话内联生图插件：模型在对话框直接出图，可基于参考图或上次生成结果连续图生图修改，附存储清理。"
    },
    "npm": null,
@@ -39180,8 +39180,8 @@
    "page": "https://awesome-dsh-plugin.com/p/jing-hy/dsh-unified-market/",
    "category": "market",
    "description": {
-    "en": "Unified plugin marketplace built for the DSH Desktop (EAC) shell, aggregating the curated catalog, the GitHub dsh-plugin ecosystem and the npm registry into one storefront, with source whitelisting, conflict pre-checks, trial-boot install verification, manual/batch/auto updates and .dshpack feature-pack management.",
-    "zh": "面向 DSH Desktop（EAC）桌面壳的统一插件市场：聚合精选目录、GitHub dsh-plugin 生态与 npm registry 三源，提供来源白名单、冲突预检、试装安装验证、手动/批量/自动三档更新与功能包（.dshpack）管理。"
+    "en": "Unified plugin marketplace built for the Shivacode Desktop (EAC) shell, aggregating the curated catalog, the GitHub dsh-plugin ecosystem and the npm registry into one storefront, with source whitelisting, conflict pre-checks, trial-boot install verification, manual/batch/auto updates and .dshpack feature-pack management.",
+    "zh": "面向 Shivacode Desktop（EAC）桌面壳的统一插件市场：聚合精选目录、GitHub dsh-plugin 生态与 npm registry 三源，提供来源白名单、冲突预检、试装安装验证、手动/批量/自动三档更新与功能包（.dshpack）管理。"
    },
    "npm": null,
    "stars": null,
@@ -39430,8 +39430,8 @@
    "page": "https://awesome-dsh-plugin.com/p/qinyre/dsh-plugin-install/",
    "category": "market",
    "description": {
-    "en": "Install tab in Settings → Plugins: install, update and remove any plugin by npm spec, `github:user/repo` or local path through the same `dsh plugin add` CLI path; update checks against npm latest or GitHub HEAD with a downgrade guard and resolved-version verification, a pnpm 11 release-cooldown bypass on every add/remove, and service restart via the DSH Desktop shell or a relay process under standalone `dsh web`.",
-    "zh": "设置 → 插件里的「安装」标签页：按 npm spec、`github:user/repo` 或本地路径安装、更新、卸载任意插件，走的都是 `dsh plugin add` 这条 CLI 路径；更新检查对照 npm latest 或 GitHub HEAD，带降级保护与装后版本核对，每次 add/remove 均附带 pnpm 11 发布冷静期豁免；服务重启在 DSH Desktop 由壳层执行，独立 `dsh web` 下由中转进程接力并交接回原终端。"
+    "en": "Install tab in Settings → Plugins: install, update and remove any plugin by npm spec, `github:user/repo` or local path through the same `dsh plugin add` CLI path; update checks against npm latest or GitHub HEAD with a downgrade guard and resolved-version verification, a pnpm 11 release-cooldown bypass on every add/remove, and service restart via the Shivacode Desktop shell or a relay process under standalone `dsh web`.",
+    "zh": "设置 → 插件里的「安装」标签页：按 npm spec、`github:user/repo` 或本地路径安装、更新、卸载任意插件，走的都是 `dsh plugin add` 这条 CLI 路径；更新检查对照 npm latest 或 GitHub HEAD，带降级保护与装后版本核对，每次 add/remove 均附带 pnpm 11 发布冷静期豁免；服务重启在 Shivacode Desktop 由壳层执行，独立 `dsh web` 下由中转进程接力并交接回原终端。"
    },
    "npm": "dsh-plugin-install",
    "stars": 2,
