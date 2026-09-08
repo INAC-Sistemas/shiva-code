@@ -227,7 +227,7 @@ describe('GitHub release contract', () => {
     expect(main).toContain('await showSplash()')
     expect(main).toContain("query: { theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light' }")
     expect(main).toContain('nativeTheme.themeSource = harnessThemePreference()')
-    expect(splash).toContain('Starting DSH Desktop')
+    expect(splash).toContain('Starting Shivacode Desktop')
     expect(splash).toContain('src="dsh-loader.gif"')
     expect(splash).toContain('src="dsh-loader-dark.gif"')
     expect(splash).toContain("document.documentElement.dataset.theme = splashTheme === 'dark'")
