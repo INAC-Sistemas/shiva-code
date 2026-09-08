@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop",
   "version": "0.1.4",
-  "description": "A cross-platform desktop shell for DeepSeek Harness.",
+  "description": "A cross-platform AI platform that unifies intelligent tools and specialized profiles for different domains.",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -9,12 +9,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dataelement/dsh-desktop.git"
+    "url": "https://shivacode.com.br/"
   },
   "bugs": {
-    "url": "https://github.com/dataelement/dsh-desktop/issues"
+    "url": "https://shivacode.com.br/"
   },
-  "homepage": "https://github.com/dataelement/dsh-desktop#readme",
+  "homepage": "https://shivacode.com.br/",
   "keywords": [
     "deepseek",
     "harness",
