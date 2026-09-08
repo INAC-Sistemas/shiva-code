@@ -1,7 +1,11 @@
 name: CI
 
 on:
-  pull_request:
+  # Automatic triggers are off in this fork: the harness workflows need
+  # upstream infrastructure this repository does not have, and only the
+  # desktop release runs on its own. Run this by hand when it is needed.
+  workflow_dispatch:
+
 permissions:
   contents: read
 

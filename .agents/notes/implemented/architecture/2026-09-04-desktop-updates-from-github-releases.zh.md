@@ -54,6 +54,8 @@ Status: implemented
 
 ## Consequences
 
+发布桌面应用现在是本仓库唯一会自行发生的事：所有 harness 工作流的自动触发器都已关闭，因为它们需要本 fork 并不具备的上游基础设施，因此一直只是跑去失败。桌面工作流的 pull request 触发器也随之移除，于是合并前不再有任何构建。发布运行仍然自我守护——测试、类型检查、打包与打包后冒烟测试都在打标签之前完成——因此失去的是更早的预警，而非安全网。
+
 向 `master` 推送并触及桌面应用即发布一个版本，因此版本号随合并推进，而非随刻意打标签推进。文档、测试和仅 Markdown 的路径已排除在触发器之外；`desktop/` 下的其他改动都会发布，并在六小时内向每个已安装的应用弹出更新卡片。
 
 在设置 `DESKTOP_WINDOWS_SIGNING` 之前，Windows 安装包未签名，因此首次安装时 SmartScreen 会提示发行者未知。更新本身不受影响：`win.verifyUpdateCodeSignature` 本就为 `false`。

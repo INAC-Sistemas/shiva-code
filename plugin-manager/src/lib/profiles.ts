@@ -42,9 +42,9 @@ export const KNOWN_PLUGINS = [
     plane: "host",
   },
   {
-    id: "dsh-docs-panel",
-    label: "Docs",
-    hint: "Aba de leitura da documentação.",
+    id: "dsh-assets",
+    label: "Mídias",
+    hint: "Galeria de mídias e ferramentas de gerar imagem, vídeo e áudio.",
     plane: "host",
   },
   {
@@ -57,18 +57,6 @@ export const KNOWN_PLUGINS = [
     id: "dsh-openviking",
     label: "Memória",
     hint: "Servidor de memória em Python, com ferramentas MCP para o modelo.",
-    plane: "host",
-  },
-  {
-    id: "dsh-flowglass",
-    label: "Flow",
-    hint: "Aba de visualização de fluxo da sessão.",
-    plane: "host",
-  },
-  {
-    id: "dsh-sidebar-qa",
-    label: "Perguntar",
-    hint: "Painel de pergunta sobre a seleção, com sub-sessão própria.",
     plane: "host",
   },
 ] as const satisfies readonly {

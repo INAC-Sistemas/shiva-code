@@ -1,7 +1,7 @@
 {
-  "name": "dsh-openviking",
-  "version": "0.1.1",
-  "description": "Native OpenViking memory for dsh: auto-installs and spawns the context database alongside the dsh server, registers its MCP tools on the model, and embeds the Web Studio in a better-sidebar tab",
+  "name": "dsh-assets",
+  "version": "0.1.0",
+  "description": "DSH better-sidebar tab and agent tools for AI-generated assets: a workspace-root assets/ folder holding images, videos, and audio produced by selected providers (OpenRouter, fal), with gallery previews",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -23,11 +23,6 @@
       ],
       "platform": "web"
     }
-  },
-  "dependencies": {
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-mcp-client": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
     "dsh-better-sidebar": ">=0.12.0",

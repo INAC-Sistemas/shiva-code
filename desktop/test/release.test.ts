@@ -539,6 +539,28 @@ describe('GitHub release contract', () => {
     expect(undeclared).toEqual([])
   })
 
+  it('is the only workflow that runs without being asked', async () => {
+    const dir = path.resolve(projectRoot, '../.github/workflows')
+    const automatic: string[] = []
+
+    for (const file of await readdir(dir)) {
+      const { on } = parse(await readFile(path.join(dir, file), 'utf8')) as {
+        on: Record<string, unknown>
+      }
+      // workflow_call is a workflow being reused by another, not a trigger of
+      // its own; workflow_dispatch is somebody pressing the button.
+      const triggers = Object.keys(on).filter(
+        (key) => key !== 'workflow_dispatch' && key !== 'workflow_call'
+      )
+      if (triggers.length > 0) automatic.push(`${file}: ${triggers.join(', ')}`)
+    }
+
+    // The harness workflows need upstream infrastructure this fork does not
+    // have, so they only ever ran to fail. Releasing the desktop app is the one
+    // thing that must happen on its own.
+    expect(automatic).toEqual(['desktop-release.yml: push'])
+  })
+
   it('pins the update feed to the desktop release', async () => {
     const workflow = await readFile(releaseWorkflow, 'utf8')
 

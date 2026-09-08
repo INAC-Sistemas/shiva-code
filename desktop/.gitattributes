@@ -1,3 +1,8 @@
 # Dependency patches preserve the upstream bundle's mixed indentation so that
 # patch-package can match and replay it exactly.
-patches/*.patch whitespace=-space-before-tab
+#
+# `-trailing-space` too: in a unified diff a context line for a BLANK source
+# line is required to be a lone space, so a patch that touches a hunk
+# containing one necessarily carries lines our whitespace rule would reject.
+# Stripping them would leave a patch that no longer applies.
+patches/*.patch whitespace=-space-before-tab,-trailing-space

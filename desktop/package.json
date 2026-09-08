@@ -1,6 +1,6 @@
 {
   "name": "shivacode-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A cross-platform AI platform that unifies intelligent tools and specialized profiles for different domains.",
   "private": true,
   "type": "module",
@@ -298,7 +298,8 @@
     "qrcode": "^1.5.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "dsh-assets": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-assets-0.1.0.tgz"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

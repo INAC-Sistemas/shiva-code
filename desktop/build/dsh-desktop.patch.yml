@@ -78,20 +78,22 @@
 # into), dsh-i18n, dsh-shiva-theme, dsh-clock, dsh-user-menu, login and
 # profiles — without the last two there is no way back to a picker.
 #
-# dsh-openviking (the
-# "Memory" sidebar tab) auto-installs a Python venv and spawns a Python
-# server at runtime — a platform dependency this Node/Electron-only
-# executable does not itself carry — so scripts/install-python-runtime.mjs
-# stages a portable, pip-ready CPython into win.extraResources for exactly
-# this plugin to use; see its own `config.pythonCandidates` entry below.
-# Still excluded: dsh-ssh-tunnel (pulls in a real third-party npm
-# dependency, ssh2, not yet verified to install cleanly on every packaged
-# target).
+# dsh-openviking (the "Memory" sidebar tab) auto-installs a Python venv and
+# spawns a Python server at runtime — a platform dependency this
+# Node/Electron-only executable does not itself carry — so
+# scripts/install-python-runtime.mjs stages a portable, pip-ready CPython into
+# win.extraResources for exactly this plugin to use; see its own
+# `config.pythonCandidates` entry below.
+#
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
-# the base plugin reads first. dsh-flowglass is the published 0.4.4, not
-# shiva-code's local checkout — that copy's inject list is missing 'sessions'
-# and crashes boot; see the dsh-flowglass client.js fix from earlier.
+# the base plugin reads first.
+#
+# Not composed at all: dsh-flowglass, dsh-sidebar-qa and dsh-docs-panel were
+# removed from the repository; dsh-ssh-tunnel pulls in a real third-party npm
+# dependency (ssh2) not yet verified to install cleanly on every packaged
+# target. A plugin that is not a row here needs no profile gate — there is
+# nothing to turn off.
 - insert:
     - id: dsh-better-sidebar
       name: dsh-better-sidebar
@@ -103,15 +105,6 @@
       name: dsh-shiva-theme
     - id: dsh-user-menu
       name: dsh-user-menu
-    - id: dsh-sidebar-qa
-      name: dsh-sidebar-qa
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-sidebar-qa').split(',').includes('dsh-sidebar-qa')"
-    - id: dsh-docs-panel
-      name: dsh-docs-panel
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-docs-panel').split(',').includes('dsh-docs-panel')"
-    - id: dsh-flowglass
-      name: dsh-flowglass
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-flowglass').split(',').includes('dsh-flowglass')"
 
     # Config replicated verbatim from dsh-login's own cordis.patch.yml (the
     # bundle patch a `dsh.profile.bundles` entry would apply automatically —
@@ -134,6 +127,16 @@
     - id: mds
       name: dsh-mds
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
+
+    # dsh-assets injects `webServer`, `sessions` and `tools`, and registers the
+    # `/assets/api` and `/assets/file` route prefixes — host plane, so it cannot
+    # move into the `profile` preset (two presets would claim the same paths).
+    # Gating it is therefore the whole boundary: its generate_image/video/audio
+    # tools land in the GLOBAL tool layer, which every agent reads, and only
+    # not loading the row keeps them away from a profile that excludes it.
+    - id: assets
+      name: dsh-assets
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-assets').split(',').includes('dsh-assets')"
 
     # `profiles` is never gated: it is the plugin that reads the roster and lets
     # a person pick, so gating it would remove the only way out of a bad choice.

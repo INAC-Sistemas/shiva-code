@@ -1,5 +1,0 @@
-node_modules/
-# lib/ e runtime versionado deste plugin (see root .gitignore exception)
-*.tsbuildinfo
-coverage/
-.DS_Store

@@ -27,11 +27,16 @@ export const Config = z.object({
 })
 
 const OV_VERSION = '0.4.17'
-const OV_PORT = 1933
+// Desktop isolado do checkout web (dsh-web): porta, dados e conf próprios, para
+// os dois ambientes rodarem simultaneamente sem adotar o server um do outro.
+// O venv (~1 GB, runtime sem estado) é compartilhado com o web; servers são
+// processos independentes e podem usá-lo ao mesmo tempo. Cada caminho tem
+// override por env para re-point sem editar código.
+const OV_PORT = Number(process.env.DSH_OPENVIKING_PORT ?? 1934)
 const OV_BASE = `http://127.0.0.1:${OV_PORT}`
-const OV_DIR = join(homedir(), '.dsh', 'openviking')
-const VENV_DIR = join(OV_DIR, 'venv')
-const OV_CONF = join(homedir(), '.openviking', 'ov.conf')
+const OV_DIR = process.env.DSH_OPENVIKING_DIR ?? join(homedir(), '.dsh', 'openviking-desktop')
+const VENV_DIR = process.env.DSH_OPENVIKING_VENV ?? join(homedir(), '.dsh', 'openviking', 'venv')
+const OV_CONF = process.env.DSH_OPENVIKING_CONF ?? join(homedir(), '.openviking', 'ov-desktop.conf')
 const SETTINGS_FILE = join(OV_DIR, 'settings.json')
 
 /** Inclusive minor-version range for the venv interpreter; 3.13+ may miss native deps for `openviking==OV_VERSION`. */
@@ -190,6 +195,9 @@ async function writeOvConf() {
   const s = await readSettings()
   if (!s?.embedding?.api_base) return false // sem embedding o server não sobe
   const conf = {}
+  // O server lê a porta de escuta do próprio conf; sem este bloco ele sobe no
+  // default 1933 e colide com o server do checkout web.
+  conf.server = { host: '127.0.0.1', port: OV_PORT }
   if (s.embedding?.api_base) {
     conf.embedding = { dense: { api_base: s.embedding.api_base, api_key: s.embedding.api_key ?? '', provider: toOvProvider(s.embedding.provider), dimension: Number(s.embedding.dimension) || 1024, model: s.embedding.model ?? '' } }
   }
@@ -288,6 +296,9 @@ async function spawnServer() {
   spawnLog = []
   if (!existsSync(SERVER_EXE)) throw new Error('openviking-server não instalado')
   const env = { ...process.env }
+  // Sem isto o server leria ~/.openviking/ov.conf (o conf do web) e ignoraria
+  // a porta e as credenciais isoladas do desktop.
+  env.OPENVIKING_CONFIG_FILE = OV_CONF
   // Studio local: o wheel não traz o bundle da SPA; apontamos para o dist
   // construído, quando existir.
   const studioDir = join(OV_DIR, 'web-studio')

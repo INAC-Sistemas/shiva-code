@@ -20,17 +20,6 @@ on:
       - '!desktop/test/**'
       - '!desktop/**/*.md'
       - '.github/workflows/desktop-release.yml'
-  # A pull request builds the unsigned development installer and runs the
-  # packaged smoke test, so desktop changes are exercised before they merge.
-  # `rai` is listed alongside `master` because work can land there first; only
-  # `master` releases.
-  pull_request:
-    branches:
-      - master
-      - rai
-    paths:
-      - 'desktop/**'
-      - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
     inputs:
       target:

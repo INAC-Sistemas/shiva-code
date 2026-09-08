@@ -8,6 +8,19 @@ name: Build single-exe
 # (remove and reapply to rerun), or call it from the Python release workflow.
 # Checkout uses the triggering ref, so dispatch needs no separate ref input.
 on:
+  # Automatic triggers are off in this fork: the harness workflows need
+  # upstream infrastructure this repository does not have, and only the
+  # desktop release runs on its own. Run this by hand when it is needed.
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: >-
+          Comma-separated pkg targets to build. Any subset of:
+          node24-linux-x64, node24-linux-arm64, node24-macos-arm64.
+          Empty builds all three.
+        type: string
+        required: false
+        default: ''
   workflow_call:
     inputs:
       targets:
@@ -25,18 +38,6 @@ on:
         type: boolean
         required: false
         default: false
-  workflow_dispatch:
-    inputs:
-      targets:
-        description: >-
-          Comma-separated pkg targets to build. Any subset of:
-          node24-linux-x64, node24-linux-arm64, node24-macos-arm64.
-          Empty builds all three.
-        type: string
-        required: false
-        default: ''
-  pull_request:
-    types: [labeled]
 
 concurrency:
   # Keep the called workflow distinct from its caller's concurrency group;

@@ -47,11 +47,9 @@ export const PLUGIN_ROWS: Readonly<Record<string, PluginPlane>> = {
   'dsh-vps-status': 'agent',
   'dsh-mds': 'host',
   'dsh-prototype': 'host',
-  'dsh-docs-panel': 'host',
   'dsh-skill-manager': 'host',
   'dsh-openviking': 'host',
-  'dsh-flowglass': 'host',
-  'dsh-sidebar-qa': 'host',
+  'dsh-assets': 'host',
 }
 
 /** One row of the picker. */
