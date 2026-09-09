@@ -33,6 +33,16 @@ The picker's order sits just below `dsh-login`'s `10_000`, so when neither is sa
 
 **The row in the sidebar foot is the only way to switch.** The picker opens itself only when there is nothing to materialize, so without that row a machine that already has a profile would never see it again, and changing profiles would mean the plugin manager's dashboard plus a reload. The two surfaces sit in different slots and never share a React tree, so they share a `ProfileStore` instead.
 
+### Applying a host-plane change
+
+The shell reads `profile/active.json` when it **spawns the harness**, so a new plugin list is settled at that moment and only a fresh spawn picks it up.
+
+Inside the desktop shell that spawn just happens: selecting a profile whose host-plane rows differ calls `window.dshDesktop.restartHarness()` straight away, and the gate holds an "Aplicando o perfil…" screen until the shell takes the window down. There is no confirmation, because there is no second question — the person answered it by choosing the profile, and asking them to confirm the consequence of their own choice is a question with one right answer.
+
+It costs an in-flight turn. A harness restart ends the conversation that is streaming; the history is persisted, the answer in progress is not. Switching profiles is a deliberate act taken between tasks, so the trade is worth stating rather than guarding with a dialog.
+
+The restart notice survives for the two cases the automatic path cannot serve: a plain browser, where the same page is served but there is no process for it to restart, and a restart that came back not ready — the manual instruction has to stay reachable, or a selection that failed to apply would leave nothing to do. `desktopBridge()` checks the method rather than assuming it, because the object is injected by another process's preload and an older shell would otherwise fail inside the click.
+
 Cancelling is offered only for a deliberate switch. With nothing materialized there is no state to go back to, so the gate has no way out but a choice — or authoring one.
 
 ## Authoring from the picker

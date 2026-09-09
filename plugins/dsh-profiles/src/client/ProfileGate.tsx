@@ -21,9 +21,11 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { ReactNode } from 'react'
 import { fetchState, selectProfile } from './api.ts'
 import { CreateProfileForm } from './CreateProfileForm.tsx'
+import { desktopBridge } from './desktop.ts'
+import type { DesktopBridge } from './desktop.ts'
 import {
-  BACKDROP_GATE, BACKDROP_MASK, CARD, CARD_WIDE, ERROR, NOTE, PRIMARY, ROW,
-  ROW_CURRENT, ROW_HINT, SECONDARY, SUBTITLE, TITLE,
+  BACKDROP_GATE, BACKDROP_MASK, CARD, CARD_WIDE, ERROR, FOOTER, NOTE, PRIMARY,
+  ROW, ROW_CURRENT, ROW_HINT, SECONDARY, SUBTITLE, TITLE,
 } from './styles.ts'
 import type { LoginSessionFace } from './context-types.ts'
 import type { ProfileStore } from './store.ts'
@@ -35,6 +37,7 @@ type Phase =
   | { kind: 'choosing', profiles: ProfileSummary[], error?: string }
   | { kind: 'creating' }
   | { kind: 'selecting' }
+  | { kind: 'restarting', name: string }
   | { kind: 'restart', name: string }
   | { kind: 'done' }
 
@@ -95,13 +98,53 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
     useCallback(() => null, []),
   )
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' })
+  const [restarting, setRestarting] = useState(false)
+  const [restartError, setRestartError] = useState<string | undefined>(undefined)
   const pending = useRef<AbortController | undefined>(undefined)
+  // Read once per mount: the shell injects it before the page runs, so it never
+  // appears or disappears while the gate is up.
+  const [desktop] = useState<DesktopBridge | undefined>(desktopBridge)
 
-  /** What a finished selection does, whether it was automatic or deliberate. */
+  // The restart is the shell's to perform, and the window goes down with it, so
+  // there is no success path to render. A failure falls back to the notice,
+  // which carries the manual instruction: a selection that could not be applied
+  // must not leave the person with nothing to do.
+  const restart = useCallback(async (bridge: DesktopBridge, name: string) => {
+    setRestarting(true)
+    setRestartError(undefined)
+    try {
+      const result = await bridge.restartHarness()
+      if (result.ok) return
+      setRestartError('O aplicativo não voltou pronto. Feche e abra o Shiva Code.')
+    } catch (error) {
+      setRestartError(error instanceof Error ? error.message : 'Não foi possível reiniciar.')
+    }
+    setRestarting(false)
+    setPhase({ kind: 'restart', name })
+  }, [])
+
+  /**
+   * What a finished selection does, whether it was automatic or deliberate.
+   *
+   * Inside the desktop shell the restart is simply performed: the person has
+   * already answered the only question there was by choosing the profile, and
+   * asking them to confirm the consequence of their own choice is a second
+   * question with one right answer. The notice survives for the browser, where
+   * there is no process the page can restart.
+   */
   const settle = useCallback((result: { name: string; restartRequired: boolean }) => {
     store.closePicker()
-    setPhase(result.restartRequired ? { kind: 'restart', name: result.name } : { kind: 'done' })
-  }, [store])
+    if (!result.restartRequired) {
+      setPhase({ kind: 'done' })
+      return
+    }
+    if (desktop === undefined) {
+      setPhase({ kind: 'restart', name: result.name })
+      return
+    }
+    setPhase({ kind: 'restarting', name: result.name })
+    void restart(desktop, result.name)
+  }, [store, desktop, restart])
 
   const apply = useCallback(async (state: ProfileState) => {
     store.setActive(state.signedIn ? state.active : null)
@@ -203,15 +246,36 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
               <h1 style={TITLE}>Reinicie para aplicar</h1>
               <p style={SUBTITLE}>
                 O perfil “{phase.name}” liga ou desliga plugins que só carregam no
-                início do aplicativo. Feche e abra o Shiva Code para aplicá-los.
+                início do aplicativo.
+                {desktop === undefined
+                  ? ' Feche e abra o Shiva Code para aplicá-los.'
+                  : ' Reinicie agora para aplicá-los.'}
               </p>
               <p style={NOTE}>
                 As skills do perfil já valem para as próximas sessões. As conversas
                 abertas continuam com os plugins com que começaram.
               </p>
-              <button type="button" style={SECONDARY} onClick={cancel}>
-                Continuar sem reiniciar
-              </button>
+
+              {restartError === undefined ? null : <p style={ERROR}>{restartError}</p>}
+
+              <div style={FOOTER}>
+                {/* Offered only inside the desktop shell: in a plain browser
+                    there is no process for the page to restart, and a button
+                    that cannot act is worse than the instruction it replaced. */}
+                {desktop === undefined ? null : (
+                  <button
+                    type="button"
+                    style={PRIMARY}
+                    disabled={restarting}
+                    onClick={() => { void restart(desktop, phase.name) }}
+                  >
+                    {restarting ? 'Reiniciando…' : 'Reiniciar agora'}
+                  </button>
+                )}
+                <button type="button" style={SECONDARY} onClick={cancel} disabled={restarting}>
+                  Continuar sem reiniciar
+                </button>
+              </div>
             </>
           )
           : null}
@@ -221,6 +285,20 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
             <>
               <h1 style={TITLE}>Carregando seu perfil…</h1>
               <p style={SUBTITLE}>Buscando o recorte de skills e plugins.</p>
+            </>
+          )
+          : null}
+
+        {/* Held only until the shell takes the window down; it exists so the
+            moment between the click and the splash is not a frozen dialog. */}
+        {phase.kind === 'restarting'
+          ? (
+            <>
+              <h1 style={TITLE}>Aplicando o perfil…</h1>
+              <p style={SUBTITLE}>
+                O perfil “{phase.name}” liga ou desliga plugins que só carregam no
+                início do aplicativo, então o Shiva Code está reiniciando.
+              </p>
             </>
           )
           : null}
