@@ -143,6 +143,7 @@
         profilesEndpoint: !!js "new URL('/api/profiles', process.env.VPS_URL).href"
         activeEndpoint: !!js "new URL('/api/profiles/active', process.env.VPS_URL).href"
         specEndpoint: !!js "new URL('/api/plugins/profile', process.env.VPS_URL).href"
+        catalogEndpoint: !!js "new URL('/api/profiles/catalog', process.env.VPS_URL).href"
 
     - id: skill-manager
       name: dsh-skill-manager

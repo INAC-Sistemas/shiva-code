@@ -4,30 +4,25 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import {
-  KNOWN_PLUGIN_IDS,
-  MAX_PROFILE_DESCRIPTION_LENGTH,
-  MAX_PROFILE_NAME_LENGTH,
-  type ProfileFieldErrors,
-  type ProfileFormState,
-} from "@/lib/profiles";
+  type ProfileDraft,
+  ProfileRequestError,
+  createProfile as createOwnedProfile,
+  isUniqueViolation,
+  profileDraftErrors,
+} from "@plugins/profile";
+import type { ProfileFieldErrors, ProfileFormState } from "@/lib/profiles";
 
 const PROFILES_PATH = "/dashboard/profiles";
 
 /** Campos de um perfil como saem do formulário, já normalizados. */
-type ProfileInput = {
-  name: string;
-  description: string | null;
-  plugins: string[];
-  skillIds: string[];
-};
+type ProfileInput = ProfileDraft;
 
 /**
  * Lê os campos do formulário e valida cada um.
  *
- * `plugins` é conferido contra {@link KNOWN_PLUGIN_IDS} e um valor fora da lista
- * é erro RUIDOSO, não silencioso: o formulário só oferece esses ids, então um
- * valor diferente significa POST adulterado — vale dizer isso em vez de gravar
- * um nome que a casca ignoraria depois.
+ * As regras em si moram em `@plugins/profile`, junto da API: o formulário e a
+ * casca propõem o mesmo rascunho, e recusá-lo em dois lugares deixaria as duas
+ * telas divergirem sobre o que é um perfil válido.
  * @param formData - corpo do formulário de criação ou edição.
  * @returns os campos normalizados, ou os erros por campo.
  */
@@ -36,42 +31,21 @@ function readProfileInput(
 ):
   | { ok: true; input: ProfileInput }
   | { ok: false; fieldErrors: ProfileFieldErrors } {
-  const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const plugins = [...new Set(formData.getAll("plugins").map(String))].sort();
-  const skillIds = [...new Set(formData.getAll("skills").map(String))];
+  const input: ProfileInput = {
+    name: String(formData.get("name") ?? "").trim(),
+    description: description === "" ? null : description,
+    plugins: [...new Set(formData.getAll("plugins").map(String))].sort(),
+    skillIds: [...new Set(formData.getAll("skills").map(String))],
+  };
 
-  const fieldErrors: ProfileFieldErrors = {};
-
-  if (!name) {
-    fieldErrors.name = "Informe o nome do perfil.";
-  } else if (name.length > MAX_PROFILE_NAME_LENGTH) {
-    fieldErrors.name = `O nome passa de ${MAX_PROFILE_NAME_LENGTH} caracteres.`;
-  }
-
-  if (description.length > MAX_PROFILE_DESCRIPTION_LENGTH) {
-    fieldErrors.description = `A descrição passa de ${MAX_PROFILE_DESCRIPTION_LENGTH} caracteres.`;
-  }
-
-  const unknown = plugins.filter((id) => !KNOWN_PLUGIN_IDS.has(id));
-
-  if (unknown.length > 0) {
-    fieldErrors.plugins = `Plugin desconhecido: ${unknown.join(", ")}.`;
-  }
+  const fieldErrors = profileDraftErrors(input);
 
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, fieldErrors };
   }
 
-  return {
-    ok: true,
-    input: {
-      name,
-      description: description === "" ? null : description,
-      plugins,
-      skillIds,
-    },
-  };
+  return { ok: true, input };
 }
 
 /**
@@ -95,23 +69,12 @@ async function missingSkills(skillIds: string[]): Promise<string | null> {
     : "Uma das skills selecionadas não existe mais.";
 }
 
-/** Verdadeiro para a violação de índice único do Prisma. */
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "P2002"
-  );
-}
-
 /**
  * Cria um perfil para quem está logado.
  *
- * Não há guard de papel, ao contrário das actions de skill: um perfil é escopo
- * pessoal, e um perfil só ESTREITA o que a biblioteca publicada já concede —
- * então deixar cada usuário criar os próprios não concede nada. Sob a regra de
- * fechar-em-vazio, um guest que não pudesse criar um ficaria sem biblioteca.
+ * A gravação é a mesma de `POST /api/profiles`: o painel e a casca criam pelo
+ * mesmo caminho, então só muda como o erro é mostrado — aqui, sob o campo
+ * culpado, que é o que o `field` do erro carrega.
  * @param prevState - estado anterior do `useActionState`.
  * @param formData - campos do formulário.
  * @returns o estado novo, com `savedCount` incrementado em caso de sucesso.
@@ -127,42 +90,17 @@ export async function createProfile(
     return { ...prevState, error: null, fieldErrors: read.fieldErrors };
   }
 
-  const missing = await missingSkills(read.input.skillIds);
-
-  if (missing) {
-    return { ...prevState, error: null, fieldErrors: { skills: missing } };
-  }
-
   try {
-    const created = await prisma.profile.create({
-      data: {
-        userId: session.userId,
-        name: read.input.name,
-        description: read.input.description,
-        plugins: read.input.plugins,
-        skills: {
-          create: read.input.skillIds.map((skillId) => ({ skillId })),
-        },
-      },
-      select: { id: true },
-    });
-
-    // O primeiro perfil de um usuário vira o ativo sozinho: sem perfil ativo a
-    // biblioteca vem vazia, e obrigar um segundo clique para sair desse estado
-    // seria uma armadilha, não uma escolha.
-    await prisma.user.updateMany({
-      where: { id: session.userId, activeProfileId: null },
-      data: { activeProfileId: created.id },
-    });
+    await createOwnedProfile({ userId: session.userId }, read.input);
   } catch (error) {
-    if (isUniqueViolation(error)) {
-      return {
-        ...prevState,
-        error: null,
-        fieldErrors: {
-          name: `Você já tem um perfil chamado "${read.input.name}".`,
-        },
-      };
+    if (error instanceof ProfileRequestError) {
+      return error.field === undefined
+        ? { ...prevState, error: error.message, fieldErrors: {} }
+        : {
+            ...prevState,
+            error: null,
+            fieldErrors: { [error.field]: error.message },
+          };
     }
 
     console.error("Falha ao criar perfil:", error);

@@ -2,11 +2,13 @@
  * dsh-profiles host half: the routes behind the profile picker.
  *
  * A profile is the slice an agent runs under — which library skills reach the
- * model, and which plugins load. The plugin manager owns the roster; this
- * plugin MATERIALIZES the selection and nothing more. It does not author
- * profiles, and it holds no credential of its own: every call reads the session
- * `dsh-login` recorded, per request and never cached, the same way
- * `dsh-skill-library` and `dsh-vps-status` do.
+ * model, and which plugins load. The plugin manager owns the roster and every
+ * rule about it; this plugin MATERIALIZES the selection and forwards authoring.
+ * Its create route carries a draft upstream without vetting it: what a valid
+ * profile is has one home, and it is the half that stores them. It holds no
+ * credential of its own either — every call reads the session `dsh-login`
+ * recorded, per request and never cached, the same way `dsh-skill-library` and
+ * `dsh-vps-status` do.
  *
  * Scope, stated plainly: which plugins load is a COMPOSITION boundary, not a
  * security one. The enforced half is the server's — a skill outside the active
@@ -27,16 +29,24 @@ import { isSameOriginRequest, resolveLoginAuthorization } from 'dsh-login'
 import type { LoginCredentialStore } from 'dsh-login'
 import { readActiveProfile, writeActiveProfile } from './active.ts'
 import { assertTimeout, resolveEndpoint } from './config.ts'
-import { hostPlaneDiffers, knownPlugins, SELECT_ROUTE, STATE_ROUTE } from './wire.ts'
-import type { ActiveProfile, ProfileState, ProfileSummary, SelectResult } from './wire.ts'
+import {
+  CATALOG_ROUTE, CREATE_ROUTE, hostPlaneDiffers, knownPlugins,
+  narrowCatalogPlugins, SELECT_ROUTE, STATE_ROUTE,
+} from './wire.ts'
+import type {
+  ActiveProfile, CreateResult, PluginOption, ProfileCatalog, ProfileState,
+  ProfileSummary, SelectResult, SkillOption,
+} from './wire.ts'
 
 export { ACTIVE_PROFILE_FILE, readActiveProfile, writeActiveProfile } from './active.ts'
 export { assertTimeout, resolveEndpoint } from './config.ts'
 export {
-  hostPlaneDiffers, knownPlugins, PLUGIN_ROWS, SELECT_ROUTE, STATE_ROUTE,
+  CATALOG_ROUTE, CREATE_ROUTE, hostPlaneDiffers, knownPlugins,
+  narrowCatalogPlugins, PLUGIN_ROWS, SELECT_ROUTE, STATE_ROUTE,
 } from './wire.ts'
 export type {
-  ActiveProfile, PluginPlane, ProfileState, ProfileSummary, SelectResult,
+  ActiveProfile, CreateResult, PluginOption, PluginPlane, ProfileCatalog,
+  ProfileDraft, ProfileState, ProfileSummary, SelectResult, SkillOption,
 } from './wire.ts'
 
 /** Loader-visible plugin name; the entry `id` in cordis.patch.yml stays independent. */
@@ -47,12 +57,19 @@ export const inject = ['webServer']
 
 /** Plugin config: where the roster lives, and how long to wait for it. */
 export interface Config {
-  /** Full URL listing the signed-in user's profiles, requested verbatim. */
+  /**
+   * Full URL listing the signed-in user's profiles, requested verbatim.
+   *
+   * Also where a new profile is posted: creating one is a POST on the same
+   * collection, so there is no second URL to keep in step with this one.
+   */
   profilesEndpoint?: string
   /** Full URL that makes one profile active, requested verbatim. */
   activeEndpoint?: string
   /** Full URL answering the active profile's spec, requested verbatim. */
   specEndpoint?: string
+  /** Full URL answering what a new profile can be built from, requested verbatim. */
+  catalogEndpoint?: string
   /** Deadline for each forwarded request, in milliseconds. */
   timeoutMs?: number
   /** Harness home; the selection is recorded under it. Defaults to `$DSH_HOME`. */
@@ -63,12 +80,19 @@ export const Config: z<Config> = z.object({
   profilesEndpoint: z.string().default(''),
   activeEndpoint: z.string().default(''),
   specEndpoint: z.string().default(''),
+  catalogEndpoint: z.string().default(''),
   timeoutMs: z.number().default(5_000),
   dshHome: z.string().default(''),
 })
 
-/** Largest body this plugin reads: a selection is one id. */
-const MAX_BODY_BYTES = 4 * 1024
+/**
+ * Largest body this plugin reads.
+ *
+ * A selection is one id, but a draft carries a name, a description and two
+ * lists of ids — still small, and the ceiling is what keeps a runaway client
+ * from streaming into the process.
+ */
+const MAX_BODY_BYTES = 64 * 1024
 
 /** Write one JSON answer; never cached, since every one of them names a session. */
 function writeJson(response: ServerResponse, status: number, body: unknown): void {
@@ -256,8 +280,97 @@ function selectHandler(ctx: Context, activeEndpoint: URL, timeoutMs: number, dsh
   }
 }
 
+/** Project one catalog plugin row, dropping anything shaped unexpectedly. */
+function toPluginOption(value: unknown): PluginOption | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const row = value as Record<string, unknown>
+  if (typeof row.id !== 'string' || typeof row.label !== 'string') return undefined
+  return {
+    id: row.id,
+    label: row.label,
+    hint: typeof row.hint === 'string' ? row.hint : '',
+    // Overwritten by narrowCatalogPlugins from this build's own table; the
+    // answer never decides what loading a row costs.
+    plane: 'agent',
+  }
+}
+
+/** Project one catalog skill row, dropping anything shaped unexpectedly. */
+function toSkillOption(value: unknown): SkillOption | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const row = value as Record<string, unknown>
+  if (typeof row.id !== 'string' || typeof row.name !== 'string') return undefined
+  return {
+    id: row.id,
+    name: row.name,
+    description: typeof row.description === 'string' ? row.description : '',
+  }
+}
+
+/** `GET /profiles/api/catalog` — what a new profile can be built from. */
+function catalogHandler(ctx: Context, catalogEndpoint: URL, timeoutMs: number) {
+  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    if (!isSameOriginRequest(request)) {
+      return writeJson(response, 403, { plugins: [], skills: [] } satisfies ProfileCatalog)
+    }
+
+    const upstream = await callUpstream(ctx, catalogEndpoint, timeoutMs)
+    if (!upstream.ok) return writeJson(response, upstream.status, { error: upstream.message })
+
+    const body = upstream.body as { plugins?: unknown, skills?: unknown }
+    const plugins = (Array.isArray(body.plugins) ? body.plugins : [])
+      .map(toPluginOption)
+      .filter((row): row is PluginOption => row !== undefined)
+
+    writeJson(response, 200, {
+      // The narrowing is the point of forwarding this at all: a row this build
+      // cannot compose must never reach the form, or the person would tick a
+      // box that selects nothing.
+      plugins: narrowCatalogPlugins(plugins),
+      skills: (Array.isArray(body.skills) ? body.skills : [])
+        .map(toSkillOption)
+        .filter((row): row is SkillOption => row !== undefined),
+    } satisfies ProfileCatalog)
+  }
+}
+
+/** `POST /profiles/api/create` — author one profile, without selecting it. */
+function createHandler(ctx: Context, profilesEndpoint: URL, timeoutMs: number) {
+  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    if (request.method !== 'POST') {
+      return writeJson(response, 405, { ok: false, message: 'use POST' } satisfies CreateResult)
+    }
+    if (!isSameOriginRequest(request)) {
+      return writeJson(response, 403, { ok: false, message: 'cross-site request' } satisfies CreateResult)
+    }
+
+    const body = await readJsonBody(request)
+    if (typeof body !== 'object' || body === null) {
+      return writeJson(response, 400, { ok: false, message: 'a draft is required' } satisfies CreateResult)
+    }
+
+    // Forwarded as received, not vetted here: the plugin manager owns what a
+    // valid profile is, and it is the half that must refuse a bad one anyway —
+    // re-stating the rules in the shell would only let the two drift.
+    const upstream = await callUpstream(ctx, profilesEndpoint, timeoutMs, { method: 'POST', body })
+    if (!upstream.ok) {
+      return writeJson(response, upstream.status, { ok: false, message: upstream.message } satisfies CreateResult)
+    }
+
+    const created = toSummary((upstream.body as { profile?: unknown } | undefined)?.profile)
+    if (created === undefined) {
+      return writeJson(response, 502, {
+        ok: false,
+        message: 'the plugin manager answered a profile this build cannot read',
+      } satisfies CreateResult)
+    }
+
+    writeJson(response, 201, { ok: true, profile: created } satisfies CreateResult)
+  }
+}
+
 /**
- * Register the two routes.
+ * Register the routes.
  * @param ctx - the host cordis context.
  * @param config - the validated plugin config.
  */
@@ -265,6 +378,7 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = config as Required<Config>
   const profilesEndpoint = resolveEndpoint('profilesEndpoint', resolved.profilesEndpoint)
   const activeEndpoint = resolveEndpoint('activeEndpoint', resolved.activeEndpoint)
+  const catalogEndpoint = resolveEndpoint('catalogEndpoint', resolved.catalogEndpoint)
   // Validated at load even though only the client reads it: a broken spec URL
   // must fail with an operator watching, not the first time someone signs in.
   resolveEndpoint('specEndpoint', resolved.specEndpoint)
@@ -292,5 +406,21 @@ export function apply(ctx: Context, config: Config): void {
       handler: selectHandler(ctx, activeEndpoint, timeoutMs, dshHome),
     }),
     `dsh-profiles: ${SELECT_ROUTE} route`,
+  )
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: CATALOG_ROUTE,
+      handler: catalogHandler(ctx, catalogEndpoint, timeoutMs),
+    }),
+    `dsh-profiles: ${CATALOG_ROUTE} route`,
+  )
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: CREATE_ROUTE,
+      handler: createHandler(ctx, profilesEndpoint, timeoutMs),
+    }),
+    `dsh-profiles: ${CREATE_ROUTE} route`,
   )
 }

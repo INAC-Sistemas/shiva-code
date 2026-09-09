@@ -10,7 +10,12 @@
 
 import "server-only";
 import { prisma } from "@/lib/db";
-import { KNOWN_PLUGIN_IDS } from "@/lib/profiles";
+import {
+  KNOWN_PLUGINS,
+  KNOWN_PLUGIN_IDS,
+  MAX_PROFILE_DESCRIPTION_LENGTH,
+  MAX_PROFILE_NAME_LENGTH,
+} from "@/lib/profiles";
 
 /** Quem está chamando. Vem sempre do token, nunca do corpo. */
 export type ProfileScope = { userId: string };
@@ -39,16 +44,57 @@ export type ProfileSpec = {
   skills: string[];
 };
 
-/** Erro de argumento vindo do cliente. A rota o traduz em status. */
+/** Campo de um rascunho que pode receber erro individual. */
+export type ProfileDraftField = "name" | "description" | "plugins" | "skills";
+
+/**
+ * Erro de argumento vindo do cliente. A rota o traduz em status.
+ *
+ * `field` existe porque os dois chamadores mostram o mesmo erro de formas
+ * diferentes: a rota devolve status e mensagem, o formulário do painel pinta a
+ * mensagem sob o campo culpado. Sem ele, o painel teria de reconhecer a
+ * mensagem por texto para saber onde pintá-la.
+ */
 export class ProfileRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly field?: ProfileDraftField,
   ) {
     super(message);
     this.name = "ProfileRequestError";
   }
 }
+
+/** Um perfil como o formulário do painel ou a casca o propõem, já normalizado. */
+export type ProfileDraft = {
+  name: string;
+  description: string | null;
+  plugins: string[];
+  skillIds: string[];
+};
+
+/** Um plugin oferecido na criação: o id que compõe, mais como apresentá-lo. */
+export type PluginOption = {
+  id: string;
+  label: string;
+  hint: string;
+  plane: "agent" | "host";
+};
+
+/** Uma skill publicada, oferecida na criação. */
+export type SkillOption = { id: string; name: string; description: string };
+
+/**
+ * Tudo que se pode marcar ao criar um perfil.
+ *
+ * O painel monta o dele das próprias constantes e do banco; a casca não tem
+ * como fazer isso, então lê daqui. Os plugins vêm com rótulo e dica para as
+ * duas telas dizerem a mesma coisa sobre a mesma linha, mas quem decide o que a
+ * casca CONSEGUE compor continua sendo a tabela do build dela — o servidor
+ * descreve as linhas, não as autoriza.
+ */
+export type ProfileCatalog = { plugins: PluginOption[]; skills: SkillOption[] };
 
 /** Formato de um id gerado por `@default(uuid())`. */
 const PROFILE_ID_PATTERN =
@@ -219,4 +265,200 @@ export async function setActiveProfile(
   }
 
   return spec;
+}
+
+/** Verdadeiro para a violação de índice único do Prisma. */
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
+}
+
+/**
+ * As regras de um rascunho de perfil, em um lugar só.
+ *
+ * Puro e devolvendo erros por campo em vez de lançar: é a forma que o
+ * formulário do painel precisa, e {@link assertProfileDraft} a converte na
+ * forma que a API precisa. Duas telas, uma regra.
+ * @param draft - o rascunho já normalizado.
+ * @returns os erros por campo; vazio quando o rascunho passa.
+ */
+export function profileDraftErrors(
+  draft: ProfileDraft,
+): Partial<Record<ProfileDraftField, string>> {
+  const errors: Partial<Record<ProfileDraftField, string>> = {};
+
+  if (draft.name === "") {
+    errors.name = "Informe o nome do perfil.";
+  } else if (draft.name.length > MAX_PROFILE_NAME_LENGTH) {
+    errors.name = `O nome passa de ${MAX_PROFILE_NAME_LENGTH} caracteres.`;
+  }
+
+  if ((draft.description ?? "").length > MAX_PROFILE_DESCRIPTION_LENGTH) {
+    errors.description = `A descrição passa de ${MAX_PROFILE_DESCRIPTION_LENGTH} caracteres.`;
+  }
+
+  // Um id fora da lista é erro RUIDOSO, não silencioso: as duas telas só
+  // oferecem estes ids, então um valor diferente significa corpo adulterado —
+  // vale dizer isso em vez de gravar um nome que a casca ignoraria depois.
+  const unknown = draft.plugins.filter((id) => !KNOWN_PLUGIN_IDS.has(id));
+
+  if (unknown.length > 0) {
+    errors.plugins = `Plugin desconhecido: ${unknown.join(", ")}.`;
+  }
+
+  return errors;
+}
+
+/** Lê uma lista de strings de um corpo JSON, sem duplicatas. */
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((item): item is string => typeof item === "string"))]
+    : [];
+}
+
+/**
+ * Valida um corpo de requisição como rascunho de perfil.
+ *
+ * A casca é código não confiável, então nada aqui confia no formato: campo com
+ * o tipo errado é tratado como ausente e cai nas mesmas regras de
+ * {@link profileDraftErrors}.
+ * @param value - o corpo JSON recebido.
+ * @returns o rascunho normalizado.
+ * @throws ProfileRequestError 400 no primeiro campo inválido.
+ */
+export function assertProfileDraft(value: unknown): ProfileDraft {
+  const body = (typeof value === "object" && value !== null ? value : {}) as Record<
+    string,
+    unknown
+  >;
+  const description =
+    typeof body.description === "string" ? body.description.trim() : "";
+  const draft: ProfileDraft = {
+    name: typeof body.name === "string" ? body.name.trim() : "",
+    description: description === "" ? null : description,
+    plugins: stringList(body.plugins).sort(),
+    skillIds: stringList(body.skillIds),
+  };
+
+  const [failed] = Object.entries(profileDraftErrors(draft));
+
+  if (failed !== undefined) {
+    const [field, message] = failed;
+
+    throw new ProfileRequestError(
+      message ?? "Rascunho inválido.",
+      400,
+      field as ProfileDraftField,
+    );
+  }
+
+  return draft;
+}
+
+/**
+ * Cria um perfil para o dono do token.
+ *
+ * Sem guard de papel, como a action do painel: um perfil só ESTREITA o que a
+ * biblioteca publicada já concede, então criar os próprios não concede nada — e
+ * sob a regra de fechar-em-vazio, quem não pudesse criar um ficaria sem
+ * biblioteca.
+ *
+ * A existência das skills é conferida, mas não `published`: um admin pode
+ * despublicar algo temporariamente e a seleção deve sobreviver. Publicação é
+ * exigida na LEITURA, num lugar só, que é o que mantém "um perfil só estreita".
+ * @param scope - o dono, vindo do token.
+ * @param draft - rascunho já validado por {@link assertProfileDraft}.
+ * @returns o resumo do perfil criado, na forma que o seletor lista.
+ * @throws ProfileRequestError 400 quando uma skill não existe ou o nome repete.
+ */
+export async function createProfile(
+  scope: ProfileScope,
+  draft: ProfileDraft,
+): Promise<ProfileSummary> {
+  if (draft.skillIds.length > 0) {
+    const found = await prisma.librarySkill.count({
+      where: { id: { in: draft.skillIds } },
+    });
+
+    if (found !== draft.skillIds.length) {
+      throw new ProfileRequestError(
+        "Uma das skills selecionadas não existe mais.",
+        400,
+        "skills",
+      );
+    }
+  }
+
+  let created: { id: string; revision: number };
+
+  try {
+    created = await prisma.profile.create({
+      data: {
+        userId: scope.userId,
+        name: draft.name,
+        description: draft.description,
+        plugins: draft.plugins,
+        skills: { create: draft.skillIds.map((skillId) => ({ skillId })) },
+      },
+      select: { id: true, revision: true },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new ProfileRequestError(
+        `Você já tem um perfil chamado "${draft.name}".`,
+        400,
+        "name",
+      );
+    }
+
+    throw error;
+  }
+
+  // O primeiro perfil de um usuário vira o ativo sozinho: sem perfil ativo a
+  // biblioteca vem vazia, e obrigar um segundo clique para sair desse estado
+  // seria uma armadilha, não uma escolha.
+  await prisma.user.updateMany({
+    where: { id: scope.userId, activeProfileId: null },
+    data: { activeProfileId: created.id },
+  });
+
+  return {
+    id: created.id,
+    name: draft.name,
+    description: draft.description,
+    pluginCount: draft.plugins.length,
+    skillCount: draft.skillIds.length,
+    revision: created.revision,
+  };
+}
+
+/**
+ * O que se pode marcar ao criar um perfil.
+ *
+ * Não depende do usuário: os plugins são a constante do build e as skills são a
+ * biblioteca publicada, a mesma que o formulário do painel oferece. `published`
+ * é o mesmo predicado da leitura, então a criação nunca oferece uma skill que o
+ * catálogo depois recusaria a servir.
+ * @returns o catálogo de plugins e skills.
+ */
+export async function readProfileCatalog(): Promise<ProfileCatalog> {
+  const skills = await prisma.librarySkill.findMany({
+    where: { published: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, description: true },
+  });
+
+  return {
+    plugins: KNOWN_PLUGINS.map((plugin) => ({
+      id: plugin.id,
+      label: plugin.label,
+      hint: plugin.hint,
+      plane: plugin.plane,
+    })),
+    skills,
+  };
 }

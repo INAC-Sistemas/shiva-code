@@ -168,6 +168,8 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
 | GET    | `/api/profiles`   | Bearer | Os perfis do usuário e qual está ativo            |
+| POST   | `/api/profiles`   | Bearer | Cria um perfil para o dono do token               |
+| GET    | `/api/profiles/catalog` | Bearer | Plugins e skills que a criação oferece      |
 | POST   | `/api/profiles/active` | Bearer | Recebe `{profileId}` e troca o perfil ativo  |
 | GET    | `/api/plugins/profile` | Bearer | O recorte do perfil ativo, para a casca      |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |

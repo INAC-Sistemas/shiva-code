@@ -15,6 +15,12 @@ export const STATE_ROUTE = '/profiles/api/state'
 /** `POST` route that makes one profile the active one. */
 export const SELECT_ROUTE = '/profiles/api/select'
 
+/** `GET` route answering what a new profile can be built from. */
+export const CATALOG_ROUTE = '/profiles/api/catalog'
+
+/** `POST` route that authors one profile. */
+export const CREATE_ROUTE = '/profiles/api/create'
+
 /**
  * Which composition plane a plugin's row lives on.
  *
@@ -91,6 +97,49 @@ export type ProfileState =
     active: ActiveProfile | null
   }
 
+/** A plugin the author can put in a profile, as the server describes it. */
+export interface PluginOption {
+  id: string
+  label: string
+  hint: string
+  plane: PluginPlane
+}
+
+/** A published library skill the author can put in a profile. */
+export interface SkillOption {
+  id: string
+  name: string
+  description: string
+}
+
+/**
+ * What a new profile can be built from.
+ *
+ * The plugin rows carry the server's label and hint so the picker and the panel
+ * say the same thing about the same row, but the server does not decide which
+ * rows exist here: {@link narrowCatalogPlugins} keeps only what
+ * {@link PLUGIN_ROWS} can actually compose, and takes the plane from that table
+ * rather than from the answer. A server that could add a row would be choosing
+ * what loads on the user's machine.
+ */
+export interface ProfileCatalog {
+  plugins: PluginOption[]
+  skills: SkillOption[]
+}
+
+/** A profile as the picker proposes it. */
+export interface ProfileDraft {
+  name: string
+  description: string | null
+  plugins: string[]
+  skillIds: string[]
+}
+
+/** The answer to authoring a profile. */
+export type CreateResult =
+  | { ok: true, profile: ProfileSummary }
+  | { ok: false, message: string }
+
 /** The answer to a selection. */
 export type SelectResult =
   | {
@@ -111,6 +160,22 @@ export type SelectResult =
  */
 export function knownPlugins(plugins: readonly string[]): string[] {
   return [...new Set(plugins.filter(name => name in PLUGIN_ROWS))].sort()
+}
+
+/**
+ * Narrow a server-sent catalog to the plugin rows this build can compose.
+ *
+ * The same rule as {@link knownPlugins}, applied to the authoring side: an id
+ * absent from {@link PLUGIN_ROWS} is dropped, and the plane comes from that
+ * table, never from the answer — the server describes a row's text, it does not
+ * get to say what loading one costs.
+ * @param rows - plugin rows as the server sent them.
+ * @returns the composable rows, in the order the server listed them.
+ */
+export function narrowCatalogPlugins(rows: readonly PluginOption[]): PluginOption[] {
+  return rows
+    .filter(row => row.id in PLUGIN_ROWS)
+    .map(row => ({ ...row, plane: PLUGIN_ROWS[row.id] as PluginPlane }))
 }
 
 /**

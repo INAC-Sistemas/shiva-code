@@ -12,144 +12,28 @@
  * asking: the user already chose, possibly on another device, and asking again
  * would be a question with one right answer.
  *
- * Styling is inline rather than a CSS module so the bundle carries no CSS
- * pipeline; the values are DSH design tokens, so the screen follows the active
- * theme. `data-dsh-profiles` is the stable hook for a profile's own CSS.
+ * Styling comes from `./styles.ts`, shared with the authoring form so the two
+ * screens are one dialog. `data-dsh-profiles` is the stable hook for a
+ * profile's own CSS.
  * @module dsh-profiles/client/ProfileGate
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fetchState, selectProfile } from './api.ts'
+import { CreateProfileForm } from './CreateProfileForm.tsx'
+import {
+  BACKDROP_GATE, BACKDROP_MASK, CARD, CARD_WIDE, ERROR, NOTE, PRIMARY, ROW,
+  ROW_CURRENT, ROW_HINT, SECONDARY, SUBTITLE, TITLE,
+} from './styles.ts'
 import type { LoginSessionFace } from './context-types.ts'
 import type { ProfileStore } from './store.ts'
 import type { ProfileState, ProfileSummary } from '../wire.ts'
-
-const BACKDROP: CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  display: 'grid',
-  placeItems: 'center',
-  padding: 24,
-  fontFamily: 'var(--dsw-font-family)',
-  overflow: 'auto',
-}
-
-/**
- * Nothing materialized yet: this is a gate, not a dialog, so it covers the app
- * outright the way the login screen does. There is nothing usable behind it.
- */
-const BACKDROP_GATE: CSSProperties = {
-  ...BACKDROP,
-  background: 'var(--dsw-alias-bg-base)',
-}
-
-/**
- * A deliberate switch: the app behind stays running and cancellable, so this is
- * the shipped modal mask (`ui-primitives/Modal.module.css`) rather than an
- * opaque cover.
- */
-const BACKDROP_MASK: CSSProperties = {
-  ...BACKDROP,
-  background: 'var(--dsw-alias-bg-mask-1)',
-  backdropFilter: 'var(--dsw-mask-blur)',
-}
-
-/**
- * The dialog card, filled with the shipped dialog tokens.
- *
- * The fill is not optional: without it the card is transparent and the picker
- * reads as text floating on whatever is behind, which is exactly what a mask
- * backdrop makes visible.
- */
-const CARD: CSSProperties = {
-  position: 'relative',
-  width: '100%',
-  maxWidth: 480,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  padding: 32,
-  borderRadius: 24,
-  border: '1px solid var(--dsw-alias-border-inverted)',
-  background: 'var(--dsw-alias-bg-layer-2)',
-  boxShadow: 'var(--dsw-shadow-lv3)',
-}
-
-const TITLE: CSSProperties = {
-  margin: 0,
-  color: 'var(--dsw-alias-label-primary)',
-  fontSize: 22,
-  fontWeight: 600,
-  lineHeight: '30px',
-}
-
-const SUBTITLE: CSSProperties = {
-  margin: 0,
-  color: 'var(--dsw-alias-label-secondary)',
-  fontSize: 13,
-  lineHeight: '20px',
-}
-
-const ROW: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  padding: '12px 16px',
-  borderRadius: 12,
-  border: '1px solid var(--dsw-alias-border-l2)',
-  // Layer 3 over the card's layer 2: raised in dark, and in light every layer
-  // is the same solid neutral, so the border does the separating there. Never
-  // `transparent` — a row that borrowed whatever sat behind it is what the
-  // mask backdrop would expose.
-  background: 'var(--dsw-alias-bg-layer-3)',
-  color: 'var(--dsw-alias-label-primary)',
-  fontFamily: 'inherit',
-  fontSize: 14,
-  textAlign: 'left',
-  cursor: 'pointer',
-}
-
-const ROW_HINT: CSSProperties = {
-  color: 'var(--dsw-alias-label-secondary)',
-  fontSize: 12,
-  lineHeight: '18px',
-}
-
-/** The row of the profile already in force, so a switch shows what it moves from. */
-const ROW_CURRENT: CSSProperties = {
-  borderColor: 'var(--dsw-alias-state-business-primary)',
-}
-
-const SECONDARY: CSSProperties = {
-  alignSelf: 'flex-start',
-  padding: '6px 0',
-  border: 'none',
-  background: 'none',
-  color: 'var(--dsw-alias-label-secondary)',
-  fontFamily: 'inherit',
-  fontSize: 13,
-  lineHeight: '20px',
-  cursor: 'pointer',
-}
-
-const NOTE: CSSProperties = {
-  margin: 0,
-  color: 'var(--dsw-alias-label-secondary)',
-  fontSize: 12,
-  lineHeight: '18px',
-}
-
-const ERROR: CSSProperties = {
-  margin: 0,
-  color: 'var(--dsw-alias-label-error, #d64545)',
-  fontSize: 13,
-  lineHeight: '20px',
-}
 
 /** What the gate is doing right now. */
 type Phase =
   | { kind: 'reading' }
   | { kind: 'choosing', profiles: ProfileSummary[], error?: string }
+  | { kind: 'creating' }
   | { kind: 'selecting' }
   | { kind: 'restart', name: string }
   | { kind: 'done' }
@@ -293,6 +177,17 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
     setPhase({ kind: 'done' })
   }, [store])
 
+  // Backing out of the form returns to the roster, which is re-read rather than
+  // remembered: a profile may have been created since it was drawn.
+  const abandonCreate = useCallback(() => {
+    setPhase({ kind: 'reading' })
+    void fetchState().then(state => {
+      setPhase(state.signedIn
+        ? { kind: 'choosing', profiles: state.profiles }
+        : { kind: 'done' })
+    })
+  }, [])
+
   if (phase.kind === 'done') return null
   if (phase.kind === 'reading' && !signedIn) return null
 
@@ -301,7 +196,7 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
       style={active === null ? BACKDROP_GATE : BACKDROP_MASK}
       data-dsh-profiles={active === null ? 'gate' : 'switcher'}
     >
-      <div style={CARD}>
+      <div style={phase.kind === 'creating' ? CARD_WIDE : CARD}>
         {phase.kind === 'restart'
           ? (
             <>
@@ -348,8 +243,8 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
               {phase.profiles.length === 0
                 ? (
                   <p style={NOTE}>
-                    Você ainda não tem perfis. Crie um em <strong>Perfis</strong>, no
-                    painel do plugin manager, e volte aqui.
+                    Você ainda não tem perfis. Crie o primeiro aqui mesmo — ou no
+                    painel do plugin manager, em <strong>Perfis</strong>.
                   </p>
                 )
                 : phase.profiles.map(profile => (
@@ -369,6 +264,17 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
                   </button>
                 ))}
 
+              {/* Authoring is offered in both states, and it is the only way
+                  out of the gate other than picking: a person with no profiles
+                  used to have to leave for the panel to get past this screen. */}
+              <button
+                type="button"
+                style={PRIMARY}
+                onClick={() => { setPhase({ kind: 'creating' }) }}
+              >
+                Criar perfil
+              </button>
+
               {/* Only for a deliberate switch: with nothing materialized there
                   is no state to go back to, so the gate has no way out but a
                   choice. */}
@@ -378,6 +284,19 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
                 </button>
               )}
             </>
+          )
+          : null}
+
+        {phase.kind === 'creating'
+          ? (
+            <CreateProfileForm
+              // Created, then selected: with nothing materialized, leaving the
+              // person on the roster to click the profile they just authored
+              // would be a second question with one right answer — the same
+              // reason the server activates a user's first profile itself.
+              onCreated={profile => { void choose(profile.id) }}
+              onCancel={abandonCreate}
+            />
           )
           : null}
       </div>

@@ -2,7 +2,7 @@
 
 The profile picker. A **profile** is the slice an agent runs under: which library skills reach the model, and which plugins load.
 
-The plugin manager owns the roster. This plugin **materializes** the selection for this machine — it does not author profiles, and it holds no credential of its own.
+The plugin manager owns the roster and every rule about it. This plugin **materializes** the selection for this machine and **forwards** authoring — it holds no credential of its own, and it does not decide what a valid profile is.
 
 ```
 browser ──GET /profiles/api/state───▶ dsh-profiles (host) ──▶ GET  /api/profiles
@@ -12,6 +12,12 @@ browser ──POST /profiles/api/select─▶ dsh-profiles (host) ──▶ POST
         ◀── { active, restartRequired }   │             ◀── the profile's spec
                                           ▼
                               $DSH_HOME/profile/active.json
+
+browser ──GET /profiles/api/catalog─▶ dsh-profiles (host) ──▶ GET  /api/profiles/catalog
+        ◀── composable plugins + skills   │             ◀── plugins, skills
+
+browser ──POST /profiles/api/create─▶ dsh-profiles (host) ──▶ POST /api/profiles
+        ◀── { ok, profile }               │             ◀── the created profile
 ```
 
 **`dsh-login` must be mounted in the same profile.** Every call resolves the session that plugin records, per request and never cached — the same contract `dsh-skill-library` and `dsh-vps-status` follow. Without it there is no roster, and the picker stays behind the login gate.
@@ -27,7 +33,15 @@ The picker's order sits just below `dsh-login`'s `10_000`, so when neither is sa
 
 **The row in the sidebar foot is the only way to switch.** The picker opens itself only when there is nothing to materialize, so without that row a machine that already has a profile would never see it again, and changing profiles would mean the plugin manager's dashboard plus a reload. The two surfaces sit in different slots and never share a React tree, so they share a `ProfileStore` instead.
 
-Cancelling is offered only for a deliberate switch. With nothing materialized there is no state to go back to, so the gate has no way out but a choice.
+Cancelling is offered only for a deliberate switch. With nothing materialized there is no state to go back to, so the gate has no way out but a choice — or authoring one.
+
+## Authoring from the picker
+
+**Criar perfil** opens the same form the plugin manager's panel offers: a name, an optional description, every composable plugin, and every published library skill. It exists because the gate used to be a dead end for anyone without a profile: the only way past it was to leave for the panel.
+
+The catalog is read from the server, never from a list in this bundle — the library is the server's, and a local copy would go stale the first time an admin publishes something. What the server does **not** get to decide is which plugin rows exist: `narrowCatalogPlugins` keeps only the ids in `PLUGIN_ROWS` and takes each row's plane from that table, so the answer supplies a row's text and never its cost. A row this build cannot compose never reaches the form, where ticking it would select nothing.
+
+The draft goes upstream as typed. This half re-states none of the rules — name length, unknown plugin, missing skill, duplicate name are all refused by the plugin manager, with the message shown in the form. A created profile is then selected straight away: leaving someone on the roster to click the profile they just authored would be a second question with one right answer.
 
 ## The active profile lives on the server
 
@@ -69,6 +83,8 @@ Both are same-origin fenced (reusing `dsh-login`'s `isSameOriginRequest`) and bo
 | --- | --- |
 | `GET /profiles/api/state` | `{ signedIn: false }`, or the roster plus `serverActiveId` and this machine's `active` |
 | `POST /profiles/api/select` | `{ ok, active, restartRequired }`, or `{ ok: false, message }` |
+| `GET /profiles/api/catalog` | `{ plugins, skills }`, already narrowed to the composable rows |
+| `POST /profiles/api/create` | `{ ok, profile }`, or `{ ok: false, message }` carrying the manager's refusal |
 
 `signedIn: false` covers not signed in, an expired session, and an unreachable plugin manager. All three leave the picker waiting rather than showing an empty roster that would read as "you have no profiles".
 
@@ -76,9 +92,10 @@ Both are same-origin fenced (reusing `dsh-login`'s `isSameOriginRequest`) and bo
 
 | Field | Meaning |
 | --- | --- |
-| `profilesEndpoint` | Full URL listing the user's profiles. **Required.** Plain http is refused off loopback |
+| `profilesEndpoint` | Full URL listing the user's profiles, and where a new one is posted. **Required.** Plain http is refused off loopback |
 | `activeEndpoint` | Full URL that makes one profile active. **Required.** |
 | `specEndpoint` | Full URL answering the active profile's spec. **Required** — validated at load even though only the client reads it |
+| `catalogEndpoint` | Full URL answering what a new profile can be built from. **Required.** |
 | `timeoutMs` | Deadline per forwarded request, default `5000` |
 | `dshHome` | Harness home holding `profile/active.json`; defaults to `$DSH_HOME` |
 
