@@ -93,7 +93,11 @@ function ProfileFields({
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-2.5">
+      {/* `min-w-0`: um fieldset nasce com `min-width: min-content` no UA
+          stylesheet e o preflight do Tailwind não zera isso. Sem o reset, uma
+          linha que não quebra alarga o fieldset até caber inteira e ele vaza
+          para fora do card — o `truncate` lá dentro nunca chega a valer. */}
+      <fieldset className="flex min-w-0 flex-col gap-2.5">
         <legend className={labelClass}>Plugins</legend>
         <p className={hintClass}>
           Marcados com <em>reinício</em> vivem na composição do processo: trocar
@@ -127,7 +131,7 @@ function ProfileFields({
         <FieldError message={fieldErrors.plugins} />
       </fieldset>
 
-      <fieldset className="flex flex-col gap-2.5">
+      <fieldset className="flex min-w-0 flex-col gap-2.5">
         <legend className={labelClass}>Skills da biblioteca</legend>
         <p className={hintClass}>
           Só as marcadas chegam ao modelo neste perfil. Nenhuma marcada significa
@@ -140,7 +144,7 @@ function ProfileFields({
         ) : (
           <div className="flex max-h-72 flex-col gap-2 overflow-y-auto rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
             {skills.map((skill) => (
-              <label key={skill.id} className="flex items-start gap-2.5">
+              <label key={skill.id} className="flex min-w-0 items-start gap-2.5">
                 <input
                   type="checkbox"
                   name="skills"
@@ -149,10 +153,11 @@ function ProfileFields({
                   className="mt-0.5 size-4 rounded border-zinc-300 text-indigo-500 focus:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900"
                 />
                 <span className="flex min-w-0 flex-col">
-                  <code className="text-sm text-zinc-700 dark:text-zinc-300">
+                  <code className="truncate text-sm text-zinc-700 dark:text-zinc-300">
                     {skill.name}
                   </code>
-                  <span className={`${hintClass} truncate`}>
+                  {/* Cortada em uma linha; o texto inteiro fica no title. */}
+                  <span className={`${hintClass} truncate`} title={skill.description}>
                     {skill.description}
                   </span>
                 </span>
