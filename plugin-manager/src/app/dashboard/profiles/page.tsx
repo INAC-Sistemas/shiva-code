@@ -179,7 +179,11 @@ export default async function ProfilesPage() {
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
+                {/* Sem `shrink-0`: aberto, o painel de edição entra nesta
+                    linha, e ela precisa poder encolher até a largura do card.
+                    Mantendo-a rígida é o painel que dita a largura e a linha
+                    inteira vaza para fora do cartão. */}
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
                   {profile.id === activeId ? null : (
                     <form action={selectProfile}>
                       <input type="hidden" name="id" value={profile.id} />

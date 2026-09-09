@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createProfile, updateProfile } from "@/app/actions/profiles";
 import { KNOWN_PLUGINS, initialProfileFormState } from "@/lib/profiles";
@@ -250,26 +250,35 @@ export function EditProfileForm({
   const [open, setOpen] = useState(false);
   const [seenCount, setSeenCount] = useState(0);
   const saved = state.savedCount > seenCount;
+  const panelId = useId();
 
   function toggle() {
     setSeenCount(state.savedCount);
     setOpen((value) => !value);
   }
 
+  // Aberto, o controle do disclosure muda de lugar: sai da linha de ações do
+  // cartão e vira o "Fechar" do rodapé do painel, ao lado de "Salvar". São o
+  // mesmo botão em dois pousos, então cada um carrega o par
+  // aria-expanded/aria-controls do painel.
   return (
     <>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        className="rounded-lg px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
-      >
-        {open ? "Fechar" : "Editar"}
-      </button>
+      {open ? null : (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={false}
+          aria-controls={panelId}
+          className="rounded-lg px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+        >
+          Editar
+        </button>
+      )}
 
       {open ? (
         <form
           key={state.savedCount}
+          id={panelId}
           action={formAction}
           className="mt-3 w-full rounded-2xl border border-zinc-200 bg-zinc-50/60 p-5 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
         >
@@ -300,6 +309,16 @@ export function EditProfileForm({
                 Salvo.
               </p>
             ) : null}
+
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded
+              aria-controls={panelId}
+              className="ml-auto rounded-lg px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+            >
+              Fechar
+            </button>
           </div>
         </form>
       ) : null}
