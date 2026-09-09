@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
 import { buildSafeModeViewModel, shouldStartInSafeMode } from '../src/main/safe-mode'
 import {
   ensureSafeModeProfile,
@@ -235,22 +236,22 @@ describe('Safe Mode', () => {
   })
 
   it('ships a selectable management page with no remote content', async () => {
-    const html = await readFile('build/safe-mode.html', 'utf8')
+    const html = normalizeHtmlSource(await readFile('build/safe-mode.html', 'utf8'))
     expect(html).toContain('id="items"')
-    expect(html).toContain('type = \'checkbox\'')
-    expect(html).toContain("window.dshSafeMode.action('apply', { plugins, issues })")
+    expect(html).toContain(normalizedFragment('type = "checkbox"'))
+    expect(html).toContain(normalizedFragment('window.dshSafeMode.action("apply", { plugins, issues })'))
     expect(html).toContain('model.issueGroups')
     expect(html).toContain('model.pluginItems')
     expect(html).toContain('plugin.statusLabel')
-    expect(html).toContain("plugin.statusTone === 'warning'")
+    expect(html).toContain(normalizedFragment('plugin.statusTone === "warning"'))
     expect(html.match(/<section class="list-card"/g)).toHaveLength(1)
     expect(html).toContain('checkbox.dataset.issueIds')
-    expect(html).toContain("document.createElement('details')")
-    expect(html).toContain("window.dshSafeMode.action('agent', {})")
+    expect(html).toContain(normalizedFragment('document.createElement("details")'))
+    expect(html).toContain(normalizedFragment('window.dshSafeMode.action("agent", {})'))
     expect(html).not.toContain('id="backup-card"')
-    expect(html).not.toContain("window.dshSafeMode.action('backup-open'")
-    expect(html).not.toContain("window.dshSafeMode.action('backup-restore'")
-    expect(html).not.toContain("window.dshSafeMode.action('backup-delete'")
+    expect(html).not.toContain(normalizedFragment('window.dshSafeMode.action("backup-open"'))
+    expect(html).not.toContain(normalizedFragment('window.dshSafeMode.action("backup-restore"'))
+    expect(html).not.toContain(normalizedFragment('window.dshSafeMode.action("backup-delete"'))
     expect(html).toContain('id="recovery-open"')
     expect(html).toContain('class="close" id="agent"')
     expect(html).toContain('class="button primary" id="restart"')
@@ -261,9 +262,9 @@ describe('Safe Mode', () => {
     expect(html).not.toContain('class="exit-panel"')
     expect(html).not.toContain('id="exit-heading"')
     expect(html).toContain('window.confirm(String(model.restartConfirm))')
-    expect(html).toContain('background: rgba(18,18,20,.28)')
-    expect(html).toContain("model.noticeTone === 'success'")
-    expect(html).toContain("default-src 'none'")
+    expect(html).toContain(normalizedFragment('background: rgba(18, 18, 20, 0.28)'))
+    expect(html).toContain(normalizedFragment('model.noticeTone === "success"'))
+    expect(html).toContain(normalizedFragment('default-src "none"'))
     expect(html).not.toContain('http://')
     expect(html).not.toContain('https://')
   })

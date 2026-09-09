@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
+import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
 import type { RuntimeSnapshot } from '../src/shared/contracts'
 import {
   buildPluginRecoveryViewModel,
@@ -99,9 +100,9 @@ describe('plugin recovery view model', () => {
   })
 
   it('wires the unresolved recovery action to Safe Mode', async () => {
-    const html = await readFile('build/plugin-recovery.html', 'utf8')
-    expect(html).toContain("model.canUninstall ? 'uninstall' : 'safe-mode'")
-    expect(html).toContain("navigate('show-log')")
+    const html = normalizeHtmlSource(await readFile('build/plugin-recovery.html', 'utf8'))
+    expect(html).toContain(normalizedFragment('model.canUninstall ? "uninstall" : "safe-mode"'))
+    expect(html).toContain(normalizedFragment('navigate("show-log")'))
     expect(html).not.toContain('id="restart"')
   })
 })

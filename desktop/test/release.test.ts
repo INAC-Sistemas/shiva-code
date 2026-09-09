@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
 
@@ -217,7 +218,9 @@ describe('GitHub release contract', () => {
 
   it('shows a packaged startup surface and pins the Electron directory picker surface', async () => {
     const main = await readFile(path.join(projectRoot, 'src', 'main', 'index.ts'), 'utf8')
-    const splash = await readFile(path.join(projectRoot, 'build', 'splash.html'), 'utf8')
+    const splash = normalizeHtmlSource(
+      await readFile(path.join(projectRoot, 'build', 'splash.html'), 'utf8')
+    )
     const patch = await readFile(
       path.join(projectRoot, 'build', 'dsh-desktop.patch.yml'),
       'utf8'
@@ -230,13 +233,13 @@ describe('GitHub release contract', () => {
     expect(splash).toContain('Starting Shivacode Desktop')
     expect(splash).toContain('src="dsh-loader.gif"')
     expect(splash).toContain('src="dsh-loader-dark.gif"')
-    expect(splash).toContain("document.documentElement.dataset.theme = splashTheme === 'dark'")
-    expect(splash).toContain(":root[data-theme='dark']")
+    expect(splash).toContain(normalizedFragment('document.documentElement.dataset.theme = splashTheme === "dark"'))
+    expect(splash).toContain(normalizedFragment(':root[data-theme="dark"]'))
     expect(splash).toContain('brightness(2.4) saturate(0.72)')
     expect(splash).not.toContain('filter: invert(1)')
     expect(splash).not.toContain('class="track"')
     expect(splash).toContain('position: fixed;')
-    expect(splash).toContain('html[data-platform="windows"] main { padding-top: 70px; }')
+    expect(splash).toContain(normalizedFragment('html[data-platform="windows"] main { padding-top: 70px; }'))
     expect(patch).not.toMatch(/id:\s*directory-picker/)
     expect(patch).not.toContain("name: '@deepseek-ai/dsh-host-directory-picker-native'")
     expect(patch).not.toContain("name: '@deepseek-ai/dsh-client-ui-directory-picker-native'")
