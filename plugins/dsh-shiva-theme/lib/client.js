@@ -6,7 +6,7 @@ window.__ModuleLoader__.load({ id: 'dsh-shiva-theme', factory: (require) => {
 
 // dsh-shiva-theme client half: the Shiva appearance for dsh web, ported
 // one-to-one from the Shivacode theme. Signal colour on true black,
-// translucent surfaces over a slow matrix backdrop, trident brand swap, five
+// translucent surfaces over a slow matrix backdrop, app-icon brand swap, five
 // selectable accents. Theme only — no settings namespace, no plugin family.
 
 // ── accent ────────────────────────────────────────────────────────────────
@@ -151,9 +151,9 @@ const SHIVA_TOKENS = {
 }
 
 // ── brand ─────────────────────────────────────────────────────────────────
-// The mark: the trishula, Shiva's trident, as flat geometry with no colour of
-// its own. Applied as a CSS mask over var(--shiva-accent), so it follows
-// whichever accent is selected.
+// The wordmark glyph: the trishula, Shiva's trident, as flat geometry with no
+// colour of its own. Applied as a CSS mask over var(--shiva-accent), so it
+// follows whichever accent is selected.
 
 const TRISHULA_GEOMETRY = '<g fill="#000">' +
   '<path d="M11.6 2.2h1.9v20.6h-1.9z"/>' +
@@ -166,7 +166,6 @@ const TRISHULA_GEOMETRY = '<g fill="#000">' +
   '<circle cx="12.55" cy="19.4" r="1.5"/>' +
   '</g>'
 
-const TRISHULA_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 23">' + TRISHULA_GEOMETRY + '</svg>'
 const WORDMARK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 24">' +
   '<g transform="translate(0,0.5) scale(0.95)">' + TRISHULA_GEOMETRY + '</g>' +
   '<text x="32" y="17.5" font-family="\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" letter-spacing="1.6" fill="#000">SHIVACODE</text>' +
@@ -175,7 +174,11 @@ const WORDMARK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 2
 function dataUri(svg) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/\s+/g, ' ').trim())
 }
-const SHIVA_MARK_URI = dataUri(TRISHULA_SVG)
+
+// The sidebar mark: the ShivaCode app icon (desktop/build/app-icon.png,
+// downscaled to 128px and inlined so the plugin carries its own artwork on
+// web and desktop alike). Full colour, so it is painted, not masked.
+const SHIVA_MARK_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAADAFBMVEVMaXHh2M8MFREXJh0eKiEUHBgNEg8TFhAdPh4qSSVHVE8IFQsDEQYuQTQKGQ8GIQoFGwoDFgUGOwsKLBEDJQcuQDUyQzplcmwLHhBJVlFtenOMzm+Y2nkkSygDHgdHbEgkZyCh34EmXyh8uGkPSRIHNAyjrKdholCm5oSapJ4vPTYpbiNZnkYHHwur6YlorVNSlUIvbS6KxXUDHwWs5JACKQckYiQTVxRmolkIIQ2BjodBhzVXZV628o0ibB1Nikq06ZcPPhgCLQYRRRWstbAjZB6PmZPC+Z0YUBpqtVIvPTY3Qj1neGoRQBUscyORm5ZRlkMLNRAhXiA4fC0TThYoaiQ6S0E+fzMQRhVFU0wQRxIjYCEDKgckYiJRkkFaZmABKQUHPAxKjzwBJQUZOSEraidpeW8PRxOTyIAeXB1qq1chZxwwQTc9fDVVnEJpdW9mjVwPQxMvcShIVk8FNAtwrWFPlz1YnkgIPA0DLAlNW1Q9fDVGiDlOX1VQZlRpqlcWShp3g3xBgzcxdSg2azJSZFhusldXnEUdUiE8SEMfWx4rNjJgoU1rr1Z5tWVGeEGNmJB1uF2LmY9RX1ddoE5lmFpOgkeEjomepqI5cjTO+a9UjkmY0IDC86Rodm6AvmkvPTe7wr5cbGI9UkR2ul6RzXiirqWPxXeIlI2Fy2aNt4FejlS/xsGJx26Gtnhsjmud04SBqXsJFRALIhILGhIeKyYbKCMdMiYTKBtQXlhMWlVEUUsPIhcXLR8hMCokNi0QNxhBTEcEGApzgHk2djJKkD0PMRctVjUWQR3f5OAYNiC5wb1ea2QpRDK69ZZ4hX3ByMSR1HQlPS7HzckaSiGCv24zXzu68JwFEAtEf0LQ1tN4vV8wPTghXSKe1oU6fzJ1tGPY3dqh53wcPSVqqlq99J2FyGqz7pNamU8fVCSw7Ytzt1tuwFWb4HiS3G+D1GKq7INfqUp2y1ql3oyzu7cDJgqIlY4pTDI+bER+xGOGzWiL2WnJ/Kb1+fa5657l/8HPjOeeAAAA3HRSTlMAAhQhBgoOAQMC/hosEyZYPkX9/mEdYP4y/f3+/i9NKf7+/f7+fP7+/v6o/v04/v3+/vyD/rLs/fxy/v7+/kb+/v6PR/2AZP7u/Zn+G3Dy/amvVbVjbEfsxNWdsp6f50jN6tC8VeGMrP7PpTtuxGvYDdWU78f9upzZ3Jt76oJj6YzWkdLLt72H34LA3cjSmeJ+fUHc7N9QxdDt/cT9/rPXwdXfn+jqj6nt6OP4ocLHxeP7//////////////////////////////////7////////////////////+I6KLKgAAAAlwSFlzAAAuIwAALiMBeKU/dgAAGeBJREFUeNrtWwdYVNe2XnPmtHEKbei9g9KLgKggiIpiVGzYe++99xJjjzGJJjHJTS83971PUARRUIpEEERBRGoQ6SCI5Vnie2ufGRAsCMZ3/d73smBgOMOc9e+1V197AP6mv+lv+r9NnETy72XHtb1A0wDPX/vfJAlNt+HG0VSwKXDvTv5gusDDN4Tm3xUAESxt8nh6WPzOZCCC4ccsZls7g+QdAeBhRP5nTVspBvi/oIl8O1v8Gg1g5BCSOxTkcpTAmwuBeSUDXvV4FXAR6Cqgd+D7IBYHB0s7pomcpEO63REp4PpZVhd6564CfsSmpsPhfEdUUUK3y49rXngH7gTzpi4YsVgAIP440P7pAu4t2ALPddwDUF/lPj0sRQArgd7nlYSqIHrde96mu5BAuFexb1EwAhgKEOLx2SbT16sh15n9516jS7zsuyavTTJhC+TM0IrwjprBa6Tc/HK74pLgf6ELKPreGVQA4MNA07cEoIV5awQSnpe0tSS5LgPU91/xpuy83FXsYpgbOO9Ff8Lx/Eu4dWgfOGRPc7TkpW/hQBy0fD6zmP3Pr6QI4Okqxpye69X75Q7tzQyDIyYteeZdxRoa4lZhWOnusWKArSnz/VeMLjsvcCiYs59XIACOF/GtWcsHB01n/rptSsB0SV7eEgP1HqP/mVOU0+S72pSf/R2jy5gHDqXp8JymYNXmcq3eFhGQ424LdCeC+ytCxeAVgYGVEbotDmBXYFJOzhJd5oscTTllXrEKqKFPSEBgRg4Nb94IvNmwPC+Pol1sx0XwMvVEbQA6wivZPtBns9pPAhOUfMzLYvwo2Pvkc4Y291rFs3MdeoMptbXplsc8teIgbJ+iIovA7tI32INmAyCqj/z4IPunTcdm+0xXr46nzTxKJgcb8Foe31OMucsqgLkuvUGX2ftFt8B1gsjxDoOrZgca57rOYlEEvIQHpiNb0ax1z36hIVEMM3jB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'
 const SHIVA_WORDMARK_URI = dataUri(WORDMARK_SVG)
 
 // ── stylesheet ────────────────────────────────────────────────────────────
@@ -188,9 +191,34 @@ const SHIVA_WORDMARK_URI = dataUri(WORDMARK_SVG)
 const THEME_ATTRIBUTE = 'data-shiva-theme'
 const WORDMARK_VIEWBOX = '0 0 182 24'
 const MARK_VIEWBOX = '0 0 23.16 17.04'
+// Both the sidebar and the conversation hero render the same mark svg; the
+// width the host asks each of them for is what tells the two apart.
+const SIDEBAR_MARK_WIDTH = '24'
+// Slot occupants are anchored in a `div[data-slot]` wrapper carrying
+// `display: contents`, so the wrapper is out of layout but sits in the DOM
+// between the host's element and the mark. Reaching a mark's surroundings goes
+// through that anchor: a selector that steps straight from the host's span to
+// the svg matches nothing.
+const SIDEBAR_MARK_SLOT = '[data-slot="sidebar.brand.mark"]'
+const HERO_MARK_SLOT = '[data-slot="conversation.hero.brand.mark"]'
+// The painted edge of the app icon. The mark svg's own box is 24x17.7 (the
+// fish ratio), which the icon does not share: sizing the element squarely is
+// what lets the artwork read at more than the fish's height. Expanded, the
+// logo row gives 44px between its paddings and clips at 60; collapsed it drops
+// its padding and clips at 36, the edge of the toggle the mark rides there, so
+// the rail takes the smaller edge.
+const SIDEBAR_MARK_EDGE = '44px'
+const RAIL_MARK_EDGE = '36px'
 
 function stylesheet() {
   const scope = 'body[' + THEME_ATTRIBUTE + ']'
+  const sidebarMark = 'svg[viewBox="' + MARK_VIEWBOX + '"][width="' + SIDEBAR_MARK_WIDTH + '"]'
+  // The headline row: mark, phrase, preview badge, in that order.
+  const heroHeadline = scope + ' div:has(> span > ' + HERO_MARK_SLOT + ')'
+  // The group holding the mark and the name inside the brand button.
+  const brandIdentity = scope + ' button > span:has(> span > ' + SIDEBAR_MARK_SLOT + ')'
+  // Collapsed, the mark is the toggle's own child rather than the brand group's.
+  const railMark = scope + ' button > span > ' + SIDEBAR_MARK_SLOT + ' > ' + sidebarMark
   const tokens = Object.entries(SHIVA_TOKENS).map(([name, value]) => '  ' + name + ': ' + value + ';').join('\n')
   return '\n' + scope + ' {\n' + tokens + '\n}\n\n' +
 '/* Type: a terminal-adjacent stack, system fonts only (must survive air-gapped). */\n' +
@@ -234,13 +262,29 @@ scope + ' button:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n' 
 scope + ' :focus-visible {\n  outline: 2px solid ' + ACCENT + ';\n  outline-offset: 2px;\n}\n\n' +
 scope + ' ::selection {\n  background: ' + accentAlpha(0.32) + ';\n  color: #fff;\n}\n\n' +
 scope + ' textarea,\n' + scope + ' input[type="text"],\n' + scope + ' input[type="search"],\n' + scope + ' [contenteditable="true"] {\n  caret-color: ' + ACCENT + ';\n}\n\n' +
-'/* Brand: the wordmark and rail mark replaced via masks keyed on each svg\n' +
-'   viewBox (stable across builds). Masks over the accent, so the geometry\n' +
-'   carries no colour. Original artwork hidden, layout box kept. */\n' +
+'/* Brand: the wordmark and sidebar mark replaced keyed on each svg viewBox\n' +
+'   (stable across builds). The wordmark is a mask over the accent, so its\n' +
+'   geometry carries no colour; the mark is the app icon, painted as its own\n' +
+'   full-colour artwork. Original artwork hidden, layout box kept. */\n' +
 scope + ' svg[viewBox="' + WORDMARK_VIEWBOX + '"] {\n  background-color: ' + ACCENT + ';\n  -webkit-mask: url("' + SHIVA_WORDMARK_URI + '") left center / contain no-repeat;\n  mask: url("' + SHIVA_WORDMARK_URI + '") left center / contain no-repeat;\n}\n\n' +
-scope + ' svg[viewBox="' + MARK_VIEWBOX + '"] {\n  background-color: ' + ACCENT + ';\n  -webkit-mask: url("' + SHIVA_MARK_URI + '") center / contain no-repeat;\n  mask: url("' + SHIVA_MARK_URI + '") center / contain no-repeat;\n}\n\n' +
+scope + ' ' + sidebarMark + ' {\n  width: ' + SIDEBAR_MARK_EDGE + ';\n  height: ' + SIDEBAR_MARK_EDGE + ';\n  background: url("' + SHIVA_MARK_URI + '") center / contain no-repeat;\n}\n\n' +
+'/* The brand button clips to its own content height, and that height comes\n' +
+'   from the identity group, pinned to the 24px the fish needed. The group has\n' +
+'   to carry the mark before the button can show it whole. */\n' +
+brandIdentity + ' {\n  height: ' + SIDEBAR_MARK_EDGE + ';\n}\n\n' +
+'/* Collapsed, the same mark is the rail toggle and rides its 36px button\n' +
+'   directly, one span down from the expanded brand. */\n' +
+railMark + ' {\n  width: ' + RAIL_MARK_EDGE + ';\n  height: ' + RAIL_MARK_EDGE + ';\n}\n\n' +
 scope + ' svg[viewBox="' + WORDMARK_VIEWBOX + '"] > *,\n' +
-scope + ' svg[viewBox="' + MARK_VIEWBOX + '"] > * {\n  visibility: hidden;\n}\n\n' +
+scope + ' ' + sidebarMark + ' > * {\n  visibility: hidden;\n}\n\n' +
+'/* The hero headline is the phrase alone: the fish and the preview badge on\n' +
+'   either side of it are dropped. Dropping them alone would leave their grid\n' +
+'   columns and the 10px gaps behind, so the row is re-tracked onto the one\n' +
+'   span that remains. */\n' +
+scope + ' span:has(> ' + HERO_MARK_SLOT + ') {\n  display: none;\n}\n\n' +
+heroHeadline + ' > span:nth-child(3) {\n  display: none;\n}\n\n' +
+heroHeadline + ' {\n  grid-template-columns: auto;\n}\n\n' +
+heroHeadline + ' > span:nth-child(2) {\n  grid-column: 1;\n}\n\n' +
 '/* Reduced motion: the backdrop is removed outright. */\n' +
 '@media (prefers-reduced-motion: reduce) {\n' +
 '  ' + scope + ' canvas[data-shiva-matrix] { display: none; }\n' +
@@ -508,7 +552,7 @@ function ShivaThemeCard({ store }) {
   return h('section', { style: styles.card, 'aria-label': 'Shiva theme' },
     h('div', { style: styles.head },
       h('h3', { style: styles.title }, 'Shiva theme'),
-      h('p', { style: styles.blurb }, 'Signal colour on true black, trident mark and glyph backdrop.')),
+      h('p', { style: styles.blurb }, 'Signal colour on true black, app icon mark and glyph backdrop.')),
     h('div', { style: styles.row },
       h('div', { style: styles.rowText },
         h('span', { style: styles.rowLabel }, 'Theme'),

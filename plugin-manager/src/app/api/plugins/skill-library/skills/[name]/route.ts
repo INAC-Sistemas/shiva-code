@@ -15,7 +15,7 @@ import {
  * cada chamada — é aqui que "só quem está logado usa" para de ser uma promessa
  * da interface e vira uma verificação.
  *
- * Uma skill despublicada responde 404, igual a uma que não existe.
+ * Despublicada, fora do perfil ativo e inexistente respondem 404 igual.
  */
 export async function GET(
   request: Request,
@@ -27,7 +27,7 @@ export async function GET(
 
   try {
     const name = assertSkillName((await context.params).name);
-    const skill = await readSkill(name);
+    const skill = await readSkill({ userId: auth.session.userId }, name);
 
     if (!skill) {
       return NextResponse.json(

@@ -1,0 +1,3 @@
+name: 配置文件模式
+description: 标准模式的全部能力，外加由 VPS 上的用户配置文件决定的 Agent 平面插件行。
+order: 5

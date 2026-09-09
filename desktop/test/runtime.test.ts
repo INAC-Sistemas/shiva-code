@@ -1,7 +1,9 @@
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  ACTIVE_PROFILE_FILE,
   buildHarnessArguments,
   buildHarnessSpawnOptions,
   buildNodeArguments,
@@ -14,6 +16,7 @@ import {
   extractSlotConflictName,
   formatExitCode,
   isHarnessStartupProbeHealthy,
+  readActiveProfilePlugins,
   resolveEnvironmentPath,
   resolveShellEnvironment,
   updateReadyStability
@@ -120,6 +123,47 @@ describe('Harness launch contract', () => {
       }
     })
     expect(options.env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+  })
+
+  it('leaves DSH_PROFILE_PLUGINS unset when no profile is selected', () => {
+    // Unset is what every `disabled` expression in the desktop patch and the
+    // `profile` preset falls back to as "enabled". A first boot before any
+    // login has to show the app, not an empty shell.
+    const options = buildHarnessSpawnOptions('/launch-root', '/harness', 'linux', {
+      PATH: '/usr/bin'
+    })
+
+    expect(options.env).not.toHaveProperty('DSH_PROFILE_PLUGINS')
+  })
+
+  it('passes the selected profile plugins as a comma-separated allowlist', () => {
+    const options = buildHarnessSpawnOptions(
+      '/launch-root',
+      '/harness',
+      'linux',
+      { PATH: '/usr/bin' },
+      undefined,
+      ['dsh-mds', 'dsh-skill-library']
+    )
+
+    expect(options.env).toMatchObject({
+      DSH_PROFILE_PLUGINS: 'dsh-mds,dsh-skill-library'
+    })
+  })
+
+  it('distinguishes a profile that enabled nothing from no profile at all', () => {
+    // An empty list is a real choice and must stay strict; only `undefined`
+    // means "no selection" and falls back to enabling everything.
+    const options = buildHarnessSpawnOptions(
+      '/launch-root',
+      '/harness',
+      'linux',
+      { PATH: '/usr/bin' },
+      undefined,
+      []
+    )
+
+    expect(options.env).toMatchObject({ DSH_PROFILE_PLUGINS: '' })
   })
 
   it('does not detach the Harness on macOS or Linux', () => {
@@ -639,5 +683,49 @@ describe('Harness window activation', () => {
     expect(isAbortedNavigationError({ code: 'ERR_CONNECTION_REFUSED', errno: -102 })).toBe(
       false
     )
+  })
+})
+
+describe('active profile selection', () => {
+  async function harnessHome(contents?: string): Promise<string> {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-desktop-profile-'))
+    if (contents !== undefined) {
+      await mkdir(join(home, 'profile'), { recursive: true })
+      await writeFile(join(home, ACTIVE_PROFILE_FILE), contents, 'utf8')
+    }
+    return home
+  }
+
+  it('reads the plugin list dsh-profiles recorded', async () => {
+    const home = await harnessHome(
+      JSON.stringify({ id: 'p1', name: 'Web', plugins: ['dsh-mds', 'dsh-prototype'] })
+    )
+
+    expect(readActiveProfilePlugins(home)).toEqual(['dsh-mds', 'dsh-prototype'])
+  })
+
+  it('reports no selection when the file is absent', async () => {
+    expect(readActiveProfilePlugins(await harnessHome())).toBeUndefined()
+  })
+
+  it('reports no selection rather than failing on an unreadable file', async () => {
+    // Every failure has to read as "no profile": refusing to start because a
+    // selection file was truncated would be worse than starting with every
+    // plugin, which is the state the user was in before choosing one.
+    for (const contents of ['{ not json', '"a string"', 'null', '{"plugins":"all"}']) {
+      expect(readActiveProfilePlugins(await harnessHome(contents))).toBeUndefined()
+    }
+  })
+
+  it('keeps an empty selection distinct from no selection', async () => {
+    const home = await harnessHome(JSON.stringify({ id: 'p1', plugins: [] }))
+
+    expect(readActiveProfilePlugins(home)).toEqual([])
+  })
+
+  it('drops non-string entries instead of forwarding them into the environment', async () => {
+    const home = await harnessHome(JSON.stringify({ plugins: ['dsh-mds', 7, null] }))
+
+    expect(readActiveProfilePlugins(home)).toEqual(['dsh-mds'])
   })
 })

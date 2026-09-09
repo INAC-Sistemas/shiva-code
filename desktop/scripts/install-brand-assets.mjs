@@ -48,6 +48,10 @@ function replaceIconLink(contents, file) {
  * Edited as JSON rather than as text: upstream added `"purpose": "any"` to the
  * entry in 0.1.2-alpha.1, which a pinned multi-line string could not survive,
  * and key order is not a contract. The entry still has to exist.
+ *
+ * The entry is matched by basename rather than by extension: the frontend's own
+ * favicon moved from `favicon.svg` to `favicon.png`, and either is the entry
+ * this replaces.
  * @param contents - manifest source.
  * @param file - path shown in the failure message.
  * @returns manifest JSON with the desktop icon.
@@ -56,7 +60,7 @@ function replaceManifestIcon(contents, file) {
   const manifest = JSON.parse(contents)
   const icons = Array.isArray(manifest.icons) ? manifest.icons : []
   const target = icons.find((icon) => icon?.src === '/dsh-desktop-logo.png')
-    ?? icons.find((icon) => typeof icon?.src === 'string' && icon.src.endsWith('favicon.svg'))
+    ?? icons.find((icon) => typeof icon?.src === 'string' && /\/favicon\.[a-z]+$/u.test(icon.src))
   if (target === undefined) {
     throw new Error(`Could not update DSH Desktop branding in ${file}: no icon entry to replace`)
   }

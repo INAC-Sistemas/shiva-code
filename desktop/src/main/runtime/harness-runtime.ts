@@ -1,6 +1,6 @@
 import { execFileSync, type SpawnOptionsWithoutStdio } from 'node:child_process'
 import type { EventEmitter } from 'node:events'
-import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, readFileSync, type WriteStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { dirname, join } from 'node:path'
@@ -230,12 +230,54 @@ export function resolveEnvironmentPath(
   return ''
 }
 
+/**
+ * Where `dsh-profiles` records the profile the user last selected.
+ *
+ * The shell reads it rather than asking the Harness, because the value is
+ * needed to LAUNCH the Harness: the composition decides which host-plane
+ * plugins load, and that is settled before any plugin is running to be asked.
+ */
+export const ACTIVE_PROFILE_FILE = join('profile', 'active.json')
+
+/**
+ * The plugin list of the selected profile, or `undefined` when there is none.
+ *
+ * `undefined` and an empty list mean different things downstream, and the
+ * difference is load-bearing: absent leaves `DSH_PROFILE_PLUGINS` unset, and
+ * every gated row's expression falls back to enabled — which is what a first
+ * boot before any login, a dev run, and the CLI all need. An empty list is a
+ * real profile that turned everything off.
+ *
+ * Every failure reads as "no profile": an unreadable, truncated, or foreign
+ * file must not stop the app from starting, and starting with every plugin is
+ * the same state the user was in before choosing one. `dsh-profiles` rewrites
+ * the file on the next selection.
+ * @param dshHome - the Harness home directory this app launches against.
+ * @returns the plugin names, or `undefined` when no selection is readable.
+ */
+export function readActiveProfilePlugins(dshHome: string): string[] | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(join(dshHome, ACTIVE_PROFILE_FILE), 'utf8'))
+  } catch {
+    // Absent (never chosen), unreadable, or not JSON. All three are "no
+    // selection"; nothing else can reach this catch, because the only reader is
+    // this function and the only writer is dsh-profiles.
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const plugins = (parsed as { plugins?: unknown }).plugins
+  if (!Array.isArray(plugins)) return undefined
+  return plugins.filter((name): name is string => typeof name === 'string')
+}
+
 export function buildHarnessSpawnOptions(
   launchDirectory: string,
   dshHome: string,
   platform: NodeJS.Platform = process.platform,
   environment: NodeJS.ProcessEnv = process.env,
-  pythonPath?: string
+  pythonPath?: string,
+  profilePlugins?: string[]
 ): SpawnOptionsWithoutStdio {
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = environment
   const pathKey = platform === 'win32' ? 'Path' : 'PATH'
@@ -266,6 +308,15 @@ export function buildHarnessSpawnOptions(
       // wins, matching the "environment overrides config" contract
       // dsh-login itself documents for DSH_LOGIN_ENDPOINT.
       VPS_URL: parentEnvironment.VPS_URL ?? 'https://shivaplugins.grupoinac.com.br',
+      // The active profile's plugin list, read by every `disabled` expression
+      // in dsh-desktop.patch.yml and in the `profile` agent preset. Unset means
+      // "no profile chosen", and those expressions fall back to enabled — the
+      // first boot before any login has to show the app, not an empty shell.
+      // A host-plane plugin can only be turned off by not loading, so this is
+      // settled here, at spawn, and changing it costs a restart.
+      ...(profilePlugins === undefined
+        ? {}
+        : { DSH_PROFILE_PLUGINS: profilePlugins.join(',') }),
       // dsh-openviking's cordis.patch.yml config.pythonCandidates reads this
       // to prefer the Python bundled into this build (staged by
       // scripts/install-python-runtime.mjs into the win32 package's
@@ -409,6 +460,10 @@ export class HarnessRuntime {
     this.writeLog(`[desktop] launch directory ${launchDirectory}`)
     this.writeLog(`[desktop] profile ${profile}`)
     this.writeLog(`[desktop] endpoint ${url}`)
+    const profilePlugins = readActiveProfilePlugins(this.options.dshHome)
+    this.writeLog(
+      `[desktop] profile plugins ${profilePlugins === undefined ? '(none selected — all enabled)' : profilePlugins.join(',')}`
+    )
     this.setState('starting', 'Starting DeepSeek Harness…')
 
     let child: HarnessChildProcess
@@ -421,7 +476,8 @@ export class HarnessRuntime {
           this.options.dshHome,
           process.platform,
           resolveShellEnvironment(),
-          this.options.pythonPath
+          this.options.pythonPath,
+          profilePlugins
         )
       )
     } catch (error) {

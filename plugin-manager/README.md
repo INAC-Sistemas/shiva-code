@@ -34,6 +34,7 @@ Os dois usuários guest são apenas dados de demonstração — remova o bloco m
 | `/login`     | Formulário de login. Redireciona para `/dashboard` se já logado   |
 | `/dashboard` | Listagem de usuários. Redireciona para `/login` se não logado     |
 | `/dashboard/skills` | Biblioteca de skills: lista para todos, cadastro para admin |
+| `/dashboard/profiles` | Perfis do usuário logado: skills e plugins de cada um    |
 | `/dashboard/token` | Gera um token de API para o usuário logado                  |
 
 O controle de acesso fica em [src/proxy.ts](src/proxy.ts) (no Next 16 a convenção
@@ -59,11 +60,15 @@ real contra corrida.
 ## Biblioteca de skills
 
 Uma skill é o bloco de instruções que dirige um agente do `dsh`. O menu
-**Skills** é onde elas são cadastradas, e a biblioteca é **uma só para toda a
-instalação**: não há dono por linha, e o que separa os papéis é a escrita.
+**Skills** é onde elas são cadastradas, e o **cadastro** é um só para toda a
+instalação: não há dono por linha, e o que separa os papéis é a escrita.
 
 - **ADMIN** cria, edita, publica, despublica e remove.
-- **GUEST** vê a lista — e, com um token de API válido, consome as publicadas.
+- **GUEST** vê a lista — e, com um token de API válido, consome as publicadas
+  **que estiverem selecionadas no perfil ativo dele** (ver [Perfis](#perfis)).
+
+Publicar não entrega a skill a ninguém: entrega ao conjunto de onde os perfis
+escolhem. Quem decide o que chega a um agente é o perfil.
 
 O guard de escrita está no início de
 [src/app/actions/skills.ts](src/app/actions/skills.ts), no servidor: esconder o
@@ -71,6 +76,51 @@ formulário no cliente não é controle de acesso.
 
 Uma skill despublicada continua no painel como rascunho e some da API. É a saída
 para tirar de circulação sem perder o texto.
+
+## Perfis
+
+Um perfil é o recorte que um agente enxerga: quais skills da biblioteca e quais
+plugins do cliente valem enquanto ele roda. Cada usuário tem quantos quiser, e um
+deles é o **ativo**.
+
+O ativo mora em `User.activeProfileId`, **não numa claim do token**. Trocar de
+perfil é uma escrita numa coluna: nenhum token é emitido nem revogado, e a
+requisição seguinte — de qualquer dispositivo — já resolve o perfil novo. A
+consequência aceita é que o perfil ativo é por **usuário**, não por dispositivo:
+duas máquinas na mesma conta compartilham a escolha.
+
+Cada um administra os próprios perfis, guest inclusive. Isso é seguro porque um
+perfil **só estreita**: `readActiveSpec` filtra a seleção por `published`, o
+mesmo predicado da biblioteca, então nenhum perfil alcança uma linha que a
+biblioteca publicada já não concedesse.
+
+Sem perfil ativo o catálogo vem **vazio**, não completo. Se "sem perfil" lesse
+tudo, bastaria uma casca nunca escolher um perfil para o recorte virar
+decorativo. `GET /api/plugins/skill-library/skills` responde
+`x-skill-library-profile: none` nesse estado, para o cliente saber abrir o
+seletor em vez de mostrar uma lista vazia sem explicação.
+
+### O que a VPS manda para a casca
+
+`GET /api/plugins/profile` devolve **identificadores** — nomes de plugin e nomes
+de skill —, nunca texto de composição. `cordis.yml` interpreta `!!js` sob `config`
+e sob `disabled`, então YAML servido daqui seria execução remota de código na
+máquina do usuário. A casca resolve esses nomes contra a tabela de linhas do
+próprio build dela.
+
+A lista de plugins válidos é `KNOWN_PLUGINS` em
+[src/lib/profiles.ts](src/lib/profiles.ts), e não uma tabela: o conjunto de
+plugins é propriedade da release do cliente — a VPS não instala nenhum —, então
+uma tabela só poderia espelhar a constante e divergir dela. Um plugin aposentado
+numa release seguinte deixa de ser servido sem migração de dados.
+
+### Fronteira real
+
+A filtragem de skills é enforcement de verdade: o corpo vem do servidor, então
+uma skill fora do perfil não existe para aquele token. Já quais **plugins** o
+cliente carrega é uma fronteira de composição — a casca roda na máquina do
+usuário, que pode editar a própria composição. A VPS é a fonte da verdade do
+recorte; ela não defende a máquina contra o dono dela.
 
 ### Cadastro
 
@@ -117,6 +167,11 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
 | POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
+| GET    | `/api/profiles`   | Bearer | Os perfis do usuário e qual está ativo            |
+| POST   | `/api/profiles`   | Bearer | Cria um perfil para o dono do token               |
+| GET    | `/api/profiles/catalog` | Bearer | Plugins e skills que a criação oferece      |
+| POST   | `/api/profiles/active` | Bearer | Recebe `{profileId}` e troca o perfil ativo  |
+| GET    | `/api/plugins/profile` | Bearer | O recorte do perfil ativo, para a casca      |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
 | POST   | `/api/plugins/prototype/automation/<op>` | Bearer | Fila de automação do protótipo   |
 | GET    | `/api/plugins/prototype/shots/<id>` | Bearer | Um screenshot gravado             |

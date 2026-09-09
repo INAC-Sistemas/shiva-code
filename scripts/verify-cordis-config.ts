@@ -30,6 +30,43 @@ export interface PluginReference {
 }
 
 const root = resolve(import.meta.dirname, '..')
+
+/** The desktop shell's composition patch, where the shiva-code plugins are mounted. */
+const DESKTOP_PATCH_FILE = 'desktop/build/dsh-desktop.patch.yml'
+
+/**
+ * The environment variable carrying the active profile's plugin list.
+ *
+ * `desktop/src/main/runtime/harness-runtime.ts` writes it at spawn from
+ * `$DSH_HOME/profile/active.json`; every profile-gated row reads it.
+ */
+const PROFILE_PLUGIN_ENV = 'DSH_PROFILE_PLUGINS'
+
+/**
+ * Rows the desktop composition always loads, regardless of the active profile.
+ *
+ * Each is here for a reason a profile cannot override: `dsh-better-sidebar` is
+ * the chassis every other tab plugs into, `login` and `profiles` are the only
+ * way back to a picker, and the rest are theme and locale with no model-facing
+ * surface at all. A row absent from this list and from the gate below is not
+ * "probably fine" — it is an undeclared plane, which is how the skill-library
+ * leak survived unnoticed.
+ */
+const HOST_ALWAYS = new Set([
+  'ui-brand-official',
+  'dsh-desktop-client-ui',
+  'dsh-desktop-market-installer',
+  'dsh-market',
+  'dsh-desktop-hmr-fallback',
+  'dsh-desktop-preset-transfer',
+  'dsh-better-sidebar',
+  'dsh-i18n',
+  'dsh-clock',
+  'dsh-shiva-theme',
+  'dsh-user-menu',
+  'login',
+  'profiles',
+])
 // These example files are overlays consumed by the built dsh app, so their bare
 // specifiers resolve from apps/cli rather than the examples workspace.
 const appOverlayFiles = new Set([
@@ -76,6 +113,7 @@ if (import.meta.main) {
   errors.push(...validateAppResolution())
   errors.push(...validateSourcePlaneResolution())
   errors.push(...validatePresetPlaneSeparation())
+  errors.push(...validateProfilePlaneDeclared())
   errors.push(...validateClientHalvesDeclared())
 
   if (errors.length > 0) {
@@ -135,18 +173,28 @@ function validateClientHalvesDeclared(): string[] {
  */
 function validatePresetPlaneSeparation(): string[] {
   const problems: string[] = []
-  // The shipped Web surface is two bundle patch layers over an empty root.
-  const hostFile = 'packages/bundle/base/cordis.patch.yml'
-  const overlayFile = 'packages/bundle/web-app/cordis.patch.yml'
-  const hostRows = rowIds(hostFile)
-  const overlay = loadEntries(overlayFile)
+  // The shipped Web surface is two bundle patch layers over an empty root; the
+  // desktop patch is a third layer over the same root, and it is where the
+  // shiva-code plugins are composed. A row that came back to it after moving
+  // into the `profile` preset is exactly the leak this catches.
+  const hostFiles = [
+    'packages/bundle/base/cordis.patch.yml',
+    'packages/bundle/web-app/cordis.patch.yml',
+    DESKTOP_PATCH_FILE,
+  ]
   const disabled = new Set<string>()
-  for (const entry of overlay) {
-    if (!isRecord(entry)) continue
-    if (entry.disabled === true && typeof entry.id === 'string') disabled.add(entry.id)
+  const declared: string[] = []
+  for (const file of hostFiles) {
+    for (const entry of loadEntries(file)) {
+      if (!isRecord(entry)) continue
+      // `disabled: true` only; an `!!js` expression evaluates against the gate's
+      // own environment, which is not the deployment's, so a conditional row
+      // counts as present on the host plane.
+      if (entry.disabled === true && typeof entry.id === 'string') disabled.add(entry.id)
+    }
+    declared.push(...rowIds(file))
   }
-  // The overlay's own inserts are host-plane too; its disables take them back out.
-  const active = new Set([...hostRows, ...rowIds(overlayFile)].filter(id => !disabled.has(id)))
+  const active = new Set(declared.filter(id => !disabled.has(id)))
   for (const file of globSync('apps/cli/config/agent-presets/*/agent.cordis.yml', { cwd: root })) {
     for (const id of rowIds(file)) {
       if (!active.has(id)) continue
@@ -157,6 +205,78 @@ function validatePresetPlaneSeparation(): string[] {
     }
   }
   return problems
+}
+
+/**
+ * Every desktop row declares which plane it belongs to.
+ *
+ * A host-plane plugin serves routes and publishes services, so a profile can
+ * only exclude it by not loading it — which is decided at boot, from
+ * `$DSH_PROFILE_PLUGINS`. This check makes that declaration mandatory: a row is
+ * either in {@link HOST_ALWAYS} or it carries a `disabled` expression naming
+ * both the environment variable and its own plugin name.
+ *
+ * Without it, adding a plugin row to the desktop patch silently gives every
+ * agent whatever it registers, in every profile — which is precisely what
+ * `dsh-skill-library` and `dsh-vps-status` did before they moved to the
+ * `profile` preset.
+ * @returns one diagnostic per row whose plane is not declared.
+ */
+function validateProfilePlaneDeclared(): string[] {
+  return undeclaredDesktopRows(loadEntries(DESKTOP_PATCH_FILE)).map(row =>
+    `${DESKTOP_PATCH_FILE}: row "${row.id}" declares no plane — add it to HOST_ALWAYS in `
+    + 'scripts/verify-cordis-config.ts, or gate it with a `disabled` expression over '
+    + `${PROFILE_PLUGIN_ENV} naming '${row.name}'`,
+  )
+}
+
+/**
+ * The desktop rows whose plane is neither always-on nor profile-gated.
+ *
+ * Exported for the spec: this is the classification the gate rests on, and it
+ * is worth proving that a plain inserted row is rejected rather than assumed
+ * fine.
+ * @param entries - the parsed desktop patch operations.
+ * @returns the id and plugin name of each row that declares no plane.
+ */
+export function undeclaredDesktopRows(entries: unknown[]): { id: string; name: string }[] {
+  const undeclared: { id: string; name: string }[] = []
+  for (const entry of entries) {
+    for (const row of desktopRows(entry)) {
+      const id = row.id as string
+      const name = String(row.name)
+      if (HOST_ALWAYS.has(id)) continue
+      const guard = row.disabled
+      const expression = isJsExpr(guard) ? guard.__jsExpr : undefined
+      if (
+        expression === undefined
+        || !expression.includes(PROFILE_PLUGIN_ENV)
+        || !expression.includes(`'${name}'`)
+      ) {
+        undeclared.push({ id, name })
+      }
+    }
+  }
+  return undeclared
+}
+
+/**
+ * The rows one desktop patch operation declares.
+ *
+ * The patch mixes two shapes: a bare `{id, disabled}` or `{id, config}` that
+ * addresses an existing row, and an `insert` list that adds new ones. Only the
+ * second kind carries a `name`, and only those are rows this gate can classify.
+ * @param entry - one top-level patch operation.
+ * @returns the inserted rows.
+ */
+function desktopRows(entry: unknown): Record<string, unknown>[] {
+  if (!isRecord(entry)) return []
+  const inserted = entry.insert
+  if (!isUnknownArray(inserted)) return []
+  return inserted.filter(
+    (row): row is Record<string, unknown> =>
+      isRecord(row) && typeof row.id === 'string' && typeof row.name === 'string',
+  )
 }
 
 /** Every entry of one config file, or an empty list when it is not an entry array. */

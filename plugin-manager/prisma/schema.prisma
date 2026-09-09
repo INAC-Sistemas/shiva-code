@@ -103,8 +103,10 @@ model PrototypeConsoleEntry {
 /// Biblioteca compartilhada de skills, servida ao provider remoto do `dsh`.
 ///
 /// Não há coluna de dono, ao contrário dos modelos `Prototype*`: a biblioteca é
-/// uma só para toda a instalação, e todo usuário autenticado lê tudo. Quem é
-/// filtrado é a escrita, restrita a `ADMIN` pelas actions do painel.
+/// uma só para toda a instalação, e a escrita é restrita a `ADMIN` pelas actions
+/// do painel. Quem recorta a LEITURA é o perfil ativo de quem chama: a API serve
+/// a interseção entre as linhas publicadas e as selecionadas em `ProfileSkill`.
+/// Um perfil só estreita — nunca alcança uma linha despublicada.
 ///
 /// As colunas SÃO o frontmatter de um `SKILL.md` — `content` guarda só o
 /// Markdown que vem depois dele. Assim o cliente recebe campos já tipados e não
@@ -131,8 +133,61 @@ model LibrarySkill {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  profiles ProfileSkill[]
+
   @@index([published, name])
   @@map("library_skills")
+}
+
+/// Um perfil de trabalho de um usuário: o recorte de skills e de plugins que um
+/// agente enxerga enquanto roda sob ele.
+///
+/// O recorte é dado da VPS, não arquivo na máquina do cliente: a casca é código
+/// não confiável, e um recorte local seria o cliente escolhendo o próprio
+/// recorte. O token NÃO carrega o perfil — quem sabe qual está ativo é
+/// `User.activeProfileId`, resolvido a cada requisição.
+model Profile {
+  id          String  @id @default(uuid())
+  userId      String
+  user        User    @relation("ProfileOwner", fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// Nomes dos plugins que este perfil habilita na casca. Lista de strings e não
+  /// tabela: o conjunto de plugins é propriedade da RELEASE do cliente — a VPS
+  /// não instala nenhum —, então ele mora no código (`KNOWN_PLUGINS` em
+  /// `src/lib/profiles.ts`), como o `KNOWN_OPS` de `plugins/prototype`, e não em
+  /// linhas que poderiam divergir do que o cliente tem instalado.
+  plugins     String[]
+  /// Incrementa a cada escrita. É por ele que a casca detecta que o recorte
+  /// mudou sem comparar as listas inteiras.
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  skills    ProfileSkill[]
+  activeFor User[]         @relation("ActiveProfile")
+
+  @@unique([userId, name])
+  @@map("profiles")
+}
+
+/// Seleção de uma skill da biblioteca por um perfil.
+///
+/// Tabela explícita em vez do m:n implícito do Prisma: o implícito criaria
+/// `_LibrarySkillToProfile`, fora do snake_case que todo `@@map` deste schema
+/// segue, e sem lugar para crescer.
+model ProfileSkill {
+  profileId String
+  profile   Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     LibrarySkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@id([profileId, skillId])
+  /// O Postgres não indexa o lado referenciante de uma FK: sem este índice,
+  /// apagar uma `LibrarySkill` faz sequential scan nesta tabela.
+  @@index([skillId])
+  @@map("profile_skills")
 }
 
 model User {
@@ -143,6 +198,16 @@ model User {
   role      Role     @default(GUEST)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  profiles Profile[] @relation("ProfileOwner")
+  /// O perfil sob o qual as chamadas deste usuário são resolvidas. Fica aqui, e
+  /// não numa claim do token, para que trocar de perfil não exija emitir nem
+  /// revogar credencial — os tokens já distribuídos passam a resolver o perfil
+  /// novo na requisição seguinte. Consequência aceita: o perfil ativo é por
+  /// USUÁRIO, não por dispositivo. `SetNull` porque apagar o perfil ativo deve
+  /// deixar o usuário sem perfil (a casca reabre o seletor), não apagar a conta.
+  activeProfileId String?
+  activeProfile   Profile? @relation("ActiveProfile", fields: [activeProfileId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }

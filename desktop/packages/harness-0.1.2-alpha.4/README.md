@@ -73,3 +73,26 @@ git rm -r packages/harness-0.1.2-alpha.4
 ```
 
 注意 git 历史是永久的，删除只是从工作树移除，克隆体积不会回收。
+
+## `npm-shiva-plugins/` —— 本仓库自有插件
+
+与上面两个目录不同：`npm-dsh/` 和 `npm-vendor/` 来自上游 tag，而
+`npm-shiva-plugins/` 是把本仓库 `plugins/*` 打包出来的产物。
+
+**改完 `plugins/` 下任何插件后，必须重新打包**，否则 `file:` 依赖仍解析到旧内容：
+文件名没变时 npm 不会察觉，应用照常启动，任何地方都不会报错。曾因此排查了一轮
+“配置文件选择器不与 plugin manager 通信” —— 直到有人打开 tarball 才发现里面是旧代码。
+
+```bash
+cd desktop
+npm run pack:plugins        # 打包并把 package.json 指向新文件名
+npm install                 # 让 lockfile 记录新的 integrity
+npm run pack:plugins:check  # CI/提交前：报告是否有 tarball 落后于 plugins/
+```
+
+需要构建的插件（`dsh-login`、`dsh-profiles`、`dsh-skill-library`）的 `lib/` 已被
+gitignore，打包前先在各自目录跑 `npm run build`。
+
+两个插件**不**从本仓库打包，脚本里有常量说明：`dsh-flowglass` 用已发布的 0.4.4
+（本仓库副本的 `inject` 缺 `sessions`，会导致启动崩溃），`dsh-openviking` 用已发布的
+0.1.1（比本仓库副本新）。改动它们的本地副本不会进入打包后的应用。

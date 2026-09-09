@@ -1,3 +1,14 @@
+# The picker needs the plugin manager's three profile routes. `new URL` both
+# normalizes the base and throws at composition when $VPS_URL is unset, instead
+# of producing `undefined/api/profiles` and failing at the first sign-in.
+#
+# `dsh-login` must be mounted in the same profile: this plugin holds no
+# credential of its own and reads the session that plugin records.
 - insert:
     - id: profiles
       name: dsh-profiles
+      config:
+        profilesEndpoint: !!js "new URL('/api/profiles', process.env.VPS_URL).href"
+        activeEndpoint: !!js "new URL('/api/profiles/active', process.env.VPS_URL).href"
+        specEndpoint: !!js "new URL('/api/plugins/profile', process.env.VPS_URL).href"
+        catalogEndpoint: !!js "new URL('/api/profiles/catalog', process.env.VPS_URL).href"
