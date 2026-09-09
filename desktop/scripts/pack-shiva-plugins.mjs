@@ -33,15 +33,24 @@ const repoRoot = resolve(desktopRoot, '..')
 const manifestPath = join(desktopRoot, 'package.json')
 
 /**
- * Plugins the desktop takes from somewhere other than this repository.
+ * Plugins whose tarball is pinned, and must not be regenerated from `plugins/`.
  *
  * `dsh-flowglass` ships the published 0.4.4 because this checkout's copy has an
  * `inject` list missing `sessions` and crashes boot; `dsh-openviking` ships a
- * published 0.1.1 newer than the checkout. Packing either from `plugins/`
- * would quietly downgrade the app, so they stay pinned and their local edits do
- * not reach the packaged build.
+ * published 0.1.1 newer than the checkout.
+ *
+ * `dsh-better-sidebar` is pinned for the mirror-image reason: the checkout is
+ * AHEAD of the harness this app bundles. Its `lib/` imports `settingsNamespace`
+ * from `@deepseek-ai/dsh-settings`, which 0.1.2-alpha.4 does not export, so a
+ * repack produces a tarball that fails the whole plugin tree at boot —
+ * `SyntaxError: does not provide an export named 'settingsNamespace'`, which
+ * takes the app down before any window appears. It stays pinned until the
+ * bundled harness catches up.
+ *
+ * Packing any of them from `plugins/` would quietly break or downgrade the app,
+ * so their local edits do not reach the packaged build.
  */
-const PUBLISHED_ELSEWHERE = new Set(['dsh-flowglass', 'dsh-openviking'])
+const PUBLISHED_ELSEWHERE = new Set(['dsh-flowglass', 'dsh-openviking', 'dsh-better-sidebar'])
 
 /**
  * Plugins whose pack output cannot be compared against the stored tarball.
