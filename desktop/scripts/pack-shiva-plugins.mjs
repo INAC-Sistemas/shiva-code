@@ -39,18 +39,19 @@ const manifestPath = join(desktopRoot, 'package.json')
  * `inject` list missing `sessions` and crashes boot; `dsh-openviking` ships a
  * published 0.1.1 newer than the checkout.
  *
- * `dsh-better-sidebar` is pinned for the mirror-image reason: the checkout is
- * AHEAD of the harness this app bundles. Its `lib/` imports `settingsNamespace`
- * from `@deepseek-ai/dsh-settings`, which 0.1.2-alpha.4 does not export, so a
- * repack produces a tarball that fails the whole plugin tree at boot —
- * `SyntaxError: does not provide an export named 'settingsNamespace'`, which
- * takes the app down before any window appears. It stays pinned until the
- * bundled harness catches up.
+ * `dsh-better-sidebar` and `dsh-i18n` are pinned for the mirror-image reason:
+ * their checkouts are AHEAD of the harness this app bundles, and a repack
+ * produces a tarball the packaged app cannot run. `dsh-better-sidebar` imports
+ * `settingsNamespace` from `@deepseek-ai/dsh-settings`, which 0.1.2-alpha.4
+ * does not export, so the whole plugin tree fails before any window appears;
+ * `dsh-i18n` calls `ctx.locale.registerLocale`, which that harness's client
+ * locale service does not have, so its entry fails to apply in the renderer.
+ * Both stay pinned until the bundled harness catches up.
  *
  * Packing any of them from `plugins/` would quietly break or downgrade the app,
  * so their local edits do not reach the packaged build.
  */
-const PUBLISHED_ELSEWHERE = new Set(['dsh-flowglass', 'dsh-openviking', 'dsh-better-sidebar'])
+const PUBLISHED_ELSEWHERE = new Set(['dsh-flowglass', 'dsh-openviking', 'dsh-better-sidebar', 'dsh-i18n'])
 
 /**
  * Plugins whose pack output cannot be compared against the stored tarball.
