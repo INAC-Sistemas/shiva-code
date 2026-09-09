@@ -1,0 +1,41 @@
+{
+  "name": "dsh-paramiko",
+  "version": "0.1.0",
+  "description": "DSH SSH capability for external VPS servers: detects Python, installs paramiko into a dedicated venv with one click, manages saved connections, and gives the agents native ssh_run/ssh_transfer tools",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.12.0",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "lib"
+  ]
+}

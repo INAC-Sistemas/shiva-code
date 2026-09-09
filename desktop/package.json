@@ -297,7 +297,10 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "ws": "^8.21.3",
-    "dsh-assets": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-assets-0.1.0.tgz"
+    "dsh-assets": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-assets-0.1.0.tgz",
+    "dsh-paramiko": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-paramiko-0.1.0.tgz",
+    "dsh-web-search": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-web-search-0.1.0.tgz",
+    "9router-app": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/9router-app-0.5.69.tgz"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

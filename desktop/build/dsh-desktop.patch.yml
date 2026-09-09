@@ -104,6 +104,19 @@
       name: dsh-mds
     - id: assets
       name: dsh-assets
+    - id: 9router
+      name: 9router-app
+
+    # Keyless web search: registers a DuckDuckGo provider on the harness web
+    # seam, so the agents' native web_search works with no API key.
+    - id: web-search
+      name: dsh-web-search
+
+    # SSH to external VPS servers: one-click paramiko install into a dedicated
+    # venv plus the agents' ssh_run/ssh_transfer tools.
+    - id: paramiko
+      name: dsh-paramiko
+
     - id: profiles
       name: dsh-profiles
     - id: skill-manager
@@ -141,4 +154,5 @@
       name: dsh-openviking
       config:
         pythonCandidates: !!js "process.env.DSH_OPENVIKING_PYTHON ? [process.env.DSH_OPENVIKING_PYTHON, 'py -3.12', 'py -3.11', 'py -3.10', 'python'] : []"
+
 
