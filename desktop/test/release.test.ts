@@ -373,8 +373,8 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('runs-on: windows-2022')
     expect(workflow).toContain('npm run package:dev:win')
     expect(workflow).toContain('Smoke test packaged Windows Harness')
-    expect(workflow).toContain('$executable = $env:SMOKE_EXE')
-    expect(workflow).toContain("'dist-dev\\win-unpacked\\DSH Desktop Dev.exe'")
+    expect(workflow).toContain("node -p \"require('./package.json').build.productName\"")
+    expect(workflow).toContain("node -p \"require('./electron-builder.dev.cjs').productName\"")
     expect(workflow).toContain('if (-not [string]::IsNullOrEmpty($log))')
     expect(workflow).toContain("dsh web: (http://127\\.0\\.0\\.1:\\d+/\\?token=[^\\s]+)")
     expect(workflow).toContain('-SessionVariable harnessSession')
@@ -638,10 +638,16 @@ describe('prerelease parity workflow', () => {
     )
   })
 
-  it('parametrises the Windows smoke test executable', async () => {
+  it('derives the Windows smoke test executable from the build config', async () => {
     const yml = await load()
-    expect(yml).toContain('SMOKE_EXE')
+    expect(yml).toContain('SMOKE_DIR')
+    expect(yml).toContain('SMOKE_CONFIG')
     expect(yml).toContain('SMOKE_USERDATA')
+    // The executable is named after `productName`; pinning the name here as a
+    // literal is what let the branding rename ship a smoke test that looked
+    // for a file the build no longer produces.
+    expect(yml).not.toContain('DSH Desktop.exe')
+    expect(yml).toContain('Packaged executable not found at $executable')
   })
 })
 
