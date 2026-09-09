@@ -13,8 +13,13 @@
  * Run it after changing any plugin under `plugins/`, then `npm install` here so
  * the lockfile records the new integrity.
  *
- * Usage: node scripts/pack-shiva-plugins.mjs [--check]
- *   --check  report what would change and exit non-zero, packing nothing.
+ * Usage: node scripts/pack-shiva-plugins.mjs [--check | --check-integrity]
+ *   --check            report what would change and exit non-zero, packing nothing.
+ *   --check-integrity   only compare the lockfile against the tarballs on disk.
+ *
+ * Runs from anywhere: every path is derived from this file's own location, and
+ * each `npm pack` is given an explicit cwd. The pre-push hook calls it from the
+ * repository root.
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -158,10 +163,37 @@ function lockIntegrityDrift(root) {
   return drifted
 }
 
+/**
+ * Report the lockfile drift and leave, without packing anything.
+ *
+ * Split out of `--check` to be affordable in a pre-push hook: the full check
+ * packs all fourteen plugins to compare them against their sources, which takes
+ * half a minute and requires every plugin to have been built — on a fresh clone
+ * `lib/` does not exist, so it would refuse a push for a reason that has nothing
+ * to do with the commit. This half reads the tarballs already on disk, needs no
+ * build, and covers exactly the failure that reaches CI as EINTEGRITY.
+ * @returns nothing; sets the exit code when an entry drifted.
+ */
+function reportIntegrityOnly() {
+  const drifted = lockIntegrityDrift(desktopRoot)
+  if (drifted.length === 0) {
+    console.log('pack-shiva-plugins: every file: dependency matches its recorded integrity.')
+    return
+  }
+  console.error(`pack-shiva-plugins: lockfile integrity is stale for: ${drifted.join(', ')}`)
+  console.error('run `npm install` in desktop/ so the lockfile records the tarballs that are on disk')
+  process.exitCode = 1
+}
+
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const relativeDirectory = packDirectory(manifest)
 const absoluteDirectory = join(desktopRoot, relativeDirectory)
 const check = process.argv.includes('--check')
+
+if (process.argv.includes('--check-integrity')) {
+  reportIntegrityOnly()
+  process.exit(process.exitCode ?? 0)
+}
 
 /** The plugin names this app depends on that also exist in `plugins/`. */
 const candidates = Object.entries(manifest.dependencies ?? {})
@@ -259,14 +291,7 @@ if (check) {
     process.exitCode = 1
   }
 
-  const drifted = lockIntegrityDrift(desktopRoot)
-  if (drifted.length === 0) {
-    console.log('pack-shiva-plugins: every file: dependency matches its recorded integrity.')
-  } else {
-    console.error(`pack-shiva-plugins: lockfile integrity is stale for: ${drifted.join(', ')}`)
-    console.error('run `npm install` here so the lockfile records the tarballs that are on disk')
-    process.exitCode = 1
-  }
+  reportIntegrityOnly()
 } else {
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
   console.log(

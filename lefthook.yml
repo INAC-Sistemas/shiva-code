@@ -53,3 +53,25 @@ pre-push:
   jobs:
     - name: typecheck
       run: pnpm run typecheck
+
+    # The desktop's plugin tarballs are `file:` dependencies, and `npm pack`
+    # embeds an mtime, so repacking rewrites all fourteen even when nothing
+    # changed. An `npm install` that covered only some of them leaves the rest
+    # with fresh bytes and a stale hash — which `npm install` reconciles in
+    # silence and `npm ci` refuses, first showing up as EINTEGRITY on the
+    # release runner.
+    #
+    # Only the integrity half runs here. The full `pack:plugins:check` also
+    # packs every plugin to compare it against its source, which costs half a
+    # minute and requires each `lib/` to be built — gitignored, so a fresh clone
+    # would have a push refused for a reason unrelated to the commit.
+    #
+    # The glob is repository-relative, which is why there is no `root:` — with
+    # one, lefthook would filter and pass paths relative to it and `desktop/…`
+    # would stop matching. A push touching neither the lockfile nor a tarball
+    # cannot drift, and skips the job.
+    - name: desktop lockfile integrity
+      glob:
+        - 'desktop/package-lock.json'
+        - 'desktop/packages/harness-*/npm-shiva-plugins/*.tgz'
+      run: node desktop/scripts/pack-shiva-plugins.mjs --check-integrity
