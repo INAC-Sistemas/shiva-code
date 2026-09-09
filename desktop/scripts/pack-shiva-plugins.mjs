@@ -92,6 +92,72 @@ function contentDigest(tarball) {
   }
 }
 
+/**
+ * The build outputs a plugin publishes that its fresh pack did not contain.
+ *
+ * `npm pack` honours the package's `files` list and says nothing when an entry
+ * is absent, so a plugin whose `lib/` was cleaned packs into a tarball with no
+ * code in it — and the app loads a plugin that registers nothing. The tarball
+ * being judged "stale" against that empty pack is the same accident read from
+ * the other side, which is why this is reported apart from staleness: the
+ * answer is `npm run build`, not another pack.
+ *
+ * Only literal paths are checked. A glob in `files` is a set, and an empty set
+ * is a legitimate state for one.
+ *
+ * A directory entry counts as carried when anything under it was packed: `tar`
+ * lists the files, not the directories holding them, so an exact match would
+ * report every `src` and `lib` in the repository as missing.
+ * @param source - the plugin directory.
+ * @param packed - paths inside the freshly produced tarball, without `package/`.
+ * @returns the declared files that the pack did not carry.
+ */
+function missingBuildOutputs(source, packed) {
+  const declared = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')).files
+  if (!Array.isArray(declared)) return []
+
+  const carried = new Set(packed)
+  const covers = entry => carried.has(entry) || packed.some(path => path.startsWith(`${entry}/`))
+  return declared.filter(entry => typeof entry === 'string' && !entry.includes('*') && !covers(entry))
+}
+
+/**
+ * The `file:` dependencies whose recorded integrity no longer matches the file.
+ *
+ * This is the half the tarball comparison above cannot see. `npm pack` embeds
+ * an mtime in the gzip stream, so packing unchanged sources still produces new
+ * bytes; a pack run followed by an `npm install` that covered only some of the
+ * plugins leaves the rest with fresh bytes on disk and a stale hash in the
+ * lockfile. `npm install` reconciles that silently, so it surfaces first as
+ * `npm ci` refusing to install — on a release runner, with EINTEGRITY.
+ *
+ * Every `file:` entry is checked, not only the packed plugins: the drift is a
+ * property of the lockfile, and a vendored harness tarball would fail the same
+ * way for the same reason.
+ * @param root - the desktop package directory holding the lockfile.
+ * @returns one diagnostic per entry whose bytes and recorded hash disagree.
+ */
+function lockIntegrityDrift(root) {
+  const lockPath = join(root, 'package-lock.json')
+  if (!existsSync(lockPath)) return []
+
+  const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+  const drifted = []
+  for (const [entry, value] of Object.entries(lock.packages ?? {})) {
+    const resolved = value?.resolved
+    if (typeof resolved !== 'string' || !resolved.startsWith('file:')) continue
+
+    const tarball = join(root, resolved.slice('file:'.length))
+    if (!existsSync(tarball)) {
+      drifted.push(`${entry}: ${relative(root, tarball)} is missing`)
+      continue
+    }
+    const actual = `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`
+    if (actual !== value.integrity) drifted.push(entry)
+  }
+  return drifted
+}
+
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const relativeDirectory = packDirectory(manifest)
 const absoluteDirectory = join(desktopRoot, relativeDirectory)
@@ -107,6 +173,7 @@ const candidates = Object.entries(manifest.dependencies ?? {})
 
 const changed = []
 const unjudged = []
+const unbuilt = []
 
 for (const name of candidates) {
   const source = join(repoRoot, 'plugins', name, 'package.json')
@@ -124,6 +191,21 @@ for (const name of candidates) {
       encoding: 'utf8',
     }).trim().split('\n').pop()
     const produced = join(staging, packed)
+
+    // Judged before anything else: an unbuilt plugin packs into a tarball with
+    // no code, which looks exactly like a stale one and would be "fixed" by
+    // writing that empty tarball over the good one.
+    const missing = missingBuildOutputs(
+      join(repoRoot, 'plugins', name),
+      execFileSync('tar', ['-tzf', produced], { encoding: 'utf8' })
+        .split('\n')
+        .filter(line => line.startsWith('package/'))
+        .map(line => line.slice('package/'.length)),
+    )
+    if (missing.length > 0) {
+      unbuilt.push(`${name} (${missing.join(', ')})`)
+      continue
+    }
 
     const existing = join(absoluteDirectory, filename)
 
@@ -157,6 +239,14 @@ for (const name of candidates) {
   }
 }
 
+// Reported in both modes: packing over a good tarball with an empty one is the
+// worse outcome, and it is the one a plain run would otherwise reach.
+if (unbuilt.length > 0) {
+  console.error(`pack-shiva-plugins: not built, nothing packed for: ${unbuilt.join(', ')}`)
+  console.error('run `npm run build` in each of those plugin directories first')
+  process.exitCode = 1
+}
+
 if (check) {
   for (const name of unjudged) {
     console.log(`pack-shiva-plugins: ${name} rebuilds non-deterministically; pack it to be sure.`)
@@ -166,6 +256,15 @@ if (check) {
   } else {
     console.error(`pack-shiva-plugins: stale tarball(s): ${changed.join(', ')}`)
     console.error('run `node scripts/pack-shiva-plugins.mjs` and then `npm install`')
+    process.exitCode = 1
+  }
+
+  const drifted = lockIntegrityDrift(desktopRoot)
+  if (drifted.length === 0) {
+    console.log('pack-shiva-plugins: every file: dependency matches its recorded integrity.')
+  } else {
+    console.error(`pack-shiva-plugins: lockfile integrity is stale for: ${drifted.join(', ')}`)
+    console.error('run `npm install` here so the lockfile records the tarballs that are on disk')
     process.exitCode = 1
   }
 } else {
