@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
+import { normalizeHtmlSource, normalizedFragment } from './html-source'
 import type { RuntimeSnapshot } from '../src/shared/contracts'
 import {
   buildPluginRecoveryViewModel,

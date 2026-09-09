@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
+import { normalizeHtmlSource, normalizedFragment } from './html-source'
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
 

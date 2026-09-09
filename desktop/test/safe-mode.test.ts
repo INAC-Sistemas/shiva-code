@@ -1,7 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { normalizeHtmlSource, normalizedFragment } from './html-source.ts'
+import { normalizeHtmlSource, normalizedFragment } from './html-source'
 import { buildSafeModeViewModel, shouldStartInSafeMode } from '../src/main/safe-mode'
 import {
   ensureSafeModeProfile,
