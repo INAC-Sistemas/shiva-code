@@ -24,8 +24,8 @@ const ALL_KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'p
 
 /**
  * Workspace areas that never reach a user: repository tooling and gates (the
- * root manifest), test infrastructure, the documentation site, the runnable
- * demo leaves, and the native launcher's build workspace. A runtime
+ * root manifest), test infrastructure, the runnable demo leaves, and the
+ * native launcher's build workspace. A runtime
  * declaration by anything outside these areas is a disclosure-relevant
  * runtime dependency because any plugin package can be mounted from a user's
  * `cordis.yml`.
@@ -352,8 +352,8 @@ function normalizeRepo(raw: string | undefined): string | undefined {
  * External npm dependencies, tiered by which workspace area declares them at
  * runtime: a package is runtime when any manifest outside `DEV_ONLY_AREAS`
  * names it in `dependencies`/`optionalDependencies`. A package declared only
- * by tooling, test infrastructure, the website, or the demo leaves — whatever
- * the declaring section is called — is development-only.
+ * by tooling, test infrastructure, or the demo leaves — whatever the
+ * declaring section is called — is development-only.
  */
 function collectNpmDeps(): ExternalDep[] {
   const { manifests, names } = loadWorkspaceManifests()
@@ -719,7 +719,7 @@ ${renderClaudeDistribution(claudeDistribution)}
 
 ## Development-only npm dependencies
 
-External packages **directly declared** only by repository tooling, test infrastructure, the documentation site, the demo leaves, or the native launcher's build workspace. No shipped surface names them itself. A package here may still be pulled in transitively by a runtime dependency — \`pnpm-lock.yaml\` is the authority on the full closure — so this tier records who declares a package, not what a build ultimately bundles.
+External packages **directly declared** only by repository tooling, test infrastructure, the demo leaves, or the native launcher's build workspace. No shipped surface names them itself. A package here may still be pulled in transitively by a runtime dependency — \`pnpm-lock.yaml\` is the authority on the full closure — so this tier records who declares a package, not what a build ultimately bundles.
 
 ${renderNpmTable(devDeps)}
 ${renderNonPermissiveNote(nonPermissiveDev)}

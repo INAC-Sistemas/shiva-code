@@ -301,7 +301,6 @@ describe('translation scope discovery', () => {
     'packages/example/CONTRIBUTING.md',
     'packages/example/BRAND_GUIDELINES.md',
     'examples/tutorial.md',
-    'website/reference.md',
     'packages/example/README.txt',
     'vendor/example/README.md',
     'packages/example/node_modules/dependency/README.md',

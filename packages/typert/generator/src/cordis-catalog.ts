@@ -937,10 +937,10 @@ function typeLinks(signature: string, onPage: string, linkedTypePages: Readonly<
 /**
  * GitHub's heading-slug algorithm (lowercase; drop everything but letters,
  * numbers, spaces, hyphens; spaces become hyphens). Region headings carry
- * backticks and em-dashes, which VitePress slugifies differently, so each
+ * backticks and em-dashes, which other renderers slugify differently, so each
  * generated heading is preceded by an explicit `<a id>` carrying this slug —
- * the historical flat-catalog anchor — making `#ctx<key>--<class>` fragments
- * resolve identically on GitHub and the published site.
+ * the historical flat-catalog anchor — keeping `#ctx<key>--<class>` fragments
+ * resolvable however the heading text itself is slugified.
  */
 function githubSlug(heading: string): string {
   return heading.toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').replaceAll(' ', '-')

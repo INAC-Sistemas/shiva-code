@@ -310,8 +310,8 @@ jobs:
       targets: node24-linux-x64
       ci: true
 
-  # The required pull-request Windows signal: the two blocking win32 surfaces
-  # (workspace build, production site) execute with real, checksum-verified
+  # The required pull-request Windows signal: the blocking win32 surface
+  # (the workspace build) executes with real, checksum-verified
   # Windows Node under Wine on standard hosted Linux. The independent
   # windows-native job below keeps the complete native-kernel inventory —
   # including the observational portability gates this lane does not run —
