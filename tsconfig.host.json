@@ -36,7 +36,6 @@
     "apps/web/tests/remote-welcome.e2e.ts",
     "apps/web/tests/workspace-management.e2e.ts",
     "apps/web/tests/replay-round-trip.e2e.ts",
-    "apps/web/tests/hmr-live.e2e.ts",
     "apps/web/tests/seeded-history.e2e.ts",
     "apps/web/tests/cold-blank-session.e2e.ts",
     "apps/web/tests/stats-paged-history.e2e.ts",
@@ -94,9 +93,7 @@
     "examples/*/start.ts",
     "examples/*/tests/**/*.ts",
     "packages/*/*/tests/**/*.ts",
-    "scripts/**/*.ts",
-    "website/**/*.ts",
-    "website/.vitepress/**/*.ts"
+    "scripts/**/*.ts"
   ],
   // Under packages/client a test file names the face it covers: `*.client.*`
   // belongs to the Client aggregate, `*.host.spec.ts` to this one. The two

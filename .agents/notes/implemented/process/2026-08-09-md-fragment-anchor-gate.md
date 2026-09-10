@@ -25,7 +25,7 @@ The 15 broken fragments are fixed in the same change: stale slugs retargeted to 
 - **Keep the manual-grep rule.** It demonstrably did not hold: the 15 fragments decayed under a gate-driven maintenance culture, because heading rewrites happen in PRs that never look at inbound links. A mechanical invariant belongs in an executed gate.
 - **Point zh links at Chinese-slug anchors.** GitHub slugs CJK headings fine, but the corpus convention is already explicit `<a id>` + English fragments (glossary, primer), which also survives renderers that strip non-ASCII; adopting a second convention would split the corpus.
 - **Share `githubSlug` with the typert generator.** A one-function import would couple a doc gate to a package build, and the two rules genuinely differ (the generator strips underscores; its anchors are explicit `<a id>`s the gate reads directly), so divergence is by design, not drift.
-- **Validate VitePress slugs as well.** The published site's dead-link check already runs in `website:build`; generated regions carry explicit anchors precisely so the two renderers agree, and hand headings that diverge would fail there.
+- **Validate another renderer's slugs as well.** Generated regions carry explicit anchors precisely so any two renderers agree; the repository publishes no second rendering, so GitHub slugs are the only contract to enforce.
 
 ## Consequences
 

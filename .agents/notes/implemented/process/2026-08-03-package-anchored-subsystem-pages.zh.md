@@ -16,7 +16,7 @@ Status: implemented
 
 每个 `packages/<group>/README.md` 配对都是统一形状的精简入口：一段先说明「为什么」的介绍、一张包表格（包 / 角色 / ctx 键）、一个指向对应子系统页面的收尾链接。如果承载关键信息的正文超出这一结构所能容纳的范围，就将其迁移到对应的子系统页面，而非删除。
 
-[子系统 README](../../../../docs/subsystems/README.zh.md) 在中英文两侧索引目录中的每一页；`scripts/project-doc-site.spec.ts` 强制每个页面对应一个表格行，因此后续 PR 新增（或合并吸收）的页面无法悄悄缺席索引。
+[子系统 README](../../../../docs/subsystems/README.zh.md) 在中英文两侧索引目录中的每一页，因此后续 PR 新增（或合并吸收）的页面随之进入索引。
 
 ## 考虑过的替代方案
 

@@ -16,7 +16,7 @@ Every type a generated signature references must resolve somewhere in the folder
 
 Every `packages/<group>/README.md` pair is a thin entry point in one shape: a why-first intro paragraph, a package table (Package / Role / ctx key), and a closing pointer to the owning subsystems page. Load-bearing prose that outgrows that shape relocates to the owning subsystems page rather than being deleted.
 
-The [subsystems README](../../../../docs/subsystems/README.md) indexes every page in the folder on both language sides; `scripts/project-doc-site.spec.ts` enforces one table row per page, so a page added by a later PR (or absorbed in a merge) cannot silently miss the index.
+The [subsystems README](../../../../docs/subsystems/README.md) indexes every page in the folder on both language sides, so a page added by a later PR (or absorbed in a merge) is indexed with it.
 
 ## Alternatives considered
 

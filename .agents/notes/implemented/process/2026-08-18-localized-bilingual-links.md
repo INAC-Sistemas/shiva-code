@@ -6,7 +6,7 @@ English | [中文](2026-08-18-localized-bilingual-links.zh.md)
 
 ## Problem
 
-GitHub resolves repository Markdown links directly, without the documentation website's locale projector. Requiring both sides of a bilingual pair to retain the same raw `.md` destination therefore sends readers from Chinese source files to English pages even when a reviewed `.zh.md` sibling exists. The website masks this error by routing ordinary links through the current locale, so the repository source and the published site previously produced different navigation results.
+GitHub resolves repository Markdown links directly, without the documentation website's locale projector. Requiring both sides of a bilingual pair to retain the same raw `.md` destination therefore sends readers from Chinese source files to English pages even when a reviewed `.zh.md` sibling exists. The documentation site then in use masked this error by routing ordinary links through the current locale, so the repository source and the published site produced different navigation results.
 
 ## Decision
 
@@ -22,17 +22,17 @@ Existing active bilingual sources use the locale-correct target. A Chinese targe
 
 ## Verification
 
-Pairing tests cover English and Chinese locale selection, out-of-scope targets with siblings, in-scope targets missing a counterpart, switcher exclusion, exact query/fragment retention, non-inference of directory targets, definitions, rewrites, and diagnostics. Documentation-site tests also pin the audited basic, framework, and practice entry links to explicit index pages in both locales. Merge-driver, translation-brief, and Cordis generator tests cover their respective consumers. Corpus checks require zero wrong-locale links, resolvable fragments, fresh generated regions, current pair records, and a successful documentation-site build.
+Pairing tests cover English and Chinese locale selection, out-of-scope targets with siblings, in-scope targets missing a counterpart, switcher exclusion, exact query/fragment retention, non-inference of directory targets, definitions, rewrites, and diagnostics. Merge-driver, translation-brief, and Cordis generator tests cover their respective consumers. Corpus checks require zero wrong-locale links, resolvable fragments, fresh generated regions, and current pair records.
 
 ## Alternatives considered
 
-**Keep `.md` destinations on both sides.** This preserves raw target equality but makes GitHub navigation leave the Chinese corpus. Website rewriting cannot repair repository rendering.
+**Keep `.md` destinations on both sides.** This preserves raw target equality but makes GitHub navigation leave the Chinese corpus. Publication-time rewriting cannot repair repository rendering.
 
 **Use translated heading fragments.** Locale-specific fragments require each link producer to know a translated heading and create a second mapping whose lifecycle can drift. One shared suffix plus an explicit target alias keeps the stable identifier with the target document.
 
 **Maintain a locale-link manifest.** Pairing discovery, the exclusions-only manifest, and the sibling naming convention already determine whether a target belongs to the corpus and which paths form its pair. A second registry would duplicate identity and require updates for every move or new pair.
 
-**Rewrite links only during publication.** The website already does this, but GitHub and other repository renderers consume the source files directly. Correct source paths are the user-visible behavior.
+**Rewrite links only during publication.** A publishing projector could do this, but GitHub and other repository renderers consume the source files directly. Correct source paths are the user-visible behavior.
 
 ## Consequences
 

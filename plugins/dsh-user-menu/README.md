@@ -99,7 +99,7 @@ pnpm --filter dsh-user-menu test     # display name and initials
 pnpm --filter dsh-user-menu watch
 ```
 
-`pnpm run dev:web` does **not** watch this plugin — it scans `packages/<group>/<name>` for `dsh.client` declarations, and `plugins/` is outside that. Rebuild manually; the host stat-polls `lib/client.js` and broadcasts the reload itself.
+No repository watcher rebuilds this plugin. Rebuild manually; the host stat-polls `lib/client.js` and broadcasts the reload itself.
 
 ## Known Limitations and Deferred Work
 

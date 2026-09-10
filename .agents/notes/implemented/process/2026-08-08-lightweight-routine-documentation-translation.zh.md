@@ -12,7 +12,7 @@ Status: implemented
 
 - **日常翻译一次完成，只处理一遍。** 当前 agent（智能体）加载 [terminology.md](../../../../docs/i18n/terminology.md)，直接翻译发生改动的内容；如果术语的实际首现位置跨过了编辑边界，则移动相应括注，否则保留改动之外已经评审的对侧文件行文；最后重新记录配对。它不会调用翻译 skill、生成简报、启动单独的翻译评审轮次，也不会把翻译委派给 subagent。
 - **扩展工作流仅限手动调用。** [dsh-translate-docs](../../../skills/dsh-translate-docs/SKILL.md) 保留简报、行文翻译委派、整篇文档和按范围核验路径。[Claude Code skill 契约](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill)读取 `SKILL.md` 中的 `disable-model-invocation: true` 和 `user-invocable: true`；Codex 读取 `agents/openai.yaml` 中的 `policy.allow_implicit_invocation: false`。仓库的 `.claude/skills` 符号链接把同一个 skill 目录映射给 Claude Code，因此两个产品共享同一份提交到仓库的工作流，同时分别执行各自的调用元数据契约。`doc-sync` 中的 skill 调用元数据门禁会让这两份独立策略保持一致。
-- **自动工作流不会串联调用这项仅限手动调用的 skill。** 轻量默认行为由根级指令和文档指令定义。文档、网站同步、行文和代码评审 skill 会链接这些指令或 i18n 契约，而不会因为推断到双语改动就加载 `dsh-translate-docs`。
+- **自动工作流不会串联调用这项仅限手动调用的 skill。** 轻量默认行为由根级指令和文档指令定义。文档、行文和代码评审 skill 会链接这些指令或 i18n 契约，而不会因为推断到双语改动就加载 `dsh-translate-docs`。
 - **配对契约与评审契约保持不变。** 两种语言文件仍会一并更新；未触及的对侧文件措辞保持稳定；术语约束仍然有效；只有当前 agent 确认配对后，才会重写一致性记录；`doc-sync`（文档同步门禁）继续执行全语料机械检查。语义层面的翻译质量仍由人工评审负责。
 
 ## 曾考虑的替代方案

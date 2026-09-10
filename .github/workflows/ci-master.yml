@@ -240,27 +240,27 @@ jobs:
           - platform: windows
             cores: '4'
             runner: dsh-windows-2025-4core
-            workload: production-site
+            workload: build
           - platform: windows
             cores: '8'
             runner: dsh-windows-2025-8core
-            workload: production-site
+            workload: build
           - platform: windows
             cores: '16'
             runner: dsh-windows-2025-16core
-            workload: production-site
+            workload: build
           - platform: windows
             cores: '32'
             runner: dsh-windows-2025-32core
-            workload: production-site
+            workload: build
           - platform: windows
             cores: '64'
             runner: dsh-windows-2025-64core
-            workload: production-site
+            workload: build
           - platform: windows
             cores: '96'
             runner: dsh-windows-2025-96core
-            workload: production-site
+            workload: build
     steps:
       - uses: actions/checkout@v6
 
@@ -288,9 +288,9 @@ jobs:
         if: matrix.platform == 'linux'
         run: pnpm run typecheck
 
-      - name: Run critical Windows production-site lane
+      - name: Run critical Windows build lane
         if: matrix.platform == 'windows'
-        run: pnpm run docs:build
+        run: pnpm run build
 
   # Manual comparison of the intended low-fanout topology. Linux runs the
   # complete unsharded primary aggregate with bounded in-runner parallelism;
