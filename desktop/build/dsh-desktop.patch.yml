@@ -117,6 +117,17 @@
     - id: paramiko
       name: dsh-paramiko
 
+    # CLI provider connections (install the CLI, log in, manage this
+    # workspace's link): GitHub, Supabase, Railway and Vercel tabs.
+    - id: github
+      name: dsh-github
+    - id: supabase
+      name: dsh-supabase
+    - id: railway
+      name: dsh-railway
+    - id: vercel
+      name: dsh-vercel
+
     - id: profiles
       name: dsh-profiles
     - id: skill-manager
