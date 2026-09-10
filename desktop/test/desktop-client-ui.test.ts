@@ -11,7 +11,7 @@ interface Registration {
 }
 
 describe('DSH Desktop client slot occupants', () => {
-  it('registers one occupant per brand seat and keeps the official name mark-free', async () => {
+  it('registers one occupant per brand seat and brands them with the app icon and product name', async () => {
     const source = await readFile(
       path.join(projectRoot, 'packages', 'dsh-desktop-client-ui', 'client.js'),
       'utf8'
@@ -90,19 +90,45 @@ describe('DSH Desktop client slot occupants', () => {
       'sidebar.brand.name',
       'conversation.hero.brand.mark'
     ])
+    // One stylesheet, and only to widen the icon in the expanded head: both
+    // call sites ask for the same size, so placement cannot be told apart in
+    // the component. The name needs no rule — the sidebar's own `.brandName`
+    // carries the wordmark typography.
     expect(appended).toHaveLength(1)
+    expect(appended[0]?.textContent).toContain('.dshDesktopBrandIcon{width:88px;height:88px}')
+    // The stock rules that clip an icon this size are released, not re-pinned:
+    // the head row's height and overflow, its items' overflow, and the
+    // mark-and-name box pinned to the name's 24px line.
+    expect(appended[0]?.textContent).toContain('[class*="logoRow"]{height:auto;min-height:104px')
+    expect(appended[0]?.textContent).toContain('[class*="logoRow"]>*{overflow:visible}')
+    expect(appended[0]?.textContent).toContain('[class*="brandIdentity"]{height:auto}')
+    // Anchored on the sidebar patch's attributes: matching a CSS module class
+    // by substring only ties with the module's own rule, and a tie is settled
+    // by stylesheet order. `wide` also keeps the rail's icon at its own size.
+    for (const rule of appended[0]?.textContent?.split('}').slice(0, -1) ?? []) {
+      expect(rule).toContain('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')
+    }
 
+    // Plain text, not the stock wordmark: that primitive draws the "deepseek"
+    // lettering and the HARNESS badge as vector paths in one svg, so neither
+    // can be dropped without replacing the component.
     const sidebarName = registrations.find(
       ({ config }) => config.name === 'sidebar.brand.name'
     )!.component({}) as { type: unknown; props: Record<string, unknown> }
-    expect(sidebarName.type).toBe(BrandWordmark)
-    expect(sidebarName.props.includeMark).toBe(false)
+    expect(sidebarName.type).toBe('span')
+    expect(sidebarName.props.children).toContain('Shiva Code')
+    expect(sidebarName.type).not.toBe(BrandWordmark)
 
+    // The app icon, square, carrying the class the stylesheet widens and the
+    // asked-for size the collapsed rail keeps.
     const sidebarMark = registrations.find(
       ({ config }) => config.name === 'sidebar.brand.mark'
     )!.component({ size: 24 }) as { type: unknown; props: Record<string, unknown> }
-    expect(sidebarMark.type).toBe('svg')
-    expect(sidebarMark.props.height).toBe(17)
+    expect(sidebarMark.type).toBe('img')
+    expect(sidebarMark.props.src).toBe('/dsh-desktop-logo.png')
+    expect(sidebarMark.props.className).toBe('dshDesktopBrandIcon')
+    expect(sidebarMark.props.width).toBe(24)
+    expect(sidebarMark.props.height).toBe(24)
 
     const heroMark = registrations.find(
       ({ config }) => config.name === 'conversation.hero.brand.mark'

@@ -1,17 +1,22 @@
 # dsh-user-menu
 
-The signed-in user's badge in the app's top-right corner: two letters in a circle, and a menu whose one action signs out.
+The signed-in user's badge in the sidebar foot, under Settings: two letters in a circle, and a menu whose one action signs out.
 
 ```
-┌────────────────────────────────────────────────┐
-│  ShivaCode                    (AD)  ▣ ▣  │
-│                              ┌──────────────┐  │
-│                              │ admin        │  │
-│                              │ Conta        │  │
-│                              ├──────────────┤  │
-│                              │ Sair         │  │
-│                              └──────────────┘  │
-└────────────────────────────────────────────────┘
+┌────────────────┬───────────────────────────────┐
+│  ShivaCode     │                               │
+│                │                               │
+│  …             │                               │
+│                │                               │
+│  ⚙  Settings   │                               │
+│  (AD) admin    │                               │
+│  ┌───────────┐ │                               │
+│  │ admin     │ │                               │
+│  │ Conta     │ │                               │
+│  ├───────────┤ │                               │
+│  │ Sair      │ │                               │
+│  └───────────┘ │                               │
+└────────────────┴───────────────────────────────┘
 ```
 
 **Browser-only.** The host half registers nothing; it exists because a profile mounts plugins by package name and the web shell serves `dsh.client` bundles only for enabled loader entries. The sign-out call goes through dsh-login's own route, which already owns the relationship with the login service.
@@ -33,23 +38,15 @@ The `user` value is whatever the login service returned minus the token, so it i
 
 ## Where it sits
 
-The frame-wide overlay layer (`shell.overlay`), pinned to the app's **top-right**, left of the shell's layout toggles.
+`sidebar.footer.below`, the last row of the sidebar foot, under Settings — the app's **bottom-left**.
 
-The sidebar foot is where a user badge belongs, and it is not available. Measured in the running app:
-
-| element                     | x   | width                     | right |
-| --------------------------- | --- | ------------------------- | ----- |
-| sidebar                     | 0   | 280                       | 280   |
-| `.footerActions` (the seat) | 12  | 256                       | 268   |
-| `dsh-kanban`'s button       | 8   | **264**, `flex: 0 0 auto` | 272   |
-
-`sidebar.footer.action` is a flex ROW, and Kanban's button is hardcoded to 264px and refuses to shrink — 8px wider than the row before anything else asks for space. A second occupant starts at x=268 and is clipped by the sidebar's 280px edge whatever width it declares; no CSS on the newcomer can reclaim space from a `flex: 0 0 auto` sibling.
+That seat is a stacking list, which is what this badge needs and what `sidebar.footer.action` cannot give: `.action` is a single flex ROW shared by every occupant, so an entry declaring a fixed width pushes its neighbours past the sidebar's edge, where they are clipped whatever width they declare. `sidebar.footer.below` is a column, so this row claims the full sidebar width beside its neighbours rather than competing with them.
 
 The other seats rule themselves out: `sidebar.settings` is SINGLE and held by the settings shell; `settings.action` renders inside the settings panel, behind a click; and every remaining slot in the app is `scope: 'session'`, so a badge there would vanish on the home screen — wrong for an identity control.
 
-That leaves `shell.overlay`: a list, root-scoped, always mounted, with pointer events granted per entry. It is pinned to the viewport rather than to the sidebar on purpose — the sidebar is `position: static` and publishes no width variable, so nothing anchors to it that survives its collapse. The anchor claims exactly the button's 28px, because the layer spans the whole frame and a larger anchor would swallow clicks meant for the app underneath.
+`slots.inject` waits for the seat's declaration and `inject: ['slots', 'loginSession']` waits for dsh-login, so unloading either plugin removes the badge with it. While nobody is signed in the entry renders `null`, so the badge appears on sign-in and disappears on sign-out; dsh-login's own gate covers the frame until then.
 
-`slots.inject` waits for the seat's declaration and `inject: ['slots', 'loginSession']` waits for dsh-login, so unloading either plugin removes the badge with it. While nobody is signed in the entry renders `null`, and dsh-login's gate (overlay order 10000, far above this entry's 100) covers the frame anyway.
+**The seat must exist in the harness the profile runs.** `@deepseek-ai/dsh-client-ui-sidebar` declares and renders `sidebar.footer.below` from the repository source; a harness build predating it declares only `sidebar.footer.action`, and against one of those `slots.inject` never fires and the badge silently never mounts — no error, no badge. The Electron app pins such a build, so `desktop/patches/@deepseek-ai+dsh-client-ui-sidebar+0.1.2-alpha.4.patch` adds the declaration, the foot row, and its column CSS to that snapshot.
 
 ## The components
 

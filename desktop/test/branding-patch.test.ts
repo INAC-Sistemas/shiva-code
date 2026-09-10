@@ -45,9 +45,16 @@ describe('DSH Desktop sidebar branding', () => {
     expect(client).toContain("ctx.slots.inject('sidebar.brand.mark'")
     expect(client).toContain("ctx.slots.inject('sidebar.brand.name'")
     expect(client).toContain("ctx.slots.inject('conversation.hero.brand.mark'")
-    expect(client).toContain("React.createElement(BrandWordmark, { includeMark: false })")
-    expect(client).toContain('/dsh-desktop-logo-light.png')
-    expect(client).toContain('/dsh-desktop-logo-dark.png')
+    // The stock wordmark draws the "deepseek" lettering and the HARNESS badge
+    // as vector paths in one svg, so the desktop replaces the component rather
+    // than configuring it, and the mark is the app icon the installer already
+    // stages from build/icon.png.
+    expect(client).toContain("const BRAND_NAME = 'Shiva Code'")
+    expect(client).toContain("React.createElement('span', null, BRAND_NAME)")
+    expect(client).toContain("const BRAND_LOGO_URL = '/dsh-desktop-logo.png'")
+    expect(client).not.toContain('React.createElement(BrandWordmark')
+    expect(client).not.toContain('/dsh-desktop-logo-light.png')
+    expect(client).not.toContain('/dsh-desktop-logo-dark.png')
     expect(client).not.toContain('translateX')
     const normalizedComposition = composition.replaceAll('\r\n', '\n')
     expect(normalizedComposition).toMatch(/- id: ui-brand-official\n  disabled: true/u)
