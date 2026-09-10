@@ -2,7 +2,7 @@ diff --git a/node_modules/@deepseek-ai/dsh/package.json b/node_modules/@deepseek
 index 28eaff9..2445f81 100644
 --- a/node_modules/@deepseek-ai/dsh/package.json
 +++ b/node_modules/@deepseek-ai/dsh/package.json
-@@ -28,6 +28,26 @@
+@@ -28,6 +28,34 @@
    },
    "license": "MIT",
    "dependencies": {
@@ -26,6 +26,14 @@ index 28eaff9..2445f81 100644
 +    "dsh-skill-library": "0.1.0",
 +    "dsh-skill-manager": "0.1.0",
 +    "dsh-vps-status": "0.1.0",
++    "dsh-assets": "0.1.0",
++    "9router-app": "0.5.69",
++    "dsh-web-search": "0.1.0",
++    "dsh-paramiko": "0.1.0",
++    "dsh-github": "0.1.7",
++    "dsh-supabase": "0.1.7",
++    "dsh-railway": "0.1.7",
++    "dsh-vercel": "0.1.7",
      "commander": "^15.0.0",
      "js-yaml": "^4.2.0",
      "node-addon-require-builtin": "^0.1.4",

@@ -30,7 +30,6 @@
   },
   "files": [
     "LICENSE",
-    "README.md",
     "cordis.patch.yml",
     "lib"
   ]
