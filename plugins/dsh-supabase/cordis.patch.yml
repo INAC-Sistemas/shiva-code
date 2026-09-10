@@ -1,0 +1,3 @@
+- insert:
+    - id: supabase
+      name: dsh-supabase

@@ -1,0 +1,37 @@
+{
+  "name": "dsh-supabase",
+  "version": "0.1.7",
+  "description": "Supabase CLI connection: install, login, project link and migration status in a sidebar tab",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.12.0",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "lib"
+  ]
+}

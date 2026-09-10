@@ -89,9 +89,8 @@
 # target).
 # dsh-better-sidebar goes first: the rest only soft-inject it (ctx.inject /
 # ctx.get, never a hard `inject` row), so nothing here blocks on order, but
-# the base plugin reads first. dsh-flowglass is the published 0.4.4, not
-# shiva-code's local checkout — that copy's inject list is missing 'sessions'
-# and crashes boot; see the dsh-flowglass client.js fix from earlier.
+# the base plugin reads first. Excluded by choice: dsh-flowglass (published
+# 0.4.4), dsh-sidebar-qa, and dsh-docs-panel.
 - insert:
     - id: dsh-better-sidebar
       name: dsh-better-sidebar
@@ -103,15 +102,6 @@
       name: dsh-shiva-theme
     - id: dsh-user-menu
       name: dsh-user-menu
-    - id: dsh-sidebar-qa
-      name: dsh-sidebar-qa
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-sidebar-qa').split(',').includes('dsh-sidebar-qa')"
-    - id: dsh-docs-panel
-      name: dsh-docs-panel
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-docs-panel').split(',').includes('dsh-docs-panel')"
-    - id: dsh-flowglass
-      name: dsh-flowglass
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-flowglass').split(',').includes('dsh-flowglass')"
 
     # Config replicated verbatim from dsh-login's own cordis.patch.yml (the
     # bundle patch a `dsh.profile.bundles` entry would apply automatically —
@@ -134,6 +124,32 @@
     - id: mds
       name: dsh-mds
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
+
+    - id: assets
+      name: dsh-assets
+    - id: 9router
+      name: 9router-app
+
+    # Keyless web search: registers a DuckDuckGo provider on the harness web
+    # seam, so the agents' native web_search works with no API key.
+    - id: web-search
+      name: dsh-web-search
+
+    # SSH to external VPS servers: one-click paramiko install into a dedicated
+    # venv plus the agents' ssh_run/ssh_transfer tools.
+    - id: paramiko
+      name: dsh-paramiko
+
+    # CLI provider connections (install the CLI, log in, manage this
+    # workspace's link): GitHub, Supabase, Railway and Vercel tabs.
+    - id: github
+      name: dsh-github
+    - id: supabase
+      name: dsh-supabase
+    - id: railway
+      name: dsh-railway
+    - id: vercel
+      name: dsh-vercel
 
     # `profiles` is never gated: it is the plugin that reads the roster and lets
     # a person pick, so gating it would remove the only way out of a bad choice.
