@@ -246,7 +246,7 @@ async function runFullCommand(cmd) {
   }
   if (!fullUrl) throw new Error('scope "full": nenhuma página carregada — rode navigate com scope:"full" antes')
   if (cmd.op === 'screenshot') {
-    const r = await bridge.run({ op: 'screenshot' })
+    const r = await bridge.run({ op: 'screenshot', full: cmd.full === true, settle: cmd.settle !== false, quietMs: cmd.quietMs })
     if (!r || !r.ok) throw new Error((r && r.error) || 'screenshot falhou')
     return { ok: true, dataUrl: (r.data && r.data.dataUrl) || null }
   }
@@ -272,9 +272,38 @@ async function runFullCommand(cmd) {
     await attachFull()
     return { ok: true, data: r.data }
   }
-  if (cmd.op === 'click' || cmd.op === 'fill' || cmd.op === 'read' || cmd.op === 'eval') {
+  if (cmd.op === 'reload') {
+    const r = await bridge.run({ op: 'reload' })
+    if (!r || !r.ok) throw new Error((r && r.error) || 'reload falhou')
+    if (r.data && r.data.url) {
+      fullUrl = r.data.url
+      desiredUrl = r.data.url
+      if (setUrlFromAgent) setUrlFromAgent(r.data.url)
+    }
     await attachFull()
-    const r = await bridge.run({ op: cmd.op, selector: cmd.selector, text: cmd.text, value: cmd.value, code: cmd.code, attr: cmd.attr })
+    return { ok: true, data: r.data }
+  }
+  if (
+    cmd.op === 'click' || cmd.op === 'fill' || cmd.op === 'read' || cmd.op === 'eval' ||
+    cmd.op === 'scroll' || cmd.op === 'wait_stable' || cmd.op === 'upload'
+  ) {
+    await attachFull()
+    const r = await bridge.run({
+      op: cmd.op,
+      selector: cmd.selector,
+      text: cmd.text,
+      value: cmd.value,
+      code: cmd.code,
+      attr: cmd.attr,
+      role: cmd.role,
+      name: cmd.name,
+      to: cmd.to,
+      by: cmd.by,
+      smooth: cmd.smooth,
+      quietMs: cmd.quietMs,
+      timeoutMs: cmd.timeoutMs,
+      path: cmd.path,
+    })
     if (!r || !r.ok) throw new Error((r && r.error) || (cmd.op + ' falhou'))
     return { ok: true, data: r.data }
   }

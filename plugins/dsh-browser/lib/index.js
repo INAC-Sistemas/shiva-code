@@ -101,7 +101,7 @@ async function saveShot(workspace, dataUrl) {
 /** Ops the agent tool exposes. */
 const TAB_OPS = ['open', 'navigate', 'focus', 'screenshot', 'open_external']
 /** Ops that script a real page — they only run in scope "full". */
-const FULL_OPS = ['click', 'fill', 'read', 'eval', 'console', 'wait_for', 'wait', 'reconnect']
+const FULL_OPS = ['click', 'fill', 'read', 'eval', 'console', 'wait_for', 'wait', 'reconnect', 'reload', 'scroll', 'wait_stable', 'upload']
 const BROWSER_OPS = [...TAB_OPS, ...FULL_OPS]
 
 /**
@@ -134,22 +134,36 @@ function createTool(ctx) {
       'navigate (open the Browser tab at url) · focus (bring an open Browser tab to the front) · screenshot (capture the app ' +
       'window showing the Browser tab; saved under the workspace and returned as a path) · open_external (open url in the ' +
       'machine\'s default browser, e.g. an OAuth or dashboard link) · plus FULL-SCOPE page automation: click, fill, read, ' +
-      'eval, console, wait_for, wait, reconnect — these require scope:"full" and the permanent browserFullAccess: true flag in the ' +
-      'harness settings.yaml; with it you drive ANY real URL like a user (logins included: read credentials from a project ' +
-      'file or env var, never from chat). fill never echoes the value. In scope "full" the page renders live inside the ' +
-      'Browser tab and screenshots capture the page itself. The target self-heals: a navigation or a page-initiated reload ' +
-      'that orphans the target is detected, re-resolved and retried once; op "reconnect" forces that re-resolution by hand. ' +
-      'The workspace prototype sandbox (default scope) is unchanged: for prototype pages use prototype_automation.',
+      'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these require scope:"full" and the ' +
+      'permanent browserFullAccess: true flag in the harness settings.yaml; with it you drive ANY real URL like a user ' +
+      '(logins included: read credentials from a project file or env var, never from chat). fill never echoes the value. ' +
+      'Prefer click/fill by role+name (accessibility) over text: text matching can hit a container. Never reload through ' +
+      'eval — use op "reload". Use wait_stable (or screenshot settle, default on) before a print so a page that mounts ' +
+      'content after load does not photograph empty. scroll reports where it landed and whether the container was the page ' +
+      'or an inner div (mobile). upload attaches a local file to a file input. In scope "full" the page renders live inside ' +
+      'the Browser tab and screenshots capture the page itself (full:true captures beyond the viewport). The target ' +
+      'self-heals: a navigation or a page-initiated reload that orphans the target is detected, re-resolved and retried ' +
+      'once; op "reconnect" forces that re-resolution by hand. The workspace prototype sandbox (default scope) is ' +
+      'unchanged: for prototype pages use prototype_automation.',
     parameters: {
       op: { type: 'string', required: true, enum: BROWSER_OPS, description: 'Operation to run.' },
       url: { type: 'string', description: 'Target URL (open/navigate/open_external).' },
       scope: { type: 'string', enum: ['workspace', 'full'], description: 'workspace (default) = tab sandbox as today; full = drive any real URL (needs browserFullAccess: true in settings.yaml).' },
-      selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for).' },
+      selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for/scroll/upload).' },
       text: { type: 'string', description: 'Visible text to match instead of a selector (click/wait_for).' },
+      role: { type: 'string', description: 'ARIA role for an accessible lookup (click/fill), e.g. "button", "link", "textbox".' },
+      name: { type: 'string', description: 'Accessible name to match with role (click/fill) — the robust way to hit a control.' },
       value: { type: 'string', description: 'Value to set (fill). Never echoed back.' },
       code: { type: 'string', description: 'Expression to evaluate in the page (eval).' },
       attr: { type: 'string', description: 'Attribute to read instead of value/text (read).' },
-      timeoutMs: { type: 'number', description: 'Deadline for wait_for in ms (default 8000, cap 30000).' },
+      to: { type: 'string', description: 'scroll target: "top", "bottom" or a pixel offset.' },
+      by: { type: 'number', description: 'scroll step in pixels (relative).' },
+      smooth: { type: 'boolean', description: 'scroll smoothly (scroll).' },
+      quietMs: { type: 'number', description: 'wait_stable/screenshot: quiet window in ms (default 500/400).' },
+      path: { type: 'string', description: 'Local file path to attach to a file input (upload).' },
+      full: { type: 'boolean', description: 'screenshot: capture the whole page, not just the viewport.' },
+      settle: { type: 'boolean', description: 'screenshot: wait for the page to stop changing first (default true).' },
+      timeoutMs: { type: 'number', description: 'Deadline for wait_for/wait_stable in ms (default 8000/10000, cap 30000).' },
       ms: { type: 'number', description: 'Milliseconds to sleep (wait, cap 30000).' },
     },
     output: {
@@ -190,7 +204,7 @@ function createTool(ctx) {
       if (typeof args.url === 'string') forward.url = args.url
       if (scope === 'full') {
         forward.scope = 'full'
-        for (const key of ['selector', 'text', 'value', 'code', 'attr', 'timeoutMs', 'ms']) {
+        for (const key of ['selector', 'text', 'value', 'code', 'attr', 'timeoutMs', 'ms', 'role', 'name', 'to', 'by', 'smooth', 'quietMs', 'path', 'full', 'settle']) {
           if (args[key] !== undefined) forward[key] = args[key]
         }
       }

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { basename, extname } from 'node:path'
 import { app, BrowserWindow, WebContentsView, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 
 /**
@@ -29,6 +31,20 @@ interface RunPayload {
   attr?: string
   timeoutMs?: number
   ms?: number
+  /** Accessible lookup (click/fill): ARIA role + accessible name. */
+  role?: string
+  name?: string
+  /** scroll: target ('top' | 'bottom' | number px), step, smooth. */
+  to?: string | number
+  by?: number
+  smooth?: boolean
+  /** wait_stable: quiet window and cap. */
+  quietMs?: number
+  /** upload: local file path. */
+  path?: string
+  /** screenshot: full-page capture and pre-capture settle. */
+  full?: boolean
+  settle?: boolean
 }
 
 type RunResult =
@@ -92,6 +108,10 @@ function log(msg: string): void {
   console.log(`[web-agent] ${msg}`)
 }
 
+function str(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -104,7 +124,7 @@ function pushConsole(level: unknown, text: string): void {
 
 /** The page-ops runner: evaluates the shared ops expression, then one op. */
 function runnerCode(a: RunPayload): string {
-  const payload = JSON.stringify({ op: a.op, selector: a.selector, text: a.text, value: a.value, code: a.code, attr: a.attr })
+  const payload = JSON.stringify({ op: a.op, selector: a.selector, text: a.text, value: a.value, code: a.code, attr: a.attr, role: a.role, name: a.name })
   return `(function(){
     var a = ${payload};
     var shared = ${pageOpsSource ?? 'null'};
@@ -331,12 +351,46 @@ async function runOpOnce(a: RunPayload): Promise<RunResult> {
       await sleep(ms)
       return { ok: true, data: { waited: ms } }
     }
+    case 'reload': {
+      log('reload')
+      wc.reload()
+      await waitForNavigation(wc, NAV_TIMEOUT_MS)
+      await ensureSettled(wc)
+      return { ok: true, data: { url: wc.getURL(), title: wc.getTitle() } }
+    }
+    case 'scroll':
+      return await evalInPage(wc, scrollScript(a), 'scroll')
+    case 'wait_stable': {
+      const quiet = Math.min(Number(a.quietMs) || 500, 5000)
+      const cap = Math.min(Number(a.timeoutMs) || 10000, MAX_WAIT_MS)
+      return await evalInPage(wc, stableScript(quiet, cap), 'wait_stable')
+    }
+    case 'upload': {
+      const file = str(a.path)
+      if (!file) return { ok: false, error: 'upload requires a local file path' }
+      let bytes: Buffer
+      try {
+        bytes = readFileSync(file)
+      } catch (e) {
+        return { ok: false, error: `upload file not readable: ${String((e as Error)?.message ?? e)}` }
+      }
+      const mime = MIME_BY_EXT[extname(file).toLowerCase()] ?? 'application/octet-stream'
+      return await evalInPage(wc, uploadScript(a.selector, basename(file), mime, bytes.toString('base64')), 'upload')
+    }
     case 'console':
       return { ok: true, data: { entries: consoleRing.slice(-CONSOLE_RING_MAX) } }
     case 'screenshot': {
+      // Settle first: a page that mounts content after load renders an empty print.
+      if (a.settle !== false) {
+        await evalInPage(wc, stableScript(Math.min(Number(a.quietMs) || 400, 3000), 6000), 'settle')
+      }
+      if (a.full === true) {
+        const full = await captureFullPage(wc)
+        if (full) return { ok: true, data: { dataUrl: full, full: true } }
+      }
       try {
         const image = await withTimeout(wc.capturePage(), OP_TIMEOUT_MS, 'screenshot')
-        return { ok: true, data: { dataUrl: image.toDataURL() } }
+        return { ok: true, data: { dataUrl: image.toDataURL(), full: false } }
       } catch (e) {
         const msg = String((e as Error)?.message ?? e)
         if (/timeout after/.test(msg)) {
@@ -373,6 +427,129 @@ async function runOp(a: RunPayload): Promise<RunResult> {
     return retry
   }
   return first
+}
+
+/** Bounded wait for a navigation the view already started (reload, redirect). */
+function waitForNavigation(wc: WebContents, timeoutMs: number): Promise<void> {
+  if (wc.isDestroyed()) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      wc.removeListener('did-stop-loading', done)
+      wc.removeListener('did-fail-load', done)
+      resolve()
+    }
+    const timer = setTimeout(done, timeoutMs)
+    wc.once('did-stop-loading', done)
+    wc.once('did-fail-load', done)
+  })
+}
+
+/** Page-side: report where a scroll landed, and whether the target is visible. */
+function scrollScript(a: RunPayload): string {
+  const cfg = JSON.stringify({ selector: a.selector, to: a.to, by: a.by, smooth: a.smooth === true })
+  return `(function(){
+    var a = ${cfg};
+    function containerOf(el) {
+      var n = el;
+      while (n && n !== document.body) {
+        var st = getComputedStyle(n);
+        if (/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight + 4) return n;
+        n = n.parentElement;
+      }
+      return document.scrollingElement || document.documentElement;
+    }
+    var box = a.selector ? document.querySelector(a.selector) : null;
+    var container = box ? containerOf(box) : (document.scrollingElement || document.documentElement);
+    var before = container.scrollTop;
+    if (box) box.scrollIntoView({ block: 'center', behavior: a.smooth ? 'smooth' : 'auto' });
+    else if (a.to === 'bottom') container.scrollTop = container.scrollHeight;
+    else if (a.to === 'top') container.scrollTop = 0;
+    else if (typeof a.to === 'number') container.scrollTop = a.to;
+    else if (typeof a.by === 'number') container.scrollTop = container.scrollTop + a.by;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var max = Math.max(container.scrollHeight - container.clientHeight, 0);
+        var isPage = container === document.scrollingElement || container === document.documentElement;
+        resolve({
+          scrollY: Math.round(window.scrollY),
+          scrollX: Math.round(window.scrollX),
+          containerScrollTop: Math.round(container.scrollTop),
+          atBottom: container.scrollTop >= max - 2,
+          container: isPage ? 'page' : (container.tagName.toLowerCase() + (container.id ? '#' + container.id : '')),
+          before: Math.round(before),
+          targetVisible: box ? (box.getBoundingClientRect().top >= 0 && box.getBoundingClientRect().bottom <= (window.innerHeight || 0)) : null
+        });
+      }, a.smooth ? 500 : 60);
+    });
+  })()`
+}
+
+/** Page-side: resolve once DOM/animations stay quiet for `quiet` ms (or the cap hits). */
+function stableScript(quietMs: number, capMs: number): string {
+  return `(function(){
+    var quiet = ${quietMs}, cap = ${capMs};
+    return new Promise(function (resolve) {
+      var last = Date.now(), started = Date.now(), raf = 0;
+      var obs = new MutationObserver(function () { last = Date.now(); });
+      try { obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); } catch (e) {}
+      var tick = function () { last = Date.now(); raf = requestAnimationFrame(tick); };
+      raf = requestAnimationFrame(tick);
+      (function check() {
+        var idle = Date.now() - last;
+        var busy = document.readyState !== 'complete';
+        if ((idle >= quiet && !busy) || Date.now() - started >= cap) {
+          try { obs.disconnect(); } catch (e) {}
+          try { cancelAnimationFrame(raf); } catch (e) {}
+          resolve({ stable: idle >= quiet && !busy, quietMs: idle, elapsedMs: Date.now() - started });
+          return;
+        }
+        setTimeout(check, 100);
+      })();
+    });
+  })()`
+}
+
+/** Page-side: attach a real File to a file input (synthesized from local bytes). */
+function uploadScript(selector: string | undefined, name: string, mime: string, base64: string): string {
+  return `(function(){
+    var sel = ${JSON.stringify(selector ?? '')}, name = ${JSON.stringify(name)}, mime = ${JSON.stringify(mime)}, b64 = ${JSON.stringify(base64)};
+    var input = sel ? document.querySelector(sel) : document.querySelector('input[type=file]');
+    if (!input) throw new Error('file input not found: ' + (sel || 'input[type=file]'));
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var file = new File([bytes], name, { type: mime });
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return { uploaded: true, name: name, bytes: bytes.length, input: sel || 'input[type=file]' };
+  })()`
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.pdf': 'application/pdf', '.txt': 'text/plain', '.json': 'application/json',
+  '.csv': 'text/csv', '.mp4': 'video/mp4', '.zip': 'application/zip',
+}
+
+/** Full-page capture through CDP (bounded, always detaches). */
+async function captureFullPage(wc: WebContents): Promise<string | null> {
+  const dbg = wc.debugger
+  try {
+    if (!dbg.isAttached()) dbg.attach('1.3')
+    try {
+      await dbg.sendCommand('Page.enable')
+      const res = (await dbg.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })) as { data?: string }
+      return res?.data ? `data:image/png;base64,${res.data}` : null
+    } finally {
+      try { dbg.detach() } catch { /* already gone */ }
+    }
+  } catch (e) {
+    log(`full-page capture unavailable (${String((e as Error)?.message ?? e)}) — falling back to the viewport`)
+    return null
+  }
 }
 
 /** Sender must be the app's own main window renderer. */

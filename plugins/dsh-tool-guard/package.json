@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-guard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Tool-seam guard for dsh: the principal agent writes only mds/ and prototype/ artifacts, and no agent may set a ticket's status to done",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,9 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "scripts": {
+    "test": "node --test test/"
   },
   "files": [
     "LICENSE",

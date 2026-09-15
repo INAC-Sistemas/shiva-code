@@ -14,6 +14,17 @@
 const PORT = process.argv[2] ?? process.env.DSH_DEBUG_PORT ?? '9335'
 const BASE = `http://127.0.0.1:${PORT}`
 
+import { writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+/** A real local file for the upload op (the main process reads it from disk). */
+function makeUploadFixture() {
+  const file = join(tmpdir(), 'dsh-stress-upload.txt')
+  writeFileSync(file, 'dsh web-agent stress fixture\n', 'utf8')
+  return file
+}
+
 async function main() {
   const list = await (await fetch(`${BASE}/json/list`)).json()
   const pages = list.filter((t) => t.type === 'page')
@@ -48,7 +59,8 @@ async function main() {
     })
 
   await send('Runtime.enable', {})
-  const script = `(${pageScript.toString()})()`
+  const uploadFile = makeUploadFixture()
+  const script = `(${pageScript.toString()})(${JSON.stringify(uploadFile)})`
   const res = await send('Runtime.evaluate', {
     expression: script,
     awaitPromise: true,
@@ -81,7 +93,7 @@ async function main() {
   process.exit(failures.length === 0 ? 0 : 1)
 }
 
-function pageScript() {
+function pageScript(uploadPath) {
   return (async () => {
     const out = { steps: [], fatal: null }
     const b = window.dshDesktopWebAgent
@@ -135,6 +147,32 @@ function pageScript() {
 
     // 5) Basic-auth 401 must fail fast (never a credential dialog)
     await step('basic-auth', () => b.run({ op: 'eval', code: "(function(){ return fetch('https://httpbin.org/basic-auth/u/p').then(function(r){ return 'status:' + r.status }).catch(function(e){ return 'err:' + e.message }) })()" }))
+
+    // 6) new ops — all deterministic, self-injected content
+    await step('nav-ex3', () => b.navigate('https://example.com'))
+    await step('eval-mark', () => b.run({ op: 'eval', code: "(function(){ document.title = 'MARCADOR'; return document.title })()" }))
+    await step('reload', () => b.run({ op: 'reload' }))
+    await step('eval-after-reload-op', () => b.run({ op: 'eval', code: 'document.title' }))
+
+    await step('eval-tall-page', () => b.run({ op: 'eval', code: "(function(){ document.body.innerHTML = '<div style=\"height:6000px\">alto</div><button id=\"rodape\" aria-label=\"ACEITAR\">ok</button>'; return document.body.scrollHeight })()" }))
+    await step('scroll-bottom', () => b.run({ op: 'scroll', to: 'bottom' }))
+    await step('scroll-to-selector', () => b.run({ op: 'scroll', selector: '#rodape' }))
+    await step('click-by-role-name', () => b.run({ op: 'click', role: 'button', name: 'aceitar' }))
+
+    await step('eval-inject-input', () => b.run({ op: 'eval', code: "(function(){ document.body.insertAdjacentHTML('afterbegin', '<input aria-label=\"email do cliente\" />'); return true })()" }))
+    await step('fill-by-role-name', () => b.run({ op: 'fill', role: 'textbox', name: 'email do cliente', value: 'entregador@teste.dev' }))
+    await step('read-back-fill', () => b.run({ op: 'eval', code: "document.querySelector('input[aria-label=\\'email do cliente\\']').value" }))
+
+    await step('eval-inject-file-input', () => b.run({ op: 'eval', code: "(function(){ document.body.insertAdjacentHTML('afterbegin', '<input type=\"file\" id=\"foto\" />'); return true })()" }))
+    await step('upload', () => b.run({ op: 'upload', selector: '#foto', path: uploadPath }))
+    await step('read-uploaded-name', () => b.run({ op: 'eval', code: "document.querySelector('#foto').files.length + ':' + document.querySelector('#foto').files[0].name" }))
+
+    await step('eval-late-mount', () => b.run({ op: 'eval', code: "(function(){ setTimeout(function(){ document.body.insertAdjacentHTML('beforeend', '<p id=\"tarde\">montou tarde</p>') }, 700); return 'agendado' })()" }))
+    await step('wait_stable', () => b.run({ op: 'wait_stable', quietMs: 400, timeoutMs: 8000 }))
+    await step('read-late-mount', () => b.run({ op: 'eval', code: "document.getElementById('tarde') ? 'presente' : 'ausente'" }))
+
+    await step('screenshot-viewport', () => b.run({ op: 'screenshot' }))
+    await step('screenshot-full', () => b.run({ op: 'screenshot', full: true }))
     await step('eval-final', () => b.run({ op: 'eval', code: 'document.title' }))
 
     return out

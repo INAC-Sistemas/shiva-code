@@ -4,9 +4,10 @@
 // listener can turn it back into permission. The laws:
 //
 //   1. the principal agent (depth 0) writes process artifacts (`mds/`, the
-//      `prototype/` folder) and, in fast-fix mode, product code in `src/` and
-//      `public/` (error found in the browser → edit → re-test live). `testes/`
-//      stays qa-only and git commit/push stays with the human;
+//      `prototype/` folder), product code in `src/`/`public/` only as a
+//      fast-fix window, and the config/tooling surface (`.scripts/` and
+//      root-level config files). `testes/` stays qa-only and git commit/push
+//      stays with the human;
 //   2. role policies for role-bound subagents: `builder` (fast code) may write
 //      only src/ and public/ and run build/typecheck — the testing is the
 //      principal's job; `qa` (post-human regression) may write only testes/ and
@@ -17,8 +18,8 @@
 //   4. every agent is denied `git commit`/`git push` — including the principal;
 //   5. a subagent briefing over ~50 KB is rejected — point at the artifact,
 //      do not paste it;
-//   6. `status: done` is NOT denied: Done is reached at the end of the flow
-//      (human test), so the old blanket prohibition is gone.
+//   6. `status: done` is denied to every agent: Done is the human's move at the
+//      end of the flow.
 //
 // Role binding: the `subagent` tool accepts `role: "builder" | "qa"`; the tool
 // forwards it as the child's `guardRole` agent option, which this guard reads
@@ -48,11 +49,43 @@ const PG_DENY_RE = /\b(psql|createdb|dropdb|pg_dump|pg_restore|pg_ctl)\b/i
 /** External-network commands a fast builder has no business running. */
 const NET_DENY_RE = /\b(curl|wget|ssh|scp|sftp|ftp|telnet|nc|npm\s+(install|i|publish)|pnpm\s+(add|install|publish)|yarn\s+(add|install|publish)|pip3?\s+install)\b/i
 
-/** Folders the principal agent may write inside, relative to the workspace. */
+/**
+ * The principal agent's write surface, declarative and grouped by reason:
+ *
+ *  - PROCESS ARTIFACTS (`mds/`, `prototype/`) — the epic's own files. The
+ *    principal owns the process, so it owns these.
+ *  - PRODUCT CODE (`src/`, `public/`) — written by the builder role; the
+ *    principal may only fast-fix what the live browser proof exposed
+ *    (edit → re-test immediately). Not widened here.
+ *  - CONFIG & TOOLING (`DEFAULT_ALLOWED_TOOLING_ROOTS` + root config files) —
+ *    build/tooling scripts and root-level configuration. These are NOT product
+ *    code: a defect in a packaging script or a tsconfig path has no
+ *    builder-shaped owner, and blocking it left real build defects unfixable by
+ *    any agent (a human had to hand-edit).
+ *
+ * `testes/` is deliberately absent: tests are qa-only. Paths outside the
+ * workspace are refused by the resolution itself.
+ */
 const DEFAULT_ALLOWED_ROOTS = ['mds', 'prototype']
 
 /** Fast-fix mode: the principal may edit product code directly (fix found in the browser → edit → re-test). */
 const PRINCIPAL_CODE_ROOTS = ['src', 'public']
+
+/** Tooling folders the principal may edit: build/packaging scripts, not product code. */
+const DEFAULT_ALLOWED_TOOLING_ROOTS = ['.scripts']
+
+/**
+ * Root-level configuration files the principal may edit (globs; a path with a
+ * separator never matches — only files directly at the workspace root). These
+ * are deployment/tooling configuration, not product code.
+ */
+const PRINCIPAL_CONFIG_FILES = [
+  'tsconfig.json', 'tsconfig.*.json', // TypeScript project configs
+  'package.json', 'package-lock.json', 'pnpm-lock.yaml', // package manifests
+  '.gitignore', '.gitattributes', '.railwayignore', // VCS / deploy ignore rules
+  'railway.toml', 'railway.json', // deploy configuration
+  '.npmrc', '.editorconfig', // tool configuration
+]
 
 /** Role-scoped write allowlists, relative to the workspace. */
 const BUILDER_ALLOW_ROOTS = ['src', 'public']
@@ -63,6 +96,8 @@ const BRIEFING_MAX_CHARS = 50_000
 
 const UX_REF_RE = /\bUX-[A-Za-z0-9_-]+/g
 const STATUS_RE = /^\s*status\s*:\s*([a-z_]+)\s*$/im
+/** The human-only terminal state: no agent writes it. */
+const DONE_RE = /^\s*status\s*:\s*done\b/im
 const FROZEN_AFTER = new Set(['code_test', 'human_test', 'done'])
 
 function log(msg) {
@@ -87,6 +122,24 @@ function inside(cwd, p, folder) {
   const abs = resolve(cwd, p)
   const rel = relative(root, abs)
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** Minimal glob match for config names: `*` spans one path segment, nothing else. */
+function globMatch(pattern, name) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/\\\\]*')
+  return new RegExp(`^${escaped}$`, 'i').test(name)
+}
+
+/**
+ * True when `p` names a config file DIRECTLY at the workspace root matching one
+ * of `patterns`. A nested path (any separator) never matches: only the project
+ * root's own configuration is the principal's tooling surface.
+ */
+function isRootConfigFile(cwd, p, patterns) {
+  const rel = relative(resolve(cwd), resolve(cwd, p))
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return false
+  if (rel.includes('/') || rel.includes('\\')) return false
+  return patterns.some((pattern) => globMatch(pattern, rel))
 }
 
 /** First replacement character in `text`, as a code-unit offset; -1 when none. */
@@ -152,11 +205,16 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
       return `GUARD[qa]: bloqueado — escrita fora de testes/ (got ${file || '<empty>'}); qa só escreve testes`
     }
   } else if (depth === 0) {
-    // The principal agent's law: process artifacts plus the fast-fix surface
-    // (edit what the browser test exposed, then re-test live). testes/ stays
-    // qa-only, and git stays with the human.
-    if (!allowedRoots.some((folder) => inside(cwd, file, folder)) && !PRINCIPAL_CODE_ROOTS.some((folder) => inside(cwd, file, folder))) {
-      return `Blocked: the principal agent writes only ${[...allowedRoots, ...PRINCIPAL_CODE_ROOTS].join('/, ')}/ — testes/ is qa-only (got ${file || '<empty>'})`
+    // The principal agent's law: process artifacts, the fast-fix code window,
+    // and the config/tooling surface. testes/ stays qa-only; git stays with the
+    // human.
+    const allowed =
+      allowedRoots.some((folder) => inside(cwd, file, folder)) ||
+      PRINCIPAL_CODE_ROOTS.some((folder) => inside(cwd, file, folder)) ||
+      DEFAULT_ALLOWED_TOOLING_ROOTS.some((folder) => inside(cwd, file, folder)) ||
+      isRootConfigFile(cwd, file, PRINCIPAL_CONFIG_FILES)
+    if (!allowed) {
+      return `Blocked: the principal agent writes only ${allowedRoots.join('/, ')}/, ${PRINCIPAL_CODE_ROOTS.join('/, ')}/, ${DEFAULT_ALLOWED_TOOLING_ROOTS.join('/, ')}/ and root config files (${PRINCIPAL_CONFIG_FILES.join(', ')}) — testes/ is qa-only (got ${file || '<empty>'})`
     }
   }
 
@@ -244,6 +302,11 @@ function check(exec, allowedRoots) {
   }
 
   if (GUARDED_FS.has(exec.name)) {
+    // Done is the human's move on the Kanban: no agent writes it, at any depth.
+    const text = exec.name === 'write' ? str(args.content) : str(args.new_string)
+    if (DONE_RE.test(text)) {
+      return 'Blocked: "status: done" is the human\'s move on the Kanban — never set it yourself'
+    }
     return checkFs(exec, depth, role, allowedRoots, cwd)
   }
   return undefined
