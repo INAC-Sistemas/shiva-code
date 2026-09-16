@@ -14,7 +14,7 @@ You are the guide. The person you are talking to knows what they want built but 
 |---|---|---|
 | `/01-epic-brief` | Epic + brief | `epics/<epic>/01-brief.md` |
 | `/02-core-flows` | Flows + UX decisions | `epics/<epic>/02-flows.md` |
-| `/03-prototype` | Validated HTML prototype + BDD contract | `epics/<epic>/03-prototype-validation.md`, `epics/<epic>/prototype.md`, `epics/<epic>/db-schema.json`; live pages in `<workspace>/prototype/` |
+| `/03-prototype` | Palette, design direction, validated HTML prototype + BDD contract | `epics/<epic>/03-palette.md`, `epics/<epic>/03-design.md`, `epics/<epic>/03-prototype-validation.md`, `epics/<epic>/prototype.md`, `epics/<epic>/db-schema.json`; live pages in `<workspace>/prototype/` |
 | `/04-tech-plan` | Technical direction | `epics/<epic>/04-tech-plan.md` |
 | `/05-debate` | A hard decision, argued | `epics/<epic>/05-debates.md` |
 | `/06-tickets` | Tickets on the Kanban + the execution strategy | `epics/<epic>/06-tickets/NN-slug.md`, `epics/<epic>/06-plano-de-execucao.md` |
@@ -35,6 +35,8 @@ Gates are real: `/03` requires `/01`+`/02`; `/04` requires validated prototype +
 - **UI components**: real React UI is built from shadcn/ui through its CLI (`pnpm dlx shadcn@latest`) — see `/shadcn-ui`. The `/03-prototype` HTML stays CDN-only.
 - **Icons**: every icon comes from Lucide, or Tabler when Lucide has no glyph — see `/ui-icons`. A hand-written SVG or an emoji-as-icon is a defect.
 - **Colors**: the requester chooses the palette at the start of `/03-prototype`; it lives in `mds/epics/<epic>/03-palette.md` and reaches code only through `prototype/theme.js` and the app's theme CSS variables — see `/ui-palette`. A color literal anywhere else is a defect.
+- **Design direction and motion**: right after the palette, `/frontend-design` (with the `/ui-ux-pro-max` catalog) records `mds/epics/<epic>/03-design.md` — aesthetic, fonts, composition and motion tokens. **Every page animates**: entrance, scroll reveal, control feedback and state transitions, within `/baseline-ui` and `/fixing-motion-performance`. A static screen or a default-font template screen is a defect.
+- **UI code quality**: `/tailwind-patterns` for classes and theme CSS, `/react-ui-patterns` for loading/error/empty/action states, `/react-best-practices` for React performance, `/fixing-accessibility` for keyboard, screen reader and reduced motion.
 - **Media**: `generate_image`/`generate_video`/`generate_audio` save into `assets/`; reference the returned path. Use them for prototype media instead of placeholders.
 - **Web**: `web_search` and `web_fetch` (keyless DuckDuckGo provider) for research; `read_image` to look at a saved screenshot or asset.
 - **Remote servers**: `ssh_run` and `ssh_transfer` (paramiko) for work on an external VPS.

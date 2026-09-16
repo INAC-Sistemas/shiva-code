@@ -10,7 +10,7 @@ The requester chooses the colors; the agent proposes, renders and checks them. E
 
 ## 1. Propose options
 
-Read `01-brief.md` (tone, audience, sector, brand) and the project's `AGENTS.md` before proposing. Then prepare **3 or 4 palettes**:
+Read `01-brief.md` (tone, audience, sector, brand) and the project's `AGENTS.md` before proposing; the Products table of `skill ui-ux-pro-max` gives the usual color mood of the product type. Then prepare **3 or 4 palettes**:
 
 - Brand colors already named by the requester (brief, AGENTS.md, an existing CSS file, a logo in the workspace) become the first option, built around them. Otherwise the palette that best fits the brief's tone is first and is the recommendation.
 - Each palette has a short name and one sentence of consequence the requester can feel ("sober, reads as financial trust"; "warm, approachable for a family audience"), never color theory.

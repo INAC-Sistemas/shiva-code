@@ -10,7 +10,7 @@ Settle the decisions a change depends on before any code exists. Read `/00-start
 
 ## Entry contract
 
-Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, `03-palette.md`, plus audited-GREEN `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
+Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, `03-palette.md`, `03-design.md`, plus audited-GREEN `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
 
 ## Which decisions reach the requester
 
@@ -23,6 +23,8 @@ A web UI is React + Tailwind with shadcn/ui components unless the existing code 
 Icons are a separate Decisions row: Lucide (`lucide-react`) by default, Tabler (`@tabler/icons-react`) only when Lucide lacks the glyph or a requester names it — `skill ui-icons` for the rules. A pack already in the project's `package.json` wins over both defaults.
 
 Theme colors are a separate Decisions row that cites `03-palette.md` (read it by path with the other inputs) and names the theme CSS file of the chosen template and its value format — `skill ui-palette` for the rules. The requester already chose the palette; the plan never re-picks colors, and a palette change returns to `/03-prototype` as an amendment.
+
+Fonts and motion are a separate Decisions row that cites `03-design.md`: how the pairing loads (`@fontsource` packages or a Google Fonts link), `motion` (`motion/react`) for JavaScript animation beside the `tw-animate-css` that `shadcn init` installs, and where the motion tokens live in the theme CSS — `skill frontend-design` section 4 and `skill tailwind-patterns`. The prototype's motion is part of the frozen UX: the app reproduces it, never drops it. A query library row (TanStack Query by default) serves `/react-ui-patterns`.
 
 ## Delivery, data and servers
 

@@ -1,6 +1,6 @@
 ---
 name: 03-prototype
-description: 'Build the initiative as a live HTML prototype (CDN-first: Tailwind, lucide, three.js, shadcn-style patterns; localStorage as the database; zero backend), validate every screen and flow with the requester in the Prototype tab using the browser-use API (navigate, click, fill, screenshot, console), and only after full GREEN produce prototype.md with every BDD scenario plus db-schema.json — each audited by a subagent. UX is frozen afterwards.'
+description: 'Build the initiative as a live HTML prototype (CDN-first: Tailwind, lucide, Motion, three.js, shadcn-style patterns; every screen animated; localStorage as the database; zero backend), validate every screen and flow with the requester in the Prototype tab using the browser-use API (navigate, click, fill, screenshot, console), and only after full GREEN produce prototype.md with every BDD scenario plus db-schema.json — each audited by a subagent. UX is frozen afterwards.'
 whenToUse: After /02-core-flows is validated and before /04-tech-plan.
 ---
 
@@ -11,6 +11,8 @@ Turn the validated Core Flows into screens the requester has actually seen, clic
 ## Part 0 — Palette
 
 `skill ui-palette` before any screen: render the palette options in `prototype/palettes.html`, let the requester pick one or send custom colors with `ask_user_question`, and record `mds/epics/<epic>/03-palette.md` with `status: validated`. No screen is built before that file exists; the palette is the first approved line of the validation ledger.
+
+Then `skill frontend-design` (it loads `ui-ux-pro-max` for the product type's style, fonts, landing pattern and effects): record `mds/epics/<epic>/03-design.md` — aesthetic direction, differentiation anchor, font pairing, composition and the motion tokens — and tell the requester the direction in one plain sentence. The first approved screen validates it (`status: validated`).
 
 ## Part 1 — Build (CDN-first, mocks only)
 
@@ -23,6 +25,7 @@ Build in **`<workspace>/prototype/`** (create it if missing) with the `write` to
 - Inline your own CSS/JS per file; external files in the same folder ARE served (our Prototype tab serves the folder, relative links and localStorage work for real).
 - Guard every CDN dependency (`window.THREE` check / `onerror`) with a graceful inline fallback.
 - Default entry: `prototype/index.html`. Screens from `02-flows.md`, each flow's happy + unhappy states reachable; unhappy paths get labelled demo controls ("simular erro"). Landing view = the first real screen of the journey, never a meta-page.
+- **Every screen animates** per `03-design.md`: an entrance sequence each time the router shows it, scroll reveals below the fold, hover/press feedback on every control, transitions on overlays and state changes, animated loading and demo states — Motion's CDN build plus CSS, guarded, honoring reduced motion (`skill frontend-design` section 4; `baseline-ui` and `fixing-motion-performance` for the limits). Fonts load from the pairing in `03-design.md`.
 - Match the requester's language in every visible string. One screen per round-trip: build → hand over → collect corrections → approve. Never blanket-approve several screens.
 
 ## Part 2 — Validate with browser use (the `prototype_automation` tool)
@@ -41,7 +44,7 @@ Drive it with the `prototype_automation` tool — no curl, no manual HTTP. **You
 | `console` | — | Captured error/warn + runtime errors |
 | `results` | — | Last 50 command results |
 
-One command at a time — the tool submits and waits. Use it to **self-test every screen before handing it over** (click the flow, fill the form, confirm no console errors, screenshot for evidence) and to reproduce exactly what the requester reports broken; then `read_image` the screenshot to see it. Any raw shim op (e.g. `console_dump`) goes through `op:'submit'` with `cmd`. For prototype media — hero, avatars, illustrations — use `generate_image`/`generate_video`/`generate_audio` (they save into `assets/`) instead of placeholder URLs; icons are not media, they come from the lucide CDN (`skill ui-icons`). For an **external** URL (a reference site, a CDN doc) use the `browser` tool (`open`/`navigate`/`screenshot`): it navigates and screenshots but cannot script the page; the prototype's own full control is `prototype_automation`.
+One command at a time — the tool submits and waits. Use it to **self-test every screen before handing it over** (click the flow, fill the form, confirm no console errors, screenshot for evidence — taken after the entrance sequence finished, so the screenshot shows the settled screen) and to reproduce exactly what the requester reports broken; then `read_image` the screenshot to see it. Any raw shim op (e.g. `console_dump`) goes through `op:'submit'` with `cmd`. For prototype media — hero, avatars, illustrations — use `generate_image`/`generate_video`/`generate_audio` (they save into `assets/`) instead of placeholder URLs; icons are not media, they come from the lucide CDN (`skill ui-icons`). For an **external** URL (a reference site, a CDN doc) use the `browser` tool (`open`/`navigate`/`screenshot`): it navigates and screenshots but cannot script the page; the prototype's own full control is `prototype_automation`.
 
 ## Part 3 — The GREEN gate
 
@@ -71,6 +74,7 @@ Given … When … Then <recovery/feedback>
 (…ALL screens, ALL states — happy, empty, unhappy…)
 ## Global decisions (tone, naming, theme, CDNs)
 palette: mds/epics/<epic>/03-palette.md (<chosen palette name>)
+design: mds/epics/<epic>/03-design.md (<aesthetic name>)
 ## localStorage keys used by the prototype
 ```
 
