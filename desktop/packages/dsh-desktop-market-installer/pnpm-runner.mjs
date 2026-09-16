@@ -23,11 +23,19 @@
  *
  * Anything unrecognized is passed straight through: same exit code, same
  * output, one pnpm run.
+ *
+ * The shim directory also sits on the Harness process PATH, so every shell the
+ * agent opens reaches this runner as its `pnpm` — `pnpm dlx shadcn@latest`,
+ * `pnpm dev` in a user project. Only a run whose working directory is inside
+ * `$DSH_HOME/profiles` gets the recovery; any other run is plain pnpm with
+ * inherited stdio, because the idle watchdog would kill a quiet dev server and
+ * the manifest and workspace rewrites belong to the profile alone.
  */
 import { spawn } from 'node:child_process'
 import { existsSync, watch } from 'node:fs'
 import { readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const SIDELINE_MARKER = '.dsh-old-'
@@ -86,6 +94,35 @@ export function lockedRenameTarget(output) {
  */
 export function sidelinePath(target, now = Date.now()) {
   return `${target}${SIDELINE_MARKER}${now}`
+}
+
+/**
+ * Whether a pnpm run is a profile package operation. `dsh plugin` runs pnpm in
+ * `$DSH_HOME/profiles/<profile>`, with the home resolved the way dsh resolves
+ * it; a run anywhere else is someone else's project.
+ * @param {string} cwd - the directory pnpm runs in.
+ * @param {NodeJS.ProcessEnv} environment - the run's environment, read for DSH_HOME.
+ * @returns {boolean} true when `cwd` is strictly inside the profiles directory.
+ */
+export function isProfileOperation(cwd = process.cwd(), environment = process.env) {
+  const home = environment.DSH_HOME?.trim() ? environment.DSH_HOME : join(homedir(), '.dsh')
+  const path = relative(resolve(home, 'profiles'), resolve(cwd))
+  return path !== '' && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)
+}
+
+/**
+ * Run pnpm once with inherited stdio and no recovery, for runs outside a
+ * profile. Interactive prompts and long-lived scripts behave as under a
+ * system pnpm.
+ * @returns {Promise<{ code: number | null, signal: NodeJS.Signals | null }>} the exit facts.
+ */
+export function runPassthrough(executable, args, options = {}) {
+  const { spawnProcess = spawn } = options
+  return new Promise((resolveRun, reject) => {
+    const child = spawnProcess(executable, args, { stdio: 'inherit', windowsHide: true })
+    child.once('error', reject)
+    child.once('exit', (code, signal) => resolveRun({ code, signal }))
+  })
 }
 
 function delay(milliseconds) {
@@ -654,7 +691,8 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
     process.exitCode = 1
   } else {
     const executable = process.execPath
-    const result = await runWithLockRecovery(executable, [pnpmEntry, ...pnpmArguments])
+    const run = isProfileOperation() ? runWithLockRecovery : runPassthrough
+    const result = await run(executable, [pnpmEntry, ...pnpmArguments])
     if (result.signal) {
       process.stderr.write(`dsh-desktop: pnpm terminated with ${result.signal}.\n`)
       process.exitCode = 1

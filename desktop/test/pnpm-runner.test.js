@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -8,8 +8,10 @@ import {
   SIDELINE_MARKER,
   blockedTargets,
   gitPrepareApprovalKey,
+  isProfileOperation,
   lockedRenameTarget,
   mergeApprovedGitPrepareKey,
+  runPassthrough,
   runWithLockRecovery,
   sidelinePath,
   suspendGenerationProjectionForPnpm
@@ -236,6 +238,30 @@ describe('packaged pnpm runner', () => {
     expect(sidelinePath('/p/node_modules/argparse', 42)).toBe(
       `/p/node_modules/argparse${SIDELINE_MARKER}42`
     )
+  })
+
+  it('recovers only runs inside the profiles directory of the resolved home', () => {
+    const home = join(tmpdir(), 'dsh-home')
+    const environment = { DSH_HOME: home }
+
+    expect(isProfileOperation(join(home, 'profiles', 'web'), environment)).toBe(true)
+    expect(isProfileOperation(join(home, 'profiles', 'web', 'node_modules'), environment)).toBe(true)
+    expect(isProfileOperation(join(home, 'profiles'), environment)).toBe(false)
+    expect(isProfileOperation(join(home, 'profiles-other', 'web'), environment)).toBe(false)
+    expect(isProfileOperation(join(tmpdir(), 'my-app'), environment)).toBe(false)
+    expect(isProfileOperation(join(homedir(), '.dsh', 'profiles', 'web'), {})).toBe(true)
+    expect(isProfileOperation(join(homedir(), 'my-app'), { DSH_HOME: ' ' })).toBe(false)
+  })
+
+  it('runs pnpm outside a profile once, with inherited stdio and its own exit facts', async () => {
+    const { spawnProcess, calls } = fakePnpm([{ code: 3, output: '' }])
+
+    const result = await runPassthrough('/node', ['/pnpm.cjs', 'dlx', 'shadcn@latest'], { spawnProcess })
+
+    expect(result).toEqual({ code: 3, signal: null })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].args).toEqual(['/pnpm.cjs', 'dlx', 'shadcn@latest'])
+    expect(calls[0].options.stdio).toBe('inherit')
   })
 
   it('passes a successful run straight through', async () => {

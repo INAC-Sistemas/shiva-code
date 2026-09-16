@@ -16,6 +16,10 @@ Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-protot
 
 Decide alone and just state: language, libraries, layout, naming, schema shape, test strategy, error style — anything reversible in an afternoon. **Bring to the requester, phrased as consequences** (with `ask_user_question`, one per question): anything that changes what they receive, what it costs to run, how long it takes, what happens to their data, or what they are locked into. Ask the reversal too: "if we're wrong in six months, how bad is it?" Cheap to reverse → decide; expensive → consider `/05-debate`.
 
+## User interface
+
+A web UI is React + Tailwind with shadcn/ui components unless the existing code or a requester constraint rules it out — decide it alone and `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`vite`, `next`, …), base (`radix` by default) and preset (`nova` by default), or with why shadcn does not apply. The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
+
 ## Delivery, data and servers
 
 The workspace's connection tools are the real mechanism for these, and the plan names them instead of hand-rolling. Each is an agent tool (see `/11-connections`): `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database/SQL/auth), `github_cli` (repo/PR), plus `ssh_run`/`ssh_transfer` (external VPS).

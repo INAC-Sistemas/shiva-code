@@ -36,6 +36,8 @@ The briefing is context injection, not documentation: it consumes the subagent's
 4. **ALREADY PROVEN** — what the principal measured personally, each item with its proof (command + output). The subagent does not re-test any of it; it may at most contest with new evidence. Re-proving existing evidence is the largest source of hours lost.
 5. **Known environment traps** of this harness (e.g. prefer `curl.exe` over `Invoke-WebRequest` on Windows, pass JSON bodies from a file, `.ps1` saved as UTF-8 with BOM, a local database already running — reuse it, do not raise another).
 
+**UI tickets** add one line to the role: "Load the `shadcn-ui` skill first; build every standard control from shadcn/ui components added with its CLI, using the template, base and preset from `04-tech-plan.md`." The evaluator's briefing adds the matching check: a hand-written control that a shadcn component covers is RED, and so is a UI change without a real-browser screenshot.
+
 Forbidden in the briefing: pasted artifact content (ticket, schema, plan, contract), "read all of X" for anything over ~20 KB, narrative/history/repetition of the execution plan, more than ~80 lines total. If the briefing does not fit, the spawn's scope is wrong: split the work.
 
 ## The acceptance flow (the agent is the user)
