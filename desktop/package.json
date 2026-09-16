@@ -310,6 +310,7 @@
     "dsh-railway": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-railway-0.1.8.tgz",
     "dsh-vercel": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-vercel-0.1.8.tgz",
     "dsh-tool-guard": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-tool-guard-0.2.2.tgz",
+    "dsh-mcp": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-mcp-0.1.0.tgz",
     "9router-app": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/9router-app-0.5.69.tgz"
   },
   "devDependencies": {

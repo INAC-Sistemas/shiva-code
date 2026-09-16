@@ -76,7 +76,9 @@
 #
 # Not gated, deliberately: dsh-better-sidebar (the chassis every other tab plugs
 # into), dsh-i18n, dsh-shiva-theme, dsh-clock, dsh-user-menu, login and
-# profiles — without the last two there is no way back to a picker.
+# profiles — without the last two there is no way back to a picker. Also
+# always loaded: dsh-kanban, dsh-tool-guard, dsh-browser, dsh-sidebar and
+# dsh-mcp, which the profile catalog does not list.
 #
 # dsh-openviking (the
 # "Memory" sidebar tab) auto-installs a Python venv and spawns a Python
@@ -130,7 +132,6 @@
     # human_test -> done. No VPS dependency, like dsh-mds itself.
     - id: kanban
       name: dsh-kanban
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-kanban').split(',').includes('dsh-kanban')"
 
     # Process laws at the tool seam: the principal agent writes only mds/ and
     # prototype/ (code is a subagent's job), and no agent may set status: done.
@@ -153,12 +154,16 @@
     # screenshot, open external URLs (the `browser` tool).
     - id: browser-agent
       name: dsh-browser
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-browser').split(',').includes('dsh-browser')"
 
     # Agent control of the sidebar tabs: list/focus/close/open (the `sidebar` tool).
     - id: sidebar-agent
       name: dsh-sidebar
-      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-sidebar').split(',').includes('dsh-sidebar')"
+
+    # User-registered MCP servers ("MCP" tab): the list persists in
+    # $DSH_HOME/mcp/servers.json and each enabled server is mounted live through
+    # dsh-mcp-client. Never gated: the registry is per machine, not per profile.
+    - id: mcp
+      name: dsh-mcp
 
     # SSH to external VPS servers: one-click paramiko install into a dedicated
     # venv plus the agents' ssh_run/ssh_transfer tools.
