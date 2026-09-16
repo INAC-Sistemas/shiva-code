@@ -58,6 +58,6 @@ pnpm dlx shadcn@latest add -y dialog card form
 
 - Import through the project alias (`@/components/ui/dialog`), never from a package path.
 - Compose shadcn primitives. A custom component is allowed only when no shadcn item covers the need; say which need, in the ticket report.
-- Style with the theme's CSS variables and Tailwind utilities created by `init`; no hard-coded colors, no second component library.
+- Style with the theme's CSS variables and Tailwind utilities created by `init`; no hard-coded colors, no second component library. The variable values come from `mds/epics/<epic>/03-palette.md` — see `/ui-palette`.
 - Keep the prototype's frozen UX: shadcn decides how a control is built, not which screens, fields or flows exist.
 - Done means the component is in the `ui` directory, used by the screen, `pnpm run build` passes, and a real-browser screenshot shows it.

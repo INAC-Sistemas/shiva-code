@@ -10,7 +10,7 @@ Settle the decisions a change depends on before any code exists. Read `/00-start
 
 ## Entry contract
 
-Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, plus audited-GREEN `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
+Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, `03-palette.md`, plus audited-GREEN `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
 
 ## Which decisions reach the requester
 
@@ -21,6 +21,8 @@ Decide alone and just state: language, libraries, layout, naming, schema shape, 
 A web UI is React + Tailwind with shadcn/ui components unless the existing code or a requester constraint rules it out — decide it alone and `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`vite`, `next`, …), base (`radix` by default) and preset (`nova` by default), or with why shadcn does not apply. The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
 
 Icons are a separate Decisions row: Lucide (`lucide-react`) by default, Tabler (`@tabler/icons-react`) only when Lucide lacks the glyph or a requester names it — `skill ui-icons` for the rules. A pack already in the project's `package.json` wins over both defaults.
+
+Theme colors are a separate Decisions row that cites `03-palette.md` (read it by path with the other inputs) and names the theme CSS file of the chosen template and its value format — `skill ui-palette` for the rules. The requester already chose the palette; the plan never re-picks colors, and a palette change returns to `/03-prototype` as an amendment.
 
 ## Delivery, data and servers
 

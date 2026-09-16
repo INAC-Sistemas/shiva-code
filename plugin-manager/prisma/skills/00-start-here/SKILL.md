@@ -34,6 +34,7 @@ Gates are real: `/03` requires `/01`+`/02`; `/04` requires validated prototype +
 - **Prototypes live in `<workspace>/prototype/`** and render live in the Prototype tab. Drive the live view with the `prototype_automation` tool (ops `navigate`, `click`, `fill`, `read`, `eval`, `wait_for`, `screenshot`, plus raw `console`/`results`/`submit`/`wait`); **the tool opens the Prototype tab itself when it is closed**, and screenshots capture the app window — call it whenever you need to see or drive the prototype, with no user step.
 - **UI components**: real React UI is built from shadcn/ui through its CLI (`pnpm dlx shadcn@latest`) — see `/shadcn-ui`. The `/03-prototype` HTML stays CDN-only.
 - **Icons**: every icon comes from Lucide, or Tabler when Lucide has no glyph — see `/ui-icons`. A hand-written SVG or an emoji-as-icon is a defect.
+- **Colors**: the requester chooses the palette at the start of `/03-prototype`; it lives in `mds/epics/<epic>/03-palette.md` and reaches code only through `prototype/theme.js` and the app's theme CSS variables — see `/ui-palette`. A color literal anywhere else is a defect.
 - **Media**: `generate_image`/`generate_video`/`generate_audio` save into `assets/`; reference the returned path. Use them for prototype media instead of placeholders.
 - **Web**: `web_search` and `web_fetch` (keyless DuckDuckGo provider) for research; `read_image` to look at a saved screenshot or asset.
 - **Remote servers**: `ssh_run` and `ssh_transfer` (paramiko) for work on an external VPS.

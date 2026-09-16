@@ -8,11 +8,15 @@ whenToUse: After /02-core-flows is validated and before /04-tech-plan.
 
 Turn the validated Core Flows into screens the requester has actually seen, clicked and approved — then freeze the UX as machine-checkable artifacts. Read `/00-start-here` first. Requires `mds/epics/<epic>/01-brief.md` and `02-flows.md` with `status: validated`.
 
+## Part 0 — Palette
+
+`skill ui-palette` before any screen: render the palette options in `prototype/palettes.html`, let the requester pick one or send custom colors with `ask_user_question`, and record `mds/epics/<epic>/03-palette.md` with `status: validated`. No screen is built before that file exists; the palette is the first approved line of the validation ledger.
+
 ## Part 1 — Build (CDN-first, mocks only)
 
 Build in **`<workspace>/prototype/`** (create it if missing) with the `write` tool. Non-negotiables:
 
-- **Always CDNs, never hand-rolled infrastructure**: Tailwind Play CDN for styling; lucide for icons; shadcn/ui-style component patterns implemented on top of Tailwind; three.js for 3D/parallax; recharts/Chart.js for charts. Whatever the screen needs, prefer a CDN library. CDNs are client-side assets, allowed and expected — never penalized by audits.
+- **Always CDNs, never hand-rolled infrastructure**: Tailwind Play CDN for styling, themed only by `prototype/theme.js` from `03-palette.md` (role classes such as `bg-primary`, never a color literal or a default Tailwind color); lucide for icons; shadcn/ui-style component patterns implemented on top of Tailwind; three.js for 3D/parallax; recharts/Chart.js for charts. Whatever the screen needs, prefer a CDN library. CDNs are client-side assets, allowed and expected — never penalized by audits.
 - **Zero backend.** No Node/Python/Go process is created or required. All data is **mocked**: hardcoded lists, in-memory state, and **localStorage** as the database (keys prefixed `proto_<epic>_`).
 - All state faked: auth, payment, hash, ZIP, rollback — simulated. The only goal is UX/UI validation of the core flows. Nothing here is a production requirement.
 - **Navigation rule**: no URL/hash routing (`href="#/x"` blanks the iframe). Pure-JS router: `data-go="screen"` attributes + one delegated click listener toggling view sections. Never navigate the frame itself from page code.
@@ -66,6 +70,7 @@ Then <visible outcome>
 Given … When … Then <recovery/feedback>
 (…ALL screens, ALL states — happy, empty, unhappy…)
 ## Global decisions (tone, naming, theme, CDNs)
+palette: mds/epics/<epic>/03-palette.md (<chosen palette name>)
 ## localStorage keys used by the prototype
 ```
 
