@@ -1,6 +1,6 @@
 {
   "name": "dsh-vercel",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Vercel CLI connection: install, login, project link and deployment status in a sidebar tab",
   "type": "module",
   "license": "MIT",

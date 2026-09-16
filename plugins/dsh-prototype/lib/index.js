@@ -1,4 +1,4 @@
-﻿// dsh-prototype host half: serves the workspace `prototype/` folder over a
+// dsh-prototype host half: serves the workspace `prototype/` folder over a
 // same-origin route (so relative links, css, js and localStorage all work),
 // injects the automation shim into every served HTML page, and connects the tab
 // to the command queue agents use to drive the live browser view.
@@ -16,8 +16,11 @@ import { join, resolve, relative, dirname, sep, basename, extname } from 'node:p
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { resolveLoginAuthorization } from 'dsh-login/vps-auth'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { BUNDLED_SHIM_JS, BUNDLED_SHIM_VERSION } from './shim.js'
+export { pageOpsExpression } from './shim.js'
 
-export const inject = ['webServer', 'sessions']
+export const inject = ['webServer', 'sessions', 'tools']
 
 /**
  * Plugin config.
@@ -78,29 +81,34 @@ function log(msg) {
  * @returns absolute path of the workspace this request belongs to.
  */
 async function workspaceOf(ctx, payload) {
-  const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
-  if (cwd && resolve(cwd) === cwd) return cwd
   const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : ''
-  if (!sessionId) return process.cwd()
 
-  const live = ctx.get('sessions')?.get(sessionId)?.header?.cwd
-  if (typeof live === 'string' && live) return live
+  // The session's own cwd is authoritative: the client-supplied `cwd` can be the
+  // harness launch root (a desktop-only directory) while the conversation lives
+  // in a workspace. Resolve the session first, and fall back to the hint only
+  // when the session is unknown to this backend.
+  if (sessionId) {
+    const live = ctx.get('sessions')?.get(sessionId)?.header?.cwd
+    if (typeof live === 'string' && live) return live
 
-  const persistence = ctx.get('sessionPersistence')
-  if (persistence !== undefined) {
-    let stored
-    try {
-      stored = (await persistence.inspect(sessionId)).meta.cwd
-    } catch (e) {
-      // `inspect` rejects for an id with no record on disk - a session the tab
-      // reported that this harness's backend does not own. Nothing else can
-      // reach here, and the fallback below is the answer for it.
-      log(`session "${sessionId}" is not on disk: ${String((e && e.message) || e)}`)
+    const persistence = ctx.get('sessionPersistence')
+    if (persistence !== undefined) {
+      let stored
+      try {
+        stored = (await persistence.inspect(sessionId)).meta.cwd
+      } catch (e) {
+        // `inspect` rejects for an id with no record on disk - a session the tab
+        // reported that this harness's backend does not own.
+        log(`session "${sessionId}" is not on disk: ${String((e && e.message) || e)}`)
+      }
+      if (typeof stored === 'string' && stored) return stored
     }
-    if (typeof stored === 'string' && stored) return stored
   }
 
-  log(`session "${sessionId}" has no cwd - falling back to ${process.cwd()}`)
+  const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+  if (cwd && resolve(cwd) === cwd) return cwd
+
+  log(`no session cwd for "${sessionId || '(none)'}" - falling back to ${process.cwd()}`)
   return process.cwd()
 }
 
@@ -185,7 +193,7 @@ async function isDir(p) {
   try { return (await stat(p)).isDirectory() } catch { return false }
 }
 
-// â”€â”€ automation shim â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── automation shim ───────────────────────────────────────────────────────
 // Injected into every served HTML page. Bridges agent commands (relayed by
 // the plugin tab over postMessage) into the live page: clicks, fills, reads,
 // eval, waits - and captures console error/warn plus runtime errors.
@@ -196,93 +204,7 @@ async function isDir(p) {
 // fallback served when no endpoint is configured or the library is unreachable;
 // it is what this plugin can still guarantee offline.
 
-/** Version of the frozen copy below. The library's copy carries its own. */
-const BUNDLED_SHIM_VERSION = '1'
 
-const BUNDLED_SHIM_JS = [
-  '(function(){',
-  "if (window.__DSH_PROTOTYPE_SHIM__) return;",
-  `window.__DSH_PROTOTYPE_SHIM__ = ${JSON.stringify(BUNDLED_SHIM_VERSION)};`,
-  "var buffer = [];",
-  "var MAX = 200;",
-  "function push(level, text) {",
-  "  var entry = { level: level, text: String(text), time: new Date().toISOString() };",
-  "  buffer.push(entry); if (buffer.length > MAX) buffer.shift();",
-  "  try { parent.postMessage({ source: 'dsh-prototype-shim', console: entry }, '*'); } catch (e) {}",
-  "}",
-  "['error','warn'].forEach(function (level) {",
-  "  var original = console[level].bind(console);",
-  "  console[level] = function () {",
-  "    var parts = []; for (var i = 0; i < arguments.length; i++) { try { parts.push(typeof arguments[i] === 'object' ? JSON.stringify(arguments[i]) : String(arguments[i])); } catch (e) { parts.push('[unserializable]'); } }",
-  "    push(level, parts.join(' '));",
-  "    original.apply(null, arguments);",
-  "  };",
-  "});",
-  "window.addEventListener('error', function (e) { push('error', 'Uncaught: ' + e.message + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0)); });",
-  "window.addEventListener('unhandledrejection', function (e) { push('error', 'Unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || String(e.reason))); });",
-  "function findByText(text) {",
-  "  var nodes = document.querySelectorAll('button, a, [role=button], input[type=button], input[type=submit], label, li, span, div');",
-  "  var needle = String(text).trim().toLowerCase();",
-  "  for (var i = 0; i < nodes.length; i++) {",
-  "    var t = (nodes[i].textContent || '').trim().toLowerCase();",
-  "    if (t && t.indexOf(needle) !== -1 && nodes[i].offsetParent !== null) return nodes[i];",
-  "  }",
-  "  return null;",
-  "}",
-  "function one(el) { el.scrollIntoView({ block: 'center' }); el.click(); return { clicked: true, tag: el.tagName, text: (el.textContent || el.value || '').trim().slice(0, 120) }; }",
-  "function setNative(el, value) {",
-  "  var proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;",
-  "  var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;",
-  "  setter.call(el, value);",
-  "  el.dispatchEvent(new Event('input', { bubbles: true }));",
-  "  el.dispatchEvent(new Event('change', { bubbles: true }));",
-  "}",
-  "var ops = {",
-  "  click: function (a) {",
-  "    var el = a.selector ? document.querySelector(a.selector) : findByText(a.text);",
-  "    if (!el) throw new Error('element not found: ' + (a.selector || a.text));",
-  "    return one(el);",
-  "  },",
-  "  fill: function (a) {",
-  "    var el = document.querySelector(a.selector);",
-  "    if (!el) throw new Error('element not found: ' + a.selector);",
-  "    setNative(el, String(a.value));",
-  "    return { filled: true, value: String(a.value).slice(0, 120) };",
-  "  },",
-  "  read: function (a) {",
-  "    var el = document.querySelector(a.selector);",
-  "    if (!el) throw new Error('element not found: ' + a.selector);",
-  "    if (a.attr) return el.getAttribute(a.attr);",
-  "    return el.value !== undefined && el.tagName !== 'DIV' && el.tagName !== 'SPAN' ? el.value : (el.textContent || '').trim();",
-  "  },",
-  "  eval: function (a) {",
-  "    var fn = new Function('return (' + a.code + ')');",
-  "    return fn();",
-  "  },",
-  "  wait_for: function (a) {",
-  "    var deadline = Date.now() + (a.timeoutMs || 5000);",
-  "    return new Promise(function (resolveP, rejectP) {",
-  "      (function check() {",
-  "        var el = document.querySelector(a.selector);",
-  "        if (el) return resolveP({ found: true });",
-  "        if (Date.now() > deadline) return rejectP(new Error('wait_for timeout: ' + a.selector));",
-  "        setTimeout(check, 120);",
-  "      })();",
-  "    });",
-  "  },",
-  "  console_dump: function () { return { entries: buffer }; },",
-  "};",
-  "window.addEventListener('message', function (e) {",
-  "  var cmd = e.data;",
-  "  if (!cmd || cmd.source !== 'dsh-prototype' || !cmd.id) return;",
-  "  var op = ops[cmd.op];",
-  "  if (!op) { parent.postMessage({ source: 'dsh-prototype-shim', id: cmd.id, ok: false, error: 'unknown op ' + cmd.op }, '*'); return; }",
-  "  Promise.resolve().then(function () { return op(cmd); })",
-  "    .then(function (result) { parent.postMessage({ source: 'dsh-prototype-shim', id: cmd.id, ok: true, result: result, consoleTail: buffer.slice(-20) }, '*'); })",
-  "    .catch(function (err) { parent.postMessage({ source: 'dsh-prototype-shim', id: cmd.id, ok: false, error: String((err && err.message) || err) }, '*'); });",
-  "});",
-  "})();",
-].join('\n')
 
 // -- automation backend ------------------------------------------------------
 // One seam, two implementations, chosen once at load. Both answer the same
@@ -537,7 +459,98 @@ function injectShim(html) {
   return html + tag
 }
 
-// â”€â”€ plugin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- agent tool ---------------------------------------------------------------
+
+/**
+ * The interactive ops the tool submits to the queue and long-polls. Each maps
+ * to one shim command; `console`, `results`, `submit` and `wait` are exposed
+ * raw because the tab and the agent share the same queue.
+ */
+const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'screenshot']
+const RAW_OPS = ['console', 'results', 'submit', 'wait']
+const AUTOMATION_OPS = [...INTERACTIVE_OPS, ...RAW_OPS]
+
+/**
+ * Run one automation request against the live prototype queue and normalize the
+ * queue's `{code, body}` envelope into the value the tool returns. Interactive
+ * ops submit a command and long-poll its result; the raw ops reach the queue
+ * directly. A missing tab (nothing polling `automation/pending`) surfaces as a
+ * timeout, which the thrown message names.
+ */
+async function runAutomation(queue, scope, args) {
+  const op = String(args.op)
+  if (op === 'console') return (await queue.call('console', {}, scope)).body
+  if (op === 'results') return (await queue.call('results', {}, scope)).body
+  if (op === 'submit') {
+    const cmd = (typeof args.cmd === 'object' && args.cmd !== null) ? args.cmd : {}
+    const { code, body } = await queue.call('submit', { cmd }, scope)
+    if (code !== 200 || !body.ok) throw new Error(body.error || `submit failed (${code})`)
+    return body
+  }
+  if (op === 'wait') {
+    const { body } = await queue.call('wait', { id: String(args.id ?? ''), timeoutMs: args.timeoutMs }, scope)
+    if (!body.ok) throw new Error(body.error || 'timeout waiting for the prototype command')
+    return body
+  }
+  const cmd = { op }
+  for (const key of ['selector', 'text', 'value', 'code', 'path', 'attr', 'timeoutMs']) {
+    if (args[key] !== undefined) cmd[key] = args[key]
+  }
+  const submitted = await queue.call('submit', { cmd }, scope)
+  if (submitted.code !== 200 || !submitted.body.ok) {
+    throw new Error(submitted.body.error || `submit failed (${submitted.code}) — is the Prototype tab open?`)
+  }
+  const waited = await queue.call('wait', { id: submitted.body.id, timeoutMs: args.timeoutMs }, scope)
+  if (!waited.body.ok) throw new Error(waited.body.error || 'timeout — is the Prototype tab open and polling?')
+  return { id: submitted.body.id, ...waited.body.result }
+}
+
+/**
+ * Build the `prototype_automation` tool. It drives the same `automation/*`
+ * queue the Prototype tab consumes, in-process, so the agent never needs curl:
+ * the tab must be open (it is what executes commands and answers `pending`).
+ * Screen capture is always on — the desktop grants the first screen silently.
+ */
+function createAutomationTool(ctx, queue) {
+  return defineTool({
+    name: 'prototype_automation',
+    description:
+      'Drive the live Prototype browser view of the workspace: navigate, click, fill, read, eval, wait_for, ' +
+      'screenshot, plus the raw console/results/submit/wait queue ops. Use it to self-test every prototype screen ' +
+      'before handing it over and to reproduce what the requester reports. It opens the Prototype tab automatically ' +
+      'when it is closed; screenshots capture the app window and are always available.',
+    parameters: {
+      op: { type: 'string', required: true, enum: AUTOMATION_OPS, description: 'Operation to run against the live prototype view.' },
+      selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for).' },
+      text: { type: 'string', description: 'Visible text to match instead of a selector (click).' },
+      value: { type: 'string', description: 'Value to set (fill).' },
+      code: { type: 'string', description: 'Expression to evaluate in the page (eval).' },
+      path: { type: 'string', description: 'Page path inside prototype/ (navigate).' },
+      attr: { type: 'string', description: 'Attribute to read instead of value/text (read).' },
+      timeoutMs: { type: 'number', description: 'Deadline for the command in ms; default 8000, capped at 10000.' },
+      id: { type: 'string', description: 'Command id (wait).' },
+      cmd: { type: 'object', additionalProperties: true, description: 'Raw command for op=submit, e.g. {"op":"click","selector":"#go"}.' },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (args, value) => [{ type: 'text', text: `prototype ${args.op}: ${JSON.stringify(value)}` }],
+    },
+    async execute(args, exec) {
+      const cwd = exec?.agent?.session?.header?.cwd
+      const sessionId = exec?.agent?.session?.header?.id ?? ''
+      // Never fall back to process.cwd(): the harness runs at the desktop's
+      // launch root, so that would target an empty workspace. Let the host
+      // resolve the workspace from the session id instead.
+      const workspace = await workspaceOf(ctx, cwd ? { cwd, sessionId } : { sessionId })
+      const root = join(workspace, PROTOTYPE_FOLDER)
+      const scope = { token: scopeToken(workspace), root }
+      return runAutomation(queue, scope, args)
+    },
+    presentCall: (args) => ({ card: 'generic', title: `Prototype ${args.op}`, kind: 'other', rawInput: args }),
+  })
+}
+
+// ── plugin ────────────────────────────────────────────────────────────────
 
 export function apply(ctx, config = {}) {
   const webServer = ctx.get('webServer')
@@ -704,6 +717,16 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => webServer.register({ kind: 'prefix', path: '/prototype/shim.js', handler: shimHandler }), 'dsh-prototype: shim')
   // No trailing slash: the webserver prefix contract is `p` or `p/<anything>`.
   ctx.effect(() => webServer.register({ kind: 'prefix', path: '/prototype/file', handler: fileHandler }), 'dsh-prototype: files')
+
+  const tools = ctx.get('tools')
+  if (tools && typeof tools.register === 'function') {
+    const automationTool = createAutomationTool(ctx, queue)
+    ctx.effect(() => tools.register(automationTool), `dsh-prototype: tool ${automationTool.name}`)
+    log(`agent tool: ${automationTool.name}`)
+  } else {
+    log('tools service unavailable — prototype_automation not registered')
+  }
+
   log('loaded')
   log('/prototype/api, /prototype/file/, /prototype/shim.js registered')
 }

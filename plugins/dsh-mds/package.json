@@ -1,6 +1,6 @@
 {
   "name": "dsh-mds",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH better-sidebar tab for workspace markdown artifacts: a workspace-root mds/ folder with create/edit/delete for folders and files, scoped API ready to back agent tools",
   "type": "module",
   "license": "MIT",

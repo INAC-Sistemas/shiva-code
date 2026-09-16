@@ -5,7 +5,7 @@ description: Helps users discover and install agent skills when they ask questio
 
 # Find Skills
 
-This skill helps you discover and install skills from the open agent skills ecosystem.
+This skill helps you discover and install skills from the open agent skills ecosystem. It is **not** a pipeline stage — the numbered 0x skills are. Use it only when the requester wants a capability that may already exist as an external skill; this dsh's own skills live in the roots named in `/00-start-here` and are managed in the **Skills** tab.
 
 ## When to Use This Skill
 

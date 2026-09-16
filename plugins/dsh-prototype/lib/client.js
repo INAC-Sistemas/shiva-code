@@ -7,9 +7,11 @@ window.__ModuleLoader__.load({ id: 'dsh-prototype', factory: (require) => {
 // dsh-prototype client half: renders the workspace prototype/ folder in a
 // same-origin iframe (served by the plugin's /prototype/file/ route), and
 // bridges agent automation commands to the live page: navigate is resolved
-// parent-side, click/fill/read/eval/wait_for go through the injected shim,
-// screenshots come from a user-granted getDisplayMedia stream, and console
-// error/warn from the prototype is streamed to the drawer and the host.
+// parent-side, click/fill/read/eval/wait_for go through the injected shim, and
+// console error/warn from the prototype is streamed to the drawer and the host.
+// A module-level dispatcher consumes the agent queue even when the tab has
+// never been opened — it activates the tab first — and screenshots come from
+// the desktop's window-capture bridge (no user gesture, no toggle).
 
 const TAB_ID = 'dsh-prototype:view'
 const FILE_BASE = '/prototype/file/'
@@ -19,12 +21,85 @@ const FILE_BASE = '/prototype/file/'
 // the served folder resolve to the workspace the user is actually looking at.
 let SCOPE = null
 
-function api(method, payload) {
+// Captured at activation so the dispatcher can open the Prototype tab for the
+// active session even when it has never been rendered.
+let sidebarService = null
+// The mounted view's command runner; null while the tab is not rendered.
+let viewHandler = null
+// The dispatcher's single in-flight command (the queue runs one at a time).
+let inflightCommand = null
+let dispatcherTimer = null
+
+function api(method, payload, scope) {
   return fetch('/prototype/api/' + method, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...(SCOPE ?? {}), ...(payload ?? {}) }),
+    body: JSON.stringify({ ...((scope ?? SCOPE) ?? {}), ...(payload ?? {}) }),
   }).then((r) => r.json())
+}
+
+// The active session the dispatcher targets. The sidebar knows it even when the
+// Prototype tab is closed; the host resolves the workspace cwd from the id. A
+// scope with no usable id must be null — an empty payload makes the host fall
+// back to the harness process cwd (the launch root), not the user's workspace.
+function scopeOf() {
+  let sessionId
+  try { sessionId = sidebarService?.getSnapshot?.()?.sessionId } catch { /* sidebar unavailable */ }
+  if (typeof sessionId === 'string' && sessionId) {
+    return SCOPE && SCOPE.sessionId === sessionId && SCOPE.cwd ? { sessionId, cwd: SCOPE.cwd } : { sessionId }
+  }
+  if (SCOPE && typeof SCOPE.sessionId === 'string' && SCOPE.sessionId) {
+    return { sessionId: SCOPE.sessionId, cwd: SCOPE.cwd }
+  }
+  return null
+}
+
+// Capture the app window through the desktop bridge: no gesture, no picker.
+function desktopCapture() {
+  const bridge = window.dshDesktopScreenCapture
+  if (bridge && typeof bridge.capture === 'function') return bridge.capture()
+  return Promise.reject(new Error('screenshots require the DSH Desktop app'))
+}
+
+// Open (or focus) the tab and wait for its runner to register, up to a bound.
+// `openTab` opens the tab (the single-instance descriptor focuses an existing
+// one); `activateTab` alone only switches to a tab that is already open.
+async function ensureView(scope) {
+  if (viewHandler) return
+  try {
+    if (typeof sidebarService?.openTab === 'function') sidebarService.openTab({ type: TAB_ID }, scope)
+    else sidebarService?.activateTab?.(TAB_ID, scope)
+  } catch { /* unknown tab is a no-op */ }
+  const deadline = Date.now() + 8000
+  while (!viewHandler && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100))
+}
+
+// Always-on consumer of the agent queue. It runs whether or not the tab is
+// open, so the agent never needs the human to open the Prototype tab first.
+function startDispatcher() {
+  if (dispatcherTimer !== null) return
+  dispatcherTimer = setInterval(async () => {
+    if (inflightCommand) return
+    const scope = scopeOf()
+    if (!scope) return
+    let cmd
+    try { cmd = (await api('automation/pending', {}, scope)).cmd } catch { return }
+    if (!cmd) return
+    inflightCommand = cmd
+    try {
+      await ensureView(scope)
+      if (!viewHandler) throw new Error('could not open the Prototype tab')
+      await viewHandler.run(cmd, scope)
+    } catch (e) {
+      api('automation/result', { id: cmd.id, ok: false, error: String((e && e.message) || e) }, scope).catch(() => {})
+    } finally {
+      inflightCommand = null
+    }
+  }, 600)
+}
+
+function stopDispatcher() {
+  if (dispatcherTimer !== null) { clearInterval(dispatcherTimer); dispatcherTimer = null }
 }
 
 function injectStyles() {
@@ -83,14 +158,11 @@ function PrototypeView(props) {
   const [currentPath, setCurrentPath] = React.useState(null)
   const [consoleOpen, setConsoleOpen] = React.useState(false)
   const [consoleEntries, setConsoleEntries] = React.useState([])
-  const [captureOn, setCaptureOn] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [toast, setToast] = React.useState(null)
   const toastTimer = React.useRef(null)
   const iframeRef = React.useRef(null)
-  const streamRef = React.useRef(null)
-  const videoRef = React.useRef(null)
-  const inflightRef = React.useRef(null) // { id, timer }
+  const inflightRef = React.useRef(null) // { id, timer, resolve }
 
   const say = React.useCallback((msg, err) => {
     setToast({ msg, err })
@@ -169,6 +241,7 @@ function PrototypeView(props) {
           clearTimeout(inflight.timer)
           inflightRef.current = null
           api('automation/result', { id, ok: !!data.ok, data: data.result ?? null, error: data.error ?? null }).catch(() => {})
+          inflight.resolve?.()
         }
       }
     }
@@ -176,94 +249,47 @@ function PrototypeView(props) {
     return () => window.removeEventListener('message', onMessage)
   }, [pushConsole])
 
-  // ── screen capture (user grants once, stream stays alive) ──
-  const ensureCapture = async () => {
-    if (streamRef.current) return true
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 } })
-      streamRef.current = stream
-      setCaptureOn(true)
-      stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        streamRef.current = null
-        setCaptureOn(false)
-        say('Screen sharing ended', true)
-      })
-      return true
-    } catch (e) {
-      say('Screen capture not granted: ' + String(e?.message ?? e), true)
-      return false
+  // ── agent command runner (invoked by the module dispatcher) ──
+  // Resolves only once the command is settled, so the dispatcher never overlaps
+  // two commands. Shim ops settle when the iframe answers; navigate and
+  // screenshot settle here.
+  const run = React.useCallback(async (cmd, scope) => {
+    const { id, op } = cmd
+    const done = (payload) => { api('automation/result', { id, ...payload }, scope).catch(() => {}) }
+    if (op === 'navigate') {
+      setCurrentPath(String(cmd.path ?? 'index.html'))
+      done({ ok: true, data: { navigated: cmd.path } })
+      return
     }
-  }
-
-  const captureFrame = () => new Promise((resolveP, rejectP) => {
-    const stream = streamRef.current
-    if (!stream) return rejectP(new Error('screen capture not enabled'))
-    let video = videoRef.current
-    if (!video) {
-      video = document.createElement('video')
-      video.muted = true
-      video.playsInline = true
-      video.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px'
-      document.body.append(video)
-      videoRef.current = video
-    }
-    if (video.srcObject !== stream) video.srcObject = stream
-    const grab = () => {
+    if (op === 'screenshot') {
       try {
-        const canvas = document.createElement('canvas')
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        if (!canvas.width || !canvas.height) return rejectP(new Error('no video frame yet'))
-        canvas.getContext('2d').drawImage(video, 0, 0)
-        resolveP(canvas.toDataURL('image/png'))
-      } catch (err) { rejectP(err) }
+        // The tab was just activated; give it a beat to paint before the grab.
+        await new Promise((r) => setTimeout(r, 400))
+        const dataUrl = await desktopCapture()
+        done({ ok: true, data: { dataUrl } })
+      } catch (e) {
+        done({ ok: false, error: String((e && e.message) || e) })
+      }
+      return
     }
-    if (video.readyState >= 2) requestAnimationFrame(grab)
-    else video.onloadeddata = () => requestAnimationFrame(grab)
-  })
-
-  const answer = (id, payload) => {
-    api('automation/result', { id, ...payload }).catch(() => {})
-  }
-
-  // ── automation bridge: poll the host queue, drive the live view ──
-  React.useEffect(() => {
-    const timer = setInterval(async () => {
-      if (inflightRef.current) return
-      let pendingCmd
-      try {
-        const r = await api('automation/pending')
-        pendingCmd = r.cmd
-      } catch { return }
-      if (!pendingCmd) return
-      const { id, op } = pendingCmd
-      if (op === 'navigate') {
-        setCurrentPath(String(pendingCmd.path ?? 'index.html'))
-        return answer(id, { ok: true, data: { navigated: pendingCmd.path } })
-      }
-      if (op === 'screenshot') {
-        if (!streamRef.current) {
-          return answer(id, { ok: false, error: 'screen capture is not enabled — click "Enable screen capture" in the Prototype tab once' })
-        }
-        try {
-          const dataUrl = await captureFrame()
-          return answer(id, { ok: true, data: { dataUrl } })
-        } catch (err) {
-          return answer(id, { ok: false, error: String(err?.message ?? err) })
-        }
-      }
-      // shim ops: click, fill, read, eval, wait_for, console_dump
-      const win = iframeRef.current?.contentWindow
-      if (!win) return answer(id, { ok: false, error: 'no prototype loaded' })
+    const win = iframeRef.current?.contentWindow
+    if (!win) { done({ ok: false, error: 'no prototype loaded' }); return }
+    await new Promise((resolve) => {
       const timer = setTimeout(() => {
-        inflightRef.current = null
-        answer(id, { ok: false, error: 'shim did not answer in 9s (page still loading?)' })
+        if (inflightRef.current?.id === id) inflightRef.current = null
+        done({ ok: false, error: 'shim did not answer in 9s (page still loading?)' })
+        resolve()
       }, 9000)
-      inflightRef.current = { id, timer }
-      win.postMessage({ source: 'dsh-prototype', id, op, ...pendingCmd }, '*')
-    }, 400)
-    return () => clearInterval(timer)
+      inflightRef.current = { id, timer, resolve }
+      win.postMessage({ source: 'dsh-prototype', id, op, ...cmd }, '*')
+    })
   }, [])
+
+  // Expose the runner to the dispatcher while this tab is rendered.
+  React.useEffect(() => {
+    viewHandler = { run }
+    return () => { if (viewHandler && viewHandler.run === run) viewHandler = null }
+  }, [run])
 
   // Served URL for the workspace this tab is scoped to. The token is minted by
   // `status`; relative links inside the page keep it, so navigation stays in
@@ -300,12 +326,6 @@ function PrototypeView(props) {
         htmlFiles.map((p) => h('option', { key: p, value: p }, p))),
       h('span', { className: 'pt-url' }, '/prototype/file/' + (currentPath ?? '')),
       h('button', { className: 'pt-btn', onClick: reload, title: 'Reload the page' }, '⟳'),
-      h('button', { className: 'pt-btn', onClick: () => api('open', { path: '.' }).then((r) => say('Opened in ' + r.editor)).catch(() => {}) }, 'Open'),
-      h('button', {
-        className: 'pt-btn' + (captureOn ? ' on' : ''),
-        onClick: () => { ensureCapture() },
-        title: 'Grant screen capture once — agent screenshots then capture the whole screen',
-      }, captureOn ? '● Capture on' : 'Enable screen capture'),
       h('button', { className: 'pt-btn', onClick: () => setConsoleOpen(!consoleOpen), title: 'Console errors/warnings' },
         'Console ' + (consoleEntries.length ? '(' + consoleEntries.length + ')' : ''))),
     h('div', { className: 'pt-view' },
@@ -335,6 +355,10 @@ function apply(ctx) {
     apply(sidebarCtx) {
       const betterSidebar = sidebarCtx.betterSidebar
       if (!betterSidebar || typeof betterSidebar.registerTab !== 'function') return
+      sidebarService = betterSidebar
+      // The dispatcher is always on: an agent command can arrive while the tab
+      // is closed, and it opens the tab itself instead of stranding the command.
+      ctx.effect(() => { startDispatcher(); return () => stopDispatcher() }, 'dsh-prototype: dispatcher')
       ctx.effect(() => betterSidebar.registerTab({
         id: TAB_ID,
         title: 'Prototype',

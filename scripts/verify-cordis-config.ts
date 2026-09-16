@@ -47,8 +47,9 @@ const PROFILE_PLUGIN_ENV = 'DSH_PROFILE_PLUGINS'
  *
  * Each is here for a reason a profile cannot override: `dsh-better-sidebar` is
  * the chassis every other tab plugs into, `login` and `profiles` are the only
- * way back to a picker, and the rest are theme and locale with no model-facing
- * surface at all. A row absent from this list and from the gate below is not
+ * way back to a picker, `tool-guard` restricts every agent (a profile that
+ * omitted it would lift restrictions, not remove a tool), and the rest are theme
+ * and locale with no model-facing surface at all. A row absent from this list and from the gate below is not
  * "probably fine" — it is an undeclared plane, which is how the skill-library
  * leak survived unnoticed.
  */
@@ -66,6 +67,7 @@ const HOST_ALWAYS = new Set([
   'dsh-user-menu',
   'login',
   'profiles',
+  'tool-guard',
 ])
 // These example files are overlays consumed by the built dsh app, so their bare
 // specifiers resolve from apps/cli rather than the examples workspace.

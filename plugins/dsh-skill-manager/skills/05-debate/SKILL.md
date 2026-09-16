@@ -11,7 +11,7 @@ Run a structured argument over one consequential, genuinely ambiguous choice, th
 ## Procedure
 
 1. **State the question in one sentence, with the alternatives.**
-2. **Assign genuinely opposed positions** — one per lens (correctness, operational cost, migration risk, user experience, the maintainer in two years). Three agents agreeing is one agent with extra latency.
+2. **Assign genuinely opposed positions** — one per lens (correctness, operational cost, migration risk, user experience, the maintainer in two years). Three agents agreeing is one agent with extra latency. `list_subagent_models` shows which models you can give each lens; distinct models make the disagreement more real.
 3. **Argue each position independently** — one `subagent` per position, or separate passes. Each states its case, **what would have to be true for it to be wrong**, and the strongest objection to it.
 4. **Cross-examine in this exact shape**: give every position the single strongest objection of each other position, one at a time, demanding a direct answer to that objection alone. Summaries let positions dodge the sharp point. A position that cannot answer has lost that ground — record which.
 5. **Score against what this project cares about** — criteria named before the arguments are read, so they are not fitted to a favourite.

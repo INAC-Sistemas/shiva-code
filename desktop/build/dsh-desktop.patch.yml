@@ -125,6 +125,20 @@
       name: dsh-mds
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
 
+    # Kanban board over mds/epics/*/06-tickets/*.md: reads the ticket status
+    # frontmatter and moves cards active -> in_progress -> code_test ->
+    # human_test -> done. No VPS dependency, like dsh-mds itself.
+    - id: kanban
+      name: dsh-kanban
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-kanban').split(',').includes('dsh-kanban')"
+
+    # Process laws at the tool seam: the principal agent writes only mds/ and
+    # prototype/ (code is a subagent's job), and no agent may set status: done.
+    # `tool-guard` is never gated: it restricts what agents may do, so a profile
+    # that left it out would lift those restrictions instead of removing a tool.
+    - id: tool-guard
+      name: dsh-tool-guard
+
     - id: assets
       name: dsh-assets
     - id: 9router
@@ -134,6 +148,17 @@
     # seam, so the agents' native web_search works with no API key.
     - id: web-search
       name: dsh-web-search
+
+    # Agent control of the better-sidebar browser tab: open, navigate,
+    # screenshot, open external URLs (the `browser` tool).
+    - id: browser-agent
+      name: dsh-browser
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-browser').split(',').includes('dsh-browser')"
+
+    # Agent control of the sidebar tabs: list/focus/close/open (the `sidebar` tool).
+    - id: sidebar-agent
+      name: dsh-sidebar
+      disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-sidebar').split(',').includes('dsh-sidebar')"
 
     # SSH to external VPS servers: one-click paramiko install into a dedicated
     # venv plus the agents' ssh_run/ssh_transfer tools.

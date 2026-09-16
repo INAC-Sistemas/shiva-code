@@ -1,6 +1,6 @@
 {
   "name": "dsh-railway",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Railway CLI connection: install, login, project link and deploy status in a sidebar tab",
   "type": "module",
   "license": "MIT",

@@ -1,11 +1,11 @@
 # dsh-prototype
 
-A simple live browser for workspace prototypes: renders the workspace `prototype/` folder (HTML + CSS + JS + localStorage, relative links, real navigation) in a same-origin iframe inside a better-sidebar tab — and gives agents an automation bridge to click, fill, navigate, read, eval and take **full-screen screenshots** without playwright.
+A simple live browser for workspace prototypes: renders the workspace `prototype/` folder (HTML + CSS + JS + localStorage, relative links, real navigation) in a same-origin iframe inside a better-sidebar tab — and gives agents an automation bridge to click, fill, navigate, read, eval and take **window screenshots** without playwright.
 
 ## Experience
 
 1. No `prototype/` folder yet → the tab is just **Create prototype folder**.
-2. Folder exists → file dropdown (every `.html`), URL line, reload, **Open** in VS Code, **Enable screen capture** (grant once), and a **Console** drawer streaming the page's `console.error/warn` + runtime errors.
+2. Folder exists → file dropdown (every `.html`), URL line, reload, and a **Console** drawer streaming the page's `console.error/warn` + runtime errors. Agents open this tab themselves when they need it.
 3. Default page: `index.html` (else the first `.html`). Navigation inside the iframe is real — the served files keep relative links working.
 
 ## How it works
@@ -14,11 +14,11 @@ A simple live browser for workspace prototypes: renders the workspace `prototype
 - **Shim** (injected): exposes click (selector or visible text), fill (native setter + input/change events), read, eval, wait_for and console_dump to the tab over `postMessage`; hooks `console.error/warn`, `window.onerror` and `unhandledrejection` (200-entry buffer). Its source of record is the plugin library (`plugin-manager/plugins/prototype/shim.ts`); this plugin fetches it, caches it for the process and serves it at `/prototype/shim.js`, so the page stays same-origin and a `<script src>` never needs a credential. The bundled copy answers when no endpoint is configured or the library is unreachable, and the log line names which one is in use.
 - **Automation queue**: one command in flight, 12 s TTL.
   - `POST /prototype/api/automation/submit` `{cmd:{op,...}}` → `{id}` (409 when busy)
-  - `automation/pending` — the tab polls, forwards to the iframe (navigate + screenshot are resolved parent-side)
+  - `automation/pending` — an always-on dispatcher polls; it activates the tab when closed, then forwards to the iframe (navigate + screenshot are resolved parent-side)
   - `automation/result` — tab posts the outcome; `dataUrl` screenshots are written to `prototype/.shots/shot-<ts>.png` and named in `data.saved`
   - `automation/wait` `{id, timeoutMs}` — long-poll for the result (≤ 10 s)
   - `automation/results`, `automation/console`, `automation/console_push`
-- **Screenshots**: `getDisplayMedia` granted once from the tab; every agent screenshot then grabs a live frame of the whole screen (chat + prototype included) with no further prompts. Without the grant the command fails with a clear error.
+- **Screenshots**: the desktop's `dshDesktopScreenCapture` bridge captures the app window (`webContents.capturePage`), so every agent screenshot works with no gesture, no picker and no toggle. Outside the desktop app the command fails with a clear error.
 
 ## Where the queue runs
 
@@ -33,7 +33,7 @@ A simple live browser for workspace prototypes: renders the workspace `prototype
 
 Every proxied call is authenticated as whoever signed in; with nobody signed in the API answers `401` with what to do about it, rather than asking the library anonymously. The workspace travels as its opaque token, so no local path leaves the machine, and the library indexes by (user, workspace) — two workspaces never see each other's queue.
 
-What does **not** move, in either mode: the file server, the `prototype/` CRUD, the same-origin iframe, `getDisplayMedia` and `open` in the editor all need the user's own machine. A screenshot is written to `prototype/.shots/` on the way through even when the library stores it, because the agent reads the capture as a file; that local PNG is a cache, the library's copy is the durable one and `data.shot.url` points at it.
+What does **not** move, in either mode: the file server, the `prototype/` CRUD, the same-origin iframe and the desktop window capture all need the user's own machine. A screenshot is written to `prototype/.shots/` on the way through even when the library stores it, because the agent reads the capture as a file; that local PNG is a cache, the library's copy is the durable one and `data.shot.url` points at it.
 
 The API the tab and the agent call is identical either way — `/prototype/api/*` never moves.
 

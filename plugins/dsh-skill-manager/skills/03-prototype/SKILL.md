@@ -21,26 +21,23 @@ Build in **`<workspace>/prototype/`** (create it if missing) with the `write` to
 - Default entry: `prototype/index.html`. Screens from `02-flows.md`, each flow's happy + unhappy states reachable; unhappy paths get labelled demo controls ("simular erro"). Landing view = the first real screen of the journey, never a meta-page.
 - Match the requester's language in every visible string. One screen per round-trip: build → hand over → collect corrections → approve. Never blanket-approve several screens.
 
-## Part 2 — Validate with browser use (our plugin's API)
+## Part 2 — Validate with browser use (the `prototype_automation` tool)
 
-Tell the requester: **open the Prototype tab** and, once, click **"Enable screen capture"** (needed for screenshots). The tab serves `prototype/` live and the injected shim lets you drive the page. All calls are `POST`, base `/prototype/api`, JSON, from the same origin:
+Drive it with the `prototype_automation` tool — no curl, no manual HTTP. **You never need the human to open anything**: the tool opens the Prototype tab itself when it is closed, and `screenshot` captures the app window (always available — there is no toggle). The tab serves `prototype/` live and injects a shim; it is what executes each command.
 
-| Step | Call | Notes |
+| `op` | Extra args | Effect |
 |---|---|---|
-| Submit a command | `automation/submit` `{cmd:{op:'click', text:'Entrar'}}` | → `{ok, id}`; 409 means one is in flight — `automation/wait` for it first |
-| Wait the result | `automation/wait` `{id, timeoutMs:10000}` | → `{ok, result:{...}}` or timeout |
-| Navigate a page | `{op:'navigate', path:'login.html'}` | resolved by the tab |
-| Click | `{op:'click', selector:'#btn'}` **or** `{op:'click', text:'Entrar'}` | text matches visible buttons/links |
-| Fill | `{op:'fill', selector:'#email', value:'a@b.c'}` | native events, framework-safe |
-| Read | `{op:'read', selector:'.total'}` or `{attr:'href'}` | assertion data |
-| Run JS | `{op:'eval', code:'localStorage.getItem("proto_x_users")'}` | inspect mock state |
-| Wait element | `{op:'wait_for', selector:'.modal', timeoutMs:5000}` | |
-| Console dump | `{op:'console_dump'}` | shim buffer |
-| **Screenshot** | `{op:'screenshot'}` | full screen (chat + prototype); saved to `prototype/.shots/shot-<ts>.png`; needs capture enabled |
-| Console ring | `automation/console` | captured error/warn + runtime errors |
-| History | `automation/results` | last 50 results |
+| `navigate` | `path:'login.html'` | Open a page inside `prototype/` |
+| `click` | `selector:'#btn'` **or** `text:'Entrar'` | Click; `text` matches visible buttons/links |
+| `fill` | `selector:'#email', value:'a@b.c'` | Native events, framework-safe |
+| `read` | `selector:'.total'` or `attr:'href'` | Assertion data |
+| `eval` | `code:'localStorage.getItem("proto_x_users")'` | Inspect mock state |
+| `wait_for` | `selector:'.modal', timeoutMs:5000` | Wait for an element |
+| `screenshot` | — | Full screen (chat + prototype); saved to `prototype/.shots/shot-<ts>.png` |
+| `console` | — | Captured error/warn + runtime errors |
+| `results` | — | Last 50 command results |
 
-One command at a time; sequence is submit → wait → next. Use it to **self-test every screen before handing it over** (click the flow, fill the form, confirm no console errors, screenshot for evidence), and to reproduce exactly what the requester reports broken.
+One command at a time — the tool submits and waits. Use it to **self-test every screen before handing it over** (click the flow, fill the form, confirm no console errors, screenshot for evidence) and to reproduce exactly what the requester reports broken; then `read_image` the screenshot to see it. Any raw shim op (e.g. `console_dump`) goes through `op:'submit'` with `cmd`. For prototype media — hero, avatars, icons — use `generate_image`/`generate_video`/`generate_audio` (they save into `assets/`) instead of placeholder URLs. For an **external** URL (a reference site, a CDN doc) use the `browser` tool (`open`/`navigate`/`screenshot`): it navigates and screenshots but cannot script the page; the prototype's own full control is `prototype_automation`.
 
 ## Part 3 — The GREEN gate
 
@@ -82,3 +79,10 @@ Given … When … Then <recovery/feedback>
 - A failing automation call is reported verbatim, then fixed — never worked around.
 - Requester reports a defect you cannot reproduce: drive it with the browser-use API until you see it; if you cannot, say exactly that.
 - Never claim the requester saw a screen unless they confirmed it (or your screenshot shows it and they answered).
+
+## Traceability and frozen text
+
+- **Traceability must be real.** Every `UX-…` id a later stage cites must exist in this frozen `prototype.md`. In one epic 63 `UX-*` ids were cited by the tickets while `prototype.md` contained none (only `data-screen` names) — the link was prose, not a bond. When you freeze, give every screen/state/action a stable `UX-…` id in the contract, so the ticket stage can resolve them mechanically.
+- **Frozen text is amended, never edited.** Once `prototype.md` is frozen, never edit it in place. Every change enters as a recorded **amendment**: what it was, what it becomes, why, and the owner's decision (their words). In one epic the agent edited the frozen `prototype.md` to match the code — the owner's decision was right, the mechanism was wrong (adjusting the spec to the code), and QA flagged it as a governance defect.
+- If prototype and contract diverge, the contract rules — but register the divergence, do not silence it.
+- Contract text existing in **three versions** (prototype, contract, ticket) means the ticket stage did not check the quotes: require byte-for-byte equality.

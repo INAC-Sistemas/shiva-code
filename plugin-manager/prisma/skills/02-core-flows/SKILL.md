@@ -48,7 +48,7 @@ status: draft
 <what a reader will expect and this design does not do>
 ```
 
-Use a mermaid diagram when a flow has more than three participants or branches.
+Use a mermaid diagram when a flow has more than three participants or branches. The MDS tab is a plain source editor and does not render mermaid — keep the diagram as source in the artifact, and render it (Prototype tab or an external viewer) only when a visual is actually needed.
 
 ## Rules
 

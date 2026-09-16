@@ -28,6 +28,8 @@ Order is the method: viability before desirability, desirability before shape, s
 9. How would we test that cheaply?
 10. Three months in: what result says keep going, what says stop?
 
+Research before you ask: use `web_search`/`web_fetch` to check competitors, adjacent tools and market evidence, so these questions land with facts instead of guesses. Bring findings as consequences, not citations.
+
 **B — Business Model Canvas (does it sustain itself)** — walk all nine blocks, none silently: customer segments; value proposition ("I use this because it lets me ___ without ___"); channels; customer relationships; revenue streams; key resources; key activities; key partners; cost structure (and which cost grows fastest).
 
 **C — Design Thinking (who is the human) — twenty questions, five per mode. All four modes run; abbreviating here is the most expensive mistake in the brief.**
@@ -52,7 +54,7 @@ Count: A=10, B=9 blocks, C=20 across four modes, D=capabilities+scenarios comple
 
 ## Write the artifact
 
-`write` to `mds/epics/<epic>/01-brief.md`:
+The artifact lives in the workspace and is read and edited in the **MDS** tab (a plain editor — it shows the markdown source, not a rendered page). `write` to `mds/epics/<epic>/01-brief.md`:
 
 ```markdown
 ---
