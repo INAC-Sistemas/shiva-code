@@ -41,6 +41,11 @@ COPY package.json /tmp/app-package.json
 RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
       "prisma@$(node -p "require('/tmp/app-package.json').dependencies.prisma")" \
       "dotenv@$(node -p "require('/tmp/app-package.json').devDependencies.dotenv")" \
+      "tsx@$(node -p "require('/tmp/app-package.json').devDependencies.tsx")" \
+      "yaml@$(node -p "require('/tmp/app-package.json').dependencies.yaml")" \
+      "bcryptjs@$(node -p "require('/tmp/app-package.json').dependencies.bcryptjs")" \
+      "@prisma/adapter-pg@$(node -p "require('/tmp/app-package.json').dependencies['@prisma/adapter-pg']")" \
+      "pg@$(node -p "require('/tmp/app-package.json').dependencies.pg")" \
   && rm -f /tmp/app-package.json \
   && npm cache clean --force
 # Nada é podado desta árvore. `@prisma/studio-core` parece supérfluo numa imagem
@@ -64,12 +69,16 @@ ENV NODE_ENV=production \
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-# Schema, migrations e o config que a CLI lê: o entrypoint aplica as pendentes
-# antes de servir. O config declara a url do datasource — no Prisma 7 ela não
-# pode mais viver no schema — e o runtime não o usa: a aplicação abre a conexão
-# pelo adapter `pg`.
+# Schema, migrations, skills versionadas e o config que a CLI lê: o
+# entrypoint aplica as pendentes e recria a biblioteca antes de servir. O
+# config declara a url do datasource — no Prisma 7 ela não pode mais viver no
+# schema — e o runtime não o usa: a aplicação abre a conexão pelo adapter `pg`.
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma7.config.ts ./prisma7.config.ts
+# O seed de skills importa `src/lib` e o cliente Prisma gerado; o tsconfig
+# resolve o alias `@/` se algum módulo ainda o usar.
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 # Mesclada dentro do node_modules do standalone, e não numa árvore à parte,
 # porque é dali que o `prisma7.config.ts` resolve `prisma/config` e `dotenv`:
 # a resolução sobe a partir do diretório do config, e nunca entraria numa

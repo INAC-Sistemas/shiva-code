@@ -13,7 +13,8 @@ Aplicação: http://localhost:3000/login
 
 O entrypoint do container ([docker/dev-entrypoint.sh](docker/dev-entrypoint.sh)) roda
 `prisma generate`, `prisma migrate deploy` e `prisma db seed` antes de subir o Next.
-O seed é idempotente (`upsert`), então pode rodar a cada start.
+O seed de usuários é idempotente (`upsert`); o de skills **recria** o corpo a
+partir de `prisma/skills/` a cada start.
 
 ## Credenciais do seed
 
@@ -135,14 +136,20 @@ modelo escreve em `skill({ name })`, e um nome fora dessa regra é inendereçáv
 
 ### Seed e fonte da verdade
 
-`prisma/skills/<nome>/SKILL.md` guarda o conteúdo inicial, semeado por
-`npm run db:seed`. O seed **cria e nunca atualiza**: ele roda a cada start do
-container, e atualizar reverteria em silêncio toda edição feita no painel.
+Toda skill de produto mora em `plugins/dsh-skill-manager/skills/<nome>/SKILL.md`
+e é espelhada em `prisma/skills/<nome>/` por `node scripts/sync-skills.mjs`.
+Uma skill que não passar por esse seed não entra na biblioteca da VPS no
+próximo deploy, e portanto não pode ser servida ao perfil ativo do usuário
+logado. A regra completa está em [AGENTS.md](AGENTS.md#biblioteca-de-skills).
 
-Depois da primeira execução **o Postgres é a fonte da verdade** — editar o
-markdown do repositório não muda o que está no ar. Para sobrescrever o que está
-gravado a partir dos arquivos, `npx tsx prisma/seed.ts --force-skills`, que é um
-gesto explícito justamente porque descarta o que foi editado.
+`npm run db:seed` (e o entrypoint de cada container) **recria** as linhas a
+partir desses arquivos: atualiza corpo, descrição e interruptores, republica, e
+incrementa `revision` só quando o arquivo mudou. O id da linha permanece, então
+as seleções de perfil sobrevivem. Uma skill nova entra no perfil **Padrão** de
+quem já o tem; os demais perfis continuam sendo um recorte manual.
+
+Skills cadastradas só no painel, sem pasta em `prisma/skills/`, ficam intocadas.
+Em produção o seed **não** cria as contas de demonstração — só recria skills.
 
 ## API
 
@@ -327,7 +334,7 @@ docker compose down -v            # parar e apagar o volume do Postgres
 docker compose up -d --build      # rebuild (após mudar package.json)
 
 npm run db:migrate                # nova migration (roda do host, porta 5432 exposta)
-npm run db:seed                   # rodar o seed manualmente
+npm run db:seed                   # recriar skills; usuários só fora de produção
 npm run db:studio                 # Prisma Studio
 ```
 

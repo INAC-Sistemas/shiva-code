@@ -30,3 +30,25 @@ Consequências para quem mexe no código:
   autorização e validação de argumentos são responsabilidade do servidor.
 - A resposta da API é a interface pública do plugin: alterá-la quebra as cascas já
   instaladas nas máquinas dos clientes.
+
+# Biblioteca de skills
+
+Uma skill nova do produto só chega ao agente autenticado se existir como linha
+`LibrarySkill` e estiver marcada no perfil ativo de quem chama. Por isso **toda
+skill nova entra no seed** antes de o PR fechar:
+
+1. Crie `plugins/dsh-skill-manager/skills/<nome>/SKILL.md` — fonte da verdade,
+   a cópia que o desktop ainda empacota.
+2. Rode `node scripts/sync-skills.mjs` na raiz do repositório. Isso espelha o
+   bundle em `plugin-manager/prisma/skills/<nome>/`. Não edite o espelho à mão.
+3. Confira com `node scripts/sync-skills.mjs --check`. Drift entre as duas
+   árvores significa que o seed em produção publicaria um corpo velho.
+
+O seed em [prisma/seed.ts](prisma/seed.ts) **recria** essas linhas a cada
+deploy (`docker/entrypoint.sh` e o start de desenvolvimento). O id permanece,
+então as seleções de perfil sobrevivem; o corpo, a descrição e os interruptores
+saem do arquivo. Uma skill nova entra no perfil "Padrão" de quem já o tem. O
+corpo continua só sendo servido na interseção entre publicado e perfil ativo —
+uma skill fora do perfil do usuário logado não existe para aquele token.
+
+Skills criadas só no painel, sem pasta em `prisma/skills/`, o seed não apaga.

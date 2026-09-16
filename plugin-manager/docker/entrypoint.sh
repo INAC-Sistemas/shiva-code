@@ -9,9 +9,10 @@ set -e
 # servidor no ar com o banco numa versão anterior à do código responde erros
 # que parecem bugs da aplicação.
 #
-# NÃO há seed. O seed cria contas de demonstração com senhas fixas no código
-# (`prisma/seed.ts`), o que em produção seria abrir acesso conhecido. A primeira
-# conta é responsabilidade de quem implanta.
+# O seed de usuários de demonstração (senhas no código) não roda aqui:
+# `NODE_ENV=production` faz `prisma/seed.ts` omiti-los. A primeira conta é
+# responsabilidade de quem implanta. As skills versionadas em `prisma/skills/`
+# são recriadas a cada partida, para o deploy levar o corpo novo à biblioteca.
 
 if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
   echo "==> Aplicando migrations"
@@ -19,6 +20,9 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
 else
   echo "==> RUN_MIGRATIONS=false; migrations não aplicadas nesta partida"
 fi
+
+echo "==> Recriando a biblioteca de skills a partir dos arquivos versionados"
+node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts
 
 echo "==> Subindo Next.js em produção na porta ${PORT:-3000}"
 exec node server.js
