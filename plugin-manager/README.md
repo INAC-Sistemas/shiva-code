@@ -136,8 +136,11 @@ modelo escreve em `skill({ name })`, e um nome fora dessa regra é inendereçáv
 
 ### Seed e fonte da verdade
 
-Toda skill de produto mora em `plugins/dsh-skill-manager/skills/<nome>/SKILL.md`
-e é espelhada em `prisma/skills/<nome>/` por `node scripts/sync-skills.mjs`.
+Toda skill de produto mora em
+`plugins/dsh-skill-manager/skills/<categoria>/<nome>/SKILL.md` e é espelhada em
+`prisma/skills/<categoria>/<nome>/` por `node scripts/sync-skills.mjs`. Hoje a
+única categoria é `system-development/`; o seed ignora uma pasta que repita o
+`name` de outra categoria.
 Uma skill que não passar por esse seed não entra na biblioteca da VPS no
 próximo deploy, e portanto não pode ser servida ao perfil ativo do usuário
 logado. A regra completa está em [AGENTS.md](AGENTS.md#biblioteca-de-skills).

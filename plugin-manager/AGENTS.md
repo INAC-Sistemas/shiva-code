@@ -37,10 +37,12 @@ Uma skill nova do produto só chega ao agente autenticado se existir como linha
 `LibrarySkill` e estiver marcada no perfil ativo de quem chama. Por isso **toda
 skill nova entra no seed** antes de o PR fechar:
 
-1. Crie `plugins/dsh-skill-manager/skills/<nome>/SKILL.md` — fonte da verdade,
-   a cópia que o desktop ainda empacota.
+1. Crie `plugins/dsh-skill-manager/skills/<categoria>/<nome>/SKILL.md` — fonte
+   da verdade, a cópia que o desktop ainda empacota. A categoria é uma pasta em
+   inglês e kebab-case; hoje todas as skills ficam em `system-development/`.
+   O `name` continua único na biblioteca inteira, não por categoria.
 2. Rode `node scripts/sync-skills.mjs` na raiz do repositório. Isso espelha o
-   bundle em `plugin-manager/prisma/skills/<nome>/`. Não edite o espelho à mão.
+   bundle em `plugin-manager/prisma/skills/<categoria>/<nome>/`. Não edite o espelho à mão.
 3. Confira com `node scripts/sync-skills.mjs --check`. Drift entre as duas
    árvores significa que o seed em produção publicaria um corpo velho.
 
