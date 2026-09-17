@@ -41,8 +41,59 @@ const users = [
   },
 ];
 
-/** Bundles `<nome>/SKILL.md` que recriam a biblioteca a cada deploy. */
+/**
+ * Bundles `<categoria>/<nome>/SKILL.md` que recriam a biblioteca a cada deploy.
+ * Uma pasta de primeiro nível que já contém `SKILL.md` é lida como skill sem
+ * categoria.
+ */
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), "skills");
+
+/** Um bundle encontrado em `prisma/skills/`, com o caminho relativo para logs. */
+type SkillBundle = { name: string; path: string; label: string };
+
+/**
+ * Lista os bundles em `prisma/skills/`, descendo um nível nas pastas de categoria.
+ * @returns os bundles na ordem do disco; vazio quando a pasta não existe.
+ */
+async function listSkillBundles(): Promise<SkillBundle[]> {
+  let entries;
+
+  try {
+    entries = await readdir(skillsDir, { withFileTypes: true });
+  } catch {
+    console.log("seed: prisma/skills ausente, nenhuma skill semeada");
+    return [];
+  }
+
+  const bundles: SkillBundle[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+
+    const dir = join(skillsDir, entry.name);
+    const children = await readdir(dir, { withFileTypes: true });
+
+    if (children.some((child) => child.isFile() && child.name === "SKILL.md")) {
+      bundles.push({
+        name: entry.name,
+        path: join(dir, "SKILL.md"),
+        label: `${entry.name}/SKILL.md`,
+      });
+      continue;
+    }
+
+    for (const child of children) {
+      if (!child.isDirectory() || child.name.startsWith(".")) continue;
+      bundles.push({
+        name: child.name,
+        path: join(dir, child.name, "SKILL.md"),
+        label: `${entry.name}/${child.name}/SKILL.md`,
+      });
+    }
+  }
+
+  return bundles;
+}
 
 /** Campos que o seed grava a partir do arquivo versionado. */
 type SeededSkillFields = ParsedSkillFile & { published: true };
@@ -99,40 +150,42 @@ function skillFieldsChanged(
  * @returns os ids das skills que este start criou (não as que só atualizou).
  */
 async function seedSkills(): Promise<string[]> {
-  let entries;
-
-  try {
-    entries = await readdir(skillsDir, { withFileTypes: true });
-  } catch {
-    console.log("seed: prisma/skills ausente, nenhuma skill semeada");
-    return [];
-  }
-
   const createdIds: string[] = [];
+  // `name` é único na biblioteca; duas categorias com a mesma pasta fariam uma
+  // sobrescrever a outra a cada deploy.
+  const seen = new Map<string, string>();
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
-    const path = join(skillsDir, entry.name, "SKILL.md");
+  for (const bundle of await listSkillBundles()) {
     let parsed;
 
     try {
-      parsed = parseSkillFile(await readFile(path, "utf8"));
+      parsed = parseSkillFile(await readFile(bundle.path, "utf8"));
     } catch (error) {
       // Um arquivo quebrado é erro de quem o versionou, não motivo para o seed
       // inteiro falhar e deixar o container sem usuários.
       console.error(
-        `seed: ${entry.name}/SKILL.md ignorado — ${error instanceof Error ? error.message : String(error)}`,
+        `seed: ${bundle.label} ignorado — ${error instanceof Error ? error.message : String(error)}`,
       );
       continue;
     }
 
-    if (parsed.name !== entry.name) {
+    if (parsed.name !== bundle.name) {
       console.error(
-        `seed: ${entry.name}/SKILL.md declara name "${parsed.name}"; renomeie a pasta ou o campo`,
+        `seed: ${bundle.label} declara name "${parsed.name}"; renomeie a pasta ou o campo`,
       );
       continue;
     }
+
+    const previous = seen.get(parsed.name);
+
+    if (previous !== undefined) {
+      console.error(
+        `seed: ${bundle.label} repete a skill "${parsed.name}" de ${previous}; ignorado`,
+      );
+      continue;
+    }
+
+    seen.set(parsed.name, bundle.label);
 
     const fields = seededFields(parsed);
     const existing = await prisma.librarySkill.findUnique({
