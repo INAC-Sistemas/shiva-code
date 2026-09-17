@@ -35,6 +35,14 @@ export const settings = {
     'confirm.enable': 'Ativar acesso total',
   },
 
+  'settings.sandbox': {
+    title: 'File sandbox',
+    'description.on': 'As sessões seguem o modo de permissão no acesso a arquivos',
+    'description.off': 'Sandbox desligado globalmente: cada sessão, inclusive as já abertas, tem Full access',
+    on: 'On',
+    off: 'Off',
+  },
+
   'settings.agentPreset': {
     title: 'Preset do agente',
     description: 'Vale para as sessões que você iniciar a partir de agora. As sessões em andamento mantêm o preset com que começaram.',

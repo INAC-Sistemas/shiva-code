@@ -22,7 +22,7 @@ Status: implemented
 
 - `Config`：`mode`（封闭的 `SandboxMode` 联合，默认 `read-only`）与 `workspaceRoot`（默认进程 cwd，解析为绝对路径）。配置错误会在加载时明确报错。
 - per-session 覆盖事件 `sandbox/mode`，连同它的纯折叠（`effectiveSandboxMode(events)`）、写入路径（`setSandboxMode(session, mode)`）与 `SANDBOX_MODES`。该事件是策略状态——被两个家族消费——所以它归于此处，而不归于任一能力的 seam。它的形状与仅日志（log-only）语义遵循 `approval/*` 的先例。
-- `resolve({ session?, mode? })` 返回完整的单次调用 `SandboxExecutionPolicy`：显式批准的模式 > 会话折叠结果 > `defaultMode`，而会话中不可变的 cwd > 配置的 `workspaceRoot` 回退值。
+- `resolve({ session?, mode? })` 返回完整的单次调用 `SandboxExecutionPolicy`：进程级 `enabled: false` 设置 > 显式批准的模式 > 会话折叠结果 > `defaultMode`，而会话中不可变的 cwd > 配置的 `workspaceRoot` 回退值。
 - 保留 `defaultMode` / `workspaceRoot` 访问器，作为部署回退值与能力宣告依据。
 
 `dsh-bash-sandbox` 自身不再携带任何沙箱配置——它注入 `sandboxPolicy`，仅在直接调用时使用其中的部署回退值。`dsh-tool-bash` 与 `dsh-tool-fs` 把当前会话传给 `ctx.sandboxPolicy.resolve()`，因此两者每次调用都会取得相同的生效模式与 cwd 根目录；`dsh-permission-presets` 预设与 ACP（Agent Client Protocol）bridge 经由迁移后的 setter 写入。拥有 bash 与 fs 执行的 seam 仍不依赖会话——会话依赖归策略包与工具消费方所有。

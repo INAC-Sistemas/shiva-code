@@ -25,6 +25,9 @@
   - button "Workspace Write":
     - text: Workspace Write
     - img
+  - text: File sandbox Sessions follow their permission mode for file access
+  - text: On
+  - switch "File sandbox" [checked]
   - text: Language
   - button "English":
     - text: English

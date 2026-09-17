@@ -11,7 +11,9 @@
  * confirmation. The Full access row carries the same explicit risk gate as
  * the composer chip; the shared popup shell owns the modal mechanics.
  * The General-settings row separately writes the default preset for sessions
- * created later through the host Settings API.
+ * created later through the host Settings API. The File sandbox row writes a
+ * process-wide kill switch on the same Settings document: turning it off
+ * forces Full access for every session, open ones included.
  */
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -28,18 +30,23 @@ import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trig
 import type { PermissionSelect } from '@deepseek-ai/dsh-permission-presets/client'
 import { PermissionRow } from './PermissionRow.tsx'
 import type { PermissionRowInjected } from './PermissionRow.tsx'
+import { SandboxRow } from './SandboxRow.tsx'
+import type { SandboxRowInjected } from './SandboxRow.tsx'
 import {
-  accessEn, accessZh, en, zh,
+  accessEn, accessZh, en, sandboxEn, sandboxZh, zh,
 } from './locales.ts'
 import {
   displayPermissionPreset, FULL_ACCESS_PRESET,
 } from './presentation.ts'
 import { PermissionPresetSettingsController } from './settings-store.ts'
+import { SandboxSettingsController } from './sandbox-store.ts'
 
 export type { PermissionRowInjected, PermissionRowProps } from './PermissionRow.tsx'
+export type { SandboxRowInjected, SandboxRowProps } from './SandboxRow.tsx'
 export type {
   PermissionDefaultOption, PermissionSettingsState,
 } from './settings-store.ts'
+export type { SandboxSettingsState } from './sandbox-store.ts'
 
 /** Required services (cordis fiber inject). */
 export const inject = ['commandUi', 'sessions', 'slots', 'locale', 'connection', 'remote', 'settingsScope', 'settingsSchema']
@@ -93,12 +100,15 @@ export function apply(ctx: ClientContext): void {
     sessions.binding(session.sessionId)?.session
 
   ctx.effect(() => ctx.locale.register('settings.permission', { zh, en }), 'ui-permission: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.sandbox', { zh: sandboxZh, en: sandboxEn }), 'ui-permission: sandbox row dictionaries')
 
   const connection = ctx.get('connection') as ConnectionHandle
   // The row follows the shared describe mirror, whose owning plugin already
   // refreshes it on document commits and reconnects.
   const controller = new PermissionPresetSettingsController(
     ctx.settingsScope.describe(), connection.api, ctx.settingsSchema)
+  const sandboxController = new SandboxSettingsController(
+    ctx.settingsScope.describe(), connection.api)
   const load = (): Promise<void> => controller.load()
   const select = (preset: string): Promise<void> => controller.select(preset)
   const injected = (): PermissionRowInjected => ({
@@ -106,8 +116,16 @@ export function apply(ctx: ClientContext): void {
     load,
     select,
   })
+  const sandboxInjected = (): SandboxRowInjected => ({
+    hooks: { sandbox: sandboxController.store },
+    load: () => sandboxController.load(),
+    setEnabled: (enabled: boolean) => sandboxController.setEnabled(enabled),
+  })
 
-  ctx.effect(() => () => { controller.dispose() }, 'ui-permission: settings row directory')
+  ctx.effect(() => () => {
+    controller.dispose()
+    sandboxController.dispose()
+  }, 'ui-permission: settings row directory')
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -116,6 +134,14 @@ export function apply(ctx: ClientContext): void {
     locale: 'settings.permission',
     inject: injected,
   }, PermissionRow))
+
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'sandbox',
+    order: -15,
+    locale: 'settings.sandbox',
+    inject: sandboxInjected,
+  }, SandboxRow))
 
   ctx.effect(() => command.decorate({
     name: 'permission',

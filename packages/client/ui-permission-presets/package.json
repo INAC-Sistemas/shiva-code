@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-permission-presets",
-  "description": "Permission surfaces: a new-session default in General settings and a current-session /permission popup over the permissions projection",
+  "description": "Permission surfaces: a new-session default and a process-wide File sandbox kill switch in General settings, plus a current-session /permission popup over the permissions projection",
   "version": "0.1.1-rc.2",
   "publishConfig": {
     "access": "public"

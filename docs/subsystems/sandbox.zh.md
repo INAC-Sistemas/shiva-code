@@ -64,14 +64,17 @@ interface SandboxExecutionPolicy {
 }
 ```
 
-`ctx.sandboxPolicy.resolve()` 接收活跃会话；对于已批准的重试，还接收显式模式。该服务拥有优先级与 root 回退规则，使 bash 和 fs 不必重复实现。
+`ctx.sandboxPolicy.resolve()` 接收活跃会话；对于已批准的重试，还接收显式模式。进程级 `enabled: false` 设置优先于该显式模式，使每个会话（包括已打开的）都解析为 `danger-full-access`，且不改写会话日志。该服务拥有优先级与 root 回退规则，使 bash 和 fs 不必重复实现。
 
 ```ts type-equiv
 /** Inputs that select the sandbox policy for one capability call. */
 interface SandboxPolicyRequest {
   /** Calling session; its immutable cwd becomes the workspace boundary. */
   session?: Session
-  /** Explicit approved mode override, which outranks session policy. */
+  /**
+   * Explicit approved mode override, which outranks session policy while the
+   * file sandbox is enabled and is ignored when it is globally off.
+   */
   mode?: SandboxMode
 }
 ```
@@ -196,11 +199,11 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
 
 ```ts cordis-catalog
 /**
- * Resolve the complete policy for one capability call. An approved explicit
- * mode outranks the session's last `sandbox/mode` event, which outranks the
- * deployment default. A session cwd is its workspace-write boundary; the
- * configured root is the fallback for agentless calls and sessions without a
- * cwd.
+ * Resolve the complete policy for one capability call. A global `enabled:
+ * false` setting outranks an approved explicit mode, which outranks the
+ * session's last `sandbox/mode` event, which outranks the deployment default.
+ * A session cwd is its workspace-write boundary; the configured root is the
+ * fallback for agentless calls and sessions without a cwd.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
  */
