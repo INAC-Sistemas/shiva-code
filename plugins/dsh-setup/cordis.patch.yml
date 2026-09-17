@@ -1,0 +1,7 @@
+# The wizard needs no endpoint: every value it writes goes to a store this
+# machine already owns (settings.yaml, .credentials.yaml, and the dsh-assets and
+# dsh-openviking routes). It reads the chat, credential and settings services
+# per request, so it can be mounted anywhere in the composition.
+- insert:
+    - id: setup
+      name: dsh-setup

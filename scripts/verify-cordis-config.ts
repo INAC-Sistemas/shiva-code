@@ -51,7 +51,8 @@ const PROFILE_PLUGIN_ENV = 'DSH_PROFILE_PLUGINS'
  * omitted it would lift restrictions, not remove a tool), `kanban`,
  * `browser-agent`, `sidebar-agent` and `mcp` are absent from the profile catalog
  * (`PLUGIN_ROWS` in dsh-profiles), which would otherwise leave them unloadable
- * under any active profile, and the rest are theme and locale with no
+ * under any active profile, `setup` holds this machine's model configuration
+ * rather than a profile's, and the rest are theme and locale with no
  * model-facing surface at all. A row absent from this list and from the gate below is not
  * "probably fine" — it is an undeclared plane, which is how the skill-library
  * leak survived unnoticed.
@@ -75,6 +76,7 @@ const HOST_ALWAYS = new Set([
   'browser-agent',
   'sidebar-agent',
   'mcp',
+  'setup',
 ])
 // These example files are overlays consumed by the built dsh app, so their bare
 // specifiers resolve from apps/cli rather than the examples workspace.

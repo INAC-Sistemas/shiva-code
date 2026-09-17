@@ -40,4 +40,13 @@ describe('desktop provider onboarding patch', () => {
     expect(installed.indexOf('"deepseek-official"')).toBeLessThan(installed.indexOf('"openai"'))
     expect(installed).toContain('left.entry.displayName.localeCompare(right.entry.displayName)')
   })
+
+  it('leaves the first-run provider step to the dsh-setup wizard', async () => {
+    const installed = await readFile('node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.js', 'utf8')
+    const composition = await readFile('build/dsh-desktop.patch.yml', 'utf8')
+    // Its modal makes #root inert, which would block the wizard in the overlay layer beneath it.
+    expect(installed).not.toContain('id: "deepseek-official"')
+    expect(installed).toContain('id: "welcome-notice"')
+    expect(composition).toContain('name: dsh-setup')
+  })
 })

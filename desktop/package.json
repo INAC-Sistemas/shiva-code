@@ -286,6 +286,7 @@
     "dsh-openviking": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-openviking-0.1.1.tgz",
     "dsh-profiles": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-profiles-0.2.0.tgz",
     "dsh-prototype": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-prototype-0.1.10.tgz",
+    "dsh-setup": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-setup-0.1.0.tgz",
     "dsh-shiva-theme": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-shiva-theme-0.1.0.tgz",
     "dsh-sidebar-qa": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-sidebar-qa-0.4.0.tgz",
     "dsh-skill-library": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-skill-library-0.1.0.tgz",

@@ -191,6 +191,15 @@
         specEndpoint: !!js "new URL('/api/plugins/profile', process.env.VPS_URL).href"
         catalogEndpoint: !!js "new URL('/api/profiles/catalog', process.env.VPS_URL).href"
 
+    # First-run setup wizard: covers the app, below the login and profile
+    # gates, until the chat model, the image generator and (when the profile
+    # loads dsh-openviking) the OpenViking memory are configured. Never gated:
+    # the configuration belongs to this machine, not to a profile. It replaces
+    # the upstream `deepseek-official` onboarding step, which the
+    # dsh-client-ui-settings-models patch no longer registers.
+    - id: setup
+      name: dsh-setup
+
     - id: skill-manager
       name: dsh-skill-manager
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-skill-manager').split(',').includes('dsh-skill-manager')"
