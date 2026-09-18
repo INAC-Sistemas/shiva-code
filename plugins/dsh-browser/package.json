@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Agent control for the better-sidebar browser tab: open it, navigate to a URL, screenshot the app window showing it, and open external URLs in the system browser",
   "type": "module",
   "license": "MIT",

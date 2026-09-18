@@ -466,9 +466,30 @@ function injectShim(html) {
  * to one shim command; `console`, `results`, `submit` and `wait` are exposed
  * raw because the tab and the agent share the same queue.
  */
-const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'screenshot']
+const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'screenshot', 'motion', 'audit', 'scroll', 'wait_stable', 'reload', 'upload']
 const RAW_OPS = ['console', 'results', 'submit', 'wait']
 const AUTOMATION_OPS = [...INTERACTIVE_OPS, ...RAW_OPS]
+
+/** Argument keys the tool forwards into one shim command. */
+const CMD_KEYS = ['selector', 'text', 'value', 'code', 'path', 'attr', 'timeoutMs', 'ms', 'role', 'name', 'to', 'by', 'smooth', 'quietMs', 'label', 'full']
+
+const MIME_BY_EXT = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.pdf': 'application/pdf', '.txt': 'text/plain', '.json': 'application/json',
+  '.csv': 'text/csv', '.mp4': 'video/mp4', '.zip': 'application/zip',
+}
+
+/**
+ * Resolve an upload from a local path into the shim's shape (base64 + name +
+ * mime): the harness process reads the file, the page synthesizes the File.
+ */
+async function resolveUpload(args) {
+  const file = typeof args.path === 'string' ? args.path : ''
+  if (!file) throw new Error('upload requires a local file path')
+  const bytes = await readFile(file)
+  const ext = extname(file).toLowerCase()
+  return { selector: args.selector, value: bytes.toString('base64'), name: basename(file), mime: MIME_BY_EXT[ext] ?? 'application/octet-stream' }
+}
 
 /**
  * Run one automation request against the live prototype queue and normalize the
@@ -493,9 +514,10 @@ async function runAutomation(queue, scope, args) {
     return body
   }
   const cmd = { op }
-  for (const key of ['selector', 'text', 'value', 'code', 'path', 'attr', 'timeoutMs']) {
+  for (const key of CMD_KEYS) {
     if (args[key] !== undefined) cmd[key] = args[key]
   }
+  if (op === 'upload') Object.assign(cmd, await resolveUpload(args))
   const submitted = await queue.call('submit', { cmd }, scope)
   if (submitted.code !== 200 || !submitted.body.ok) {
     throw new Error(submitted.body.error || `submit failed (${submitted.code}) — is the Prototype tab open?`)
@@ -515,18 +537,33 @@ function createAutomationTool(ctx, queue) {
   return defineTool({
     name: 'prototype_automation',
     description:
-      'Drive the live Prototype browser view of the workspace: navigate, click, fill, read, eval, wait_for, ' +
-      'screenshot, plus the raw console/results/submit/wait queue ops. Use it to self-test every prototype screen ' +
-      'before handing it over and to reproduce what the requester reports. It opens the Prototype tab automatically ' +
-      'when it is closed; screenshots capture the app window and are always available.',
+      'Drive the live Prototype browser view of the workspace: navigate, click, fill, read, eval, wait_for, screenshot, ' +
+      'motion, audit, scroll, wait_stable, reload, upload, plus the raw console/results/submit/wait queue ops. Use it to ' +
+      'self-test every prototype screen before handing it over and to reproduce what the requester reports. It opens the ' +
+      'Prototype tab automatically when it is closed; screenshots capture the app window and are always available. ' +
+      'click/fill accept role+name (accessibility) instead of a selector; motion measures an animation by numbers ' +
+      '(frames, duration, distance, opacity, curve) — the only way to judge motion without seeing it; audit returns the ' +
+      'measured findings of the craft/mobile/motion rules (tap highlight, 16px inputs, 44px targets, hover gating, ' +
+      'transition: all, ease-in, long durations, contrast, clickable divs) so the craft gate runs by measurement, not by ' +
+      'memory; scroll reports where it landed and which container scrolled; wait_stable waits for the page to stop ' +
+      'changing (use it before a print); reload reloads the page without killing the channel; upload attaches a local ' +
+      'file to a file input by path.',
     parameters: {
       op: { type: 'string', required: true, enum: AUTOMATION_OPS, description: 'Operation to run against the live prototype view.' },
-      selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for).' },
+      selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for/motion/scroll/upload).' },
       text: { type: 'string', description: 'Visible text to match instead of a selector (click).' },
+      role: { type: 'string', description: 'ARIA role for an accessible lookup (click/fill), e.g. "button", "textbox".' },
+      name: { type: 'string', description: 'Accessible name to match with role (click/fill).' },
       value: { type: 'string', description: 'Value to set (fill).' },
       code: { type: 'string', description: 'Expression to evaluate in the page (eval).' },
-      path: { type: 'string', description: 'Page path inside prototype/ (navigate).' },
+      path: { type: 'string', description: 'Page path inside prototype/ (navigate) or the local file to attach (upload).' },
       attr: { type: 'string', description: 'Attribute to read instead of value/text (read).' },
+      to: { type: 'string', description: 'scroll target: "top", "bottom" or a pixel offset.' },
+      by: { type: 'number', description: 'scroll step in pixels.' },
+      smooth: { type: 'boolean', description: 'scroll smoothly.' },
+      quietMs: { type: 'number', description: 'wait_stable: quiet window in ms (default 500).' },
+      ms: { type: 'number', description: 'motion: sampling window in ms (default 800, cap 5000).' },
+      label: { type: 'string', description: 'Screenshot label, used in the saved file name for citable evidence.' },
       timeoutMs: { type: 'number', description: 'Deadline for the command in ms; default 8000, capped at 10000.' },
       id: { type: 'string', description: 'Command id (wait).' },
       cmd: { type: 'object', additionalProperties: true, description: 'Raw command for op=submit, e.g. {"op":"click","selector":"#go"}.' },

@@ -101,7 +101,7 @@ async function saveShot(workspace, dataUrl) {
 /** Ops the agent tool exposes. */
 const TAB_OPS = ['open', 'navigate', 'focus', 'screenshot', 'open_external']
 /** Ops that script a real page — they only run in scope "full". */
-const FULL_OPS = ['click', 'fill', 'read', 'eval', 'console', 'wait_for', 'wait', 'reconnect', 'reload', 'scroll', 'wait_stable', 'upload']
+const FULL_OPS = ['click', 'fill', 'read', 'eval', 'console', 'wait_for', 'wait', 'reconnect', 'reload', 'scroll', 'wait_stable', 'upload', 'motion', 'audit']
 const BROWSER_OPS = [...TAB_OPS, ...FULL_OPS]
 
 /**
@@ -164,7 +164,8 @@ function createTool(ctx) {
       full: { type: 'boolean', description: 'screenshot: capture the whole page, not just the viewport.' },
       settle: { type: 'boolean', description: 'screenshot: wait for the page to stop changing first (default true).' },
       timeoutMs: { type: 'number', description: 'Deadline for wait_for/wait_stable in ms (default 8000/10000, cap 30000).' },
-      ms: { type: 'number', description: 'Milliseconds to sleep (wait, cap 30000).' },
+      ms: { type: 'number', description: 'wait: sleep in ms (cap 30000) · motion: sampling window in ms (default 800, cap 5000).' },
+      label: { type: 'string', description: 'Screenshot label, used in the saved file name for citable evidence.' },
     },
     output: {
       schema: { type: 'json' },
@@ -204,7 +205,7 @@ function createTool(ctx) {
       if (typeof args.url === 'string') forward.url = args.url
       if (scope === 'full') {
         forward.scope = 'full'
-        for (const key of ['selector', 'text', 'value', 'code', 'attr', 'timeoutMs', 'ms', 'role', 'name', 'to', 'by', 'smooth', 'quietMs', 'path', 'full', 'settle']) {
+        for (const key of ['selector', 'text', 'value', 'code', 'attr', 'timeoutMs', 'ms', 'role', 'name', 'to', 'by', 'smooth', 'quietMs', 'path', 'full', 'settle', 'label']) {
           if (args[key] !== undefined) forward[key] = args[key]
         }
       }

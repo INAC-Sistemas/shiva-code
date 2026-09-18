@@ -285,7 +285,8 @@ async function runFullCommand(cmd) {
   }
   if (
     cmd.op === 'click' || cmd.op === 'fill' || cmd.op === 'read' || cmd.op === 'eval' ||
-    cmd.op === 'scroll' || cmd.op === 'wait_stable' || cmd.op === 'upload'
+    cmd.op === 'scroll' || cmd.op === 'wait_stable' || cmd.op === 'upload' ||
+    cmd.op === 'motion' || cmd.op === 'audit'
   ) {
     await attachFull()
     const r = await bridge.run({
@@ -302,6 +303,7 @@ async function runFullCommand(cmd) {
       smooth: cmd.smooth,
       quietMs: cmd.quietMs,
       timeoutMs: cmd.timeoutMs,
+      ms: cmd.ms,
       path: cmd.path,
     })
     if (!r || !r.ok) throw new Error((r && r.error) || (cmd.op + ' falhou'))

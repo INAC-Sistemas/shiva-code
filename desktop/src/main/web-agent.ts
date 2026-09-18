@@ -124,7 +124,7 @@ function pushConsole(level: unknown, text: string): void {
 
 /** The page-ops runner: evaluates the shared ops expression, then one op. */
 function runnerCode(a: RunPayload): string {
-  const payload = JSON.stringify({ op: a.op, selector: a.selector, text: a.text, value: a.value, code: a.code, attr: a.attr, role: a.role, name: a.name })
+  const payload = JSON.stringify({ op: a.op, selector: a.selector, text: a.text, value: a.value, code: a.code, attr: a.attr, role: a.role, name: a.name, ms: a.ms })
   return `(function(){
     var a = ${payload};
     var shared = ${pageOpsSource ?? 'null'};

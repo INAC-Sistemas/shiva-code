@@ -16,6 +16,8 @@ Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-protot
 
 Decide alone and just state: language, libraries, layout, naming, schema shape, test strategy, error style — anything reversible in an afternoon. **Bring to the requester, phrased as consequences** (with `ask_user_question`, one per question): anything that changes what they receive, what it costs to run, how long it takes, what happens to their data, or what they are locked into. Ask the reversal too: "if we're wrong in six months, how bad is it?" Cheap to reverse → decide; expensive → consider `/05-debate`.
 
+**A dependency is a decision, not a reflex.** Before hand-rolling a component or a utility — toast, dropdown, dialog, drawer, command menu, date picker, carousel, motion — check whether a maintained library already solves it, and prefer it when it deletes owned code and tests. Record it in the Decisions table with the rejected alternative and the maintenance risk. The two failure modes are equally expensive: installing a package nobody will maintain, and hand-rolling what a maintained library already does (a hand-built dropdown ships without focus management, keyboard handling or a11y).
+
 ## Delivery, data and servers
 
 The workspace's connection tools are the real mechanism for these, and the plan names them instead of hand-rolling. Each is an agent tool (see `/11-connections`): `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database/SQL/auth), `github_cli` (repo/PR), plus `ssh_run`/`ssh_transfer` (external VPS).
@@ -61,4 +63,5 @@ status: draft
 - Trade-offs in the project's own terms, not textbook virtues.
 - The plan describes the code as of its writing; when they later disagree, the code is right — `edit` the plan.
 - Leave genuinely open questions open, each with what evidence would settle it. Never invent a decision.
+- **Component and motion libraries are yours to pick** — the requester never chooses a package. State the choice and the rejected alternative; if a component already exists in the project, reuse it before adding another.
 - Do not create tickets here. That is `/06-tickets`.

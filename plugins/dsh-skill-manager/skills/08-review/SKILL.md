@@ -10,11 +10,18 @@ The requester trusts your "done" completely — that is why this skill exists. R
 
 ## Procedure
 
-1. **Read the epic artifacts**: `01-brief.md` (outcome + Must Do), `02-flows.md` (every flow's happy + unhappy paths), `prototype.md` (frozen UX contract), `04-tech-plan.md` (decisions + boundaries).
-2. **Verify outcome, not tickets**: each Must Do from the brief gets evidence — executed command, real output, or the exact reason it cannot be verified from here. A checked ticket whose evidence you cannot reproduce today counts as UNVERIFIED.
-3. **Traceability sweep**: every UX id in `prototype.md` → working feature. Every boundary in the plan ("we will not do X") → still true.
-4. **Full run from cold**: execute the start commands yourself with `bash`/`pwsh`/`terminal_*`, confirm the exact "working" signals, then write the walkthrough a human can follow from a cold machine (see shape). For a deployed deliverable, verify with the connection tools (`railway_cli`/`vercel_cli`/`supabase_cli` `status`) and open the real URL with `browser {op:'navigate'}` + `browser {op:'screenshot'}` — the screenshot is the evidence, not the deploy exit code.
-5. **Write** `mds/epics/<epic>/08-review.md` (shape below) and present the delivery report in the requester's language: what is verified, what is not, what broke and was fixed, what they must test themselves.
+1. **Regressão completa (a única fase do épico em que ela existe)** — spawn de agentes com `role: "qa"` para escrever e rodar tudo o que o build adiou: suítes de segurança (bypass de rotas — percent-encoding, case, barras duplicadas, `..`; tokens forjados/expirados/`alg`-trocados; vazamento de campos sensíveis em **toda** rota), bateria de entradas inválidas nas rotas novas (campos faltando/extras, tipos errados), integridade de schema, e as suítes do repo. Qa escreve só em `testes/` e não toca em `src/` (o guard bloqueia). O resultado entra no relatório: achados → consertados com evidência, ou declarados.
+2. **Gate de UI — mobile e motion, verificado visualmente** (antes do walkthrough humano):
+   - **Mobile**, quando a superfície é usada no celular: percorra o checklist do `/ui-mobile` contra o navegador real em tamanho de telefone (e o aparelho, quando houver), **cada item com seu print** como evidência — tap highlight, altura dinâmica (`dvh`), input 16px, atraso de toque, overscroll, safe areas, hover gateado, `theme-color`. Emulação não é evidência; diga o que só o hardware confirma.
+   - **Motion — inventário primeiro, depois a auditoria.** Antes de auditar, varra os arquivos entregues por `transition`, `animation`, `@keyframes`, `transform`, `:hover`, `:active` e movimento disparado por JS (toggle de classe, `animate(`, timeout que mexe em estilo) e monte **a lista de todo movimento da superfície** — o `transitions review` do `/ui-transitions` faz essa varredura e sugere o transition certo por site. Sem o inventário a auditoria depende de lembrar onde olhar — e o que se esquece nunca é auditado. Depois audite item por item contra o `/ui-motion`, **medindo com a instrumentação dele** quando um still não mostra (duração, propriedades, distância, opacidade, curva), e rode o `transitions refine`: trocar duração/easing soltos pelos tokens, **casando por uso** (valor sem uso correspondente fica listado e intocado). Escreva os achados como tabela `| Antes | Depois | Porquê |` (uma linha por problema). Conserte o que bloqueia e mantenha a tabela no relatório.
+   - **Craft do protótipo**: o que foi congelado em `prototype.md` e construído não pode ter regredido — compare o print final com o aprovado no `/03-prototype` e registre divergências como achado, não como ajuste silencioso.
+3. **Read the epic artifacts**: `01-brief.md` (outcome + Must Do), `02-flows.md` (every flow's happy + unhappy paths), `prototype.md` (frozen UX contract), `04-tech-plan.md` (decisions + boundaries).
+4. **Verify outcome, not tickets**: each Must Do from the brief gets evidence — executed command, real output, or the exact reason it cannot be verified from here. A checked ticket whose evidence you cannot reproduce today counts as UNVERIFIED.
+5. **Traceability sweep**: every UX id in `prototype.md` → working feature. Every boundary in the plan ("we will not do X") → still true.
+6. **Full run from cold**: execute the start commands yourself with `bash`/`pwsh`/`terminal_*`, confirm the exact "working" signals, then write the walkthrough a human can follow from a cold machine (see shape). For a deployed deliverable, verify with the connection tools (`railway_cli`/`vercel_cli`/`supabase_cli` `status`) and open the real URL with `browser {op:'navigate'}` + `browser {op:'screenshot'}` — the screenshot is the evidence, not the deploy exit code.
+7. **Write** `mds/epics/<epic>/08-review.md` (shape below) and present the delivery report in the requester's language: what is verified, what is not, what broke and was fixed, what they must test themselves.
+
+The order is fixed: (1) regressão com qa → (2) gate de UI (mobile + motion, com prints) → (3) walkthrough humano com o app inteiro → (4) relatório honesto (verificado vs não verificado).
 
 ## Artifact shape
 
@@ -26,6 +33,7 @@ status: delivered
 ---
 # Delivery review — <initiative>
 ## Outcome check (brief outcome → evidence per Must Do)
+## UI gate (mobile checklist with prints · motion audit | Before | After | Why | · prototype craft not regressed)
 ## UX sweep (prototype.md → all screens verified, changes found and how they were handled)
 ## What I verified (each: how, when, output)
 ## What I could NOT verify (each: why, and exactly what the human should do)

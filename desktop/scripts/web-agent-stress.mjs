@@ -89,6 +89,16 @@ async function main() {
     const flag = s.ok ? 'ok  ' : 'FAIL'
     console.log(`${flag} ${String(s.ms).padStart(6)}ms  ${s.label}${s.detail ? '  -> ' + String(s.detail).slice(0, 160) : ''}`)
   }
+  console.log('\n=== motion (measured numbers) ===')
+  console.log(JSON.stringify(out.motion ?? null, null, 1).slice(0, 900))
+  console.log('\n=== audit (findings) ===')
+  const a = out.audit
+  if (a && a.findings) {
+    console.log(`count=${a.count} scanned=${a.scanned} inventory=${(a.motionInventory || []).length}`)
+    for (const f of a.findings) console.log(` - [${f.rule}] ${String(f.detail).slice(0, 90)} :: ${String(f.measured).slice(0, 90)}`)
+  } else {
+    console.log(JSON.stringify(a ?? null).slice(0, 400))
+  }
   console.log(`\ntotal steps: ${steps.length} | failures: ${failures.length} | slowest: ${maxMs}ms`)
   process.exit(failures.length === 0 ? 0 : 1)
 }
@@ -118,6 +128,14 @@ function pageScript(uploadPath) {
         out.steps.push({ label, ms: Date.now() - t0, ok: !!(r && r.ok), detail: r && r.ok ? undefined : r && r.error })
       } catch (e) {
         out.steps.push({ label, ms: Date.now() - t0, ok: false, detail: String((e && e.message) || e) })
+      }
+    }
+    const probe = async (label, fn) => {
+      try {
+        const r = await fn()
+        return r && r.ok ? { data: r.data } : { data: null, error: r && r.error }
+      } catch (e) {
+        return { data: null, error: String((e && e.message) || e) }
       }
     }
 
@@ -173,6 +191,19 @@ function pageScript(uploadPath) {
 
     await step('screenshot-viewport', () => b.run({ op: 'screenshot' }))
     await step('screenshot-full', () => b.run({ op: 'screenshot', full: true }))
+
+    // 7) motion measurement (numbers, not impressions)
+    await step('eval-setup-motion', () => b.run({ op: 'eval', code: "(function(){ var d=document.createElement('div'); d.id='mv'; d.style.cssText='position:fixed;left:20px;top:20px;width:40px;height:40px;background:#111;transform:translateY(8px);opacity:0;transition:transform 180ms cubic-bezier(0.23,1,0.32,1), opacity 180ms ease-out'; document.body.appendChild(d); return 'ok' })()" }))
+    const before = await probe('motion-before', () => b.run({ op: 'motion', selector: '#mv', ms: 300 }))
+    await step('eval-run-motion', () => b.run({ op: 'eval', code: "(function(){ var d=document.getElementById('mv'); requestAnimationFrame(function(){ d.style.transform='translateY(0)'; d.style.opacity='1' }); return 'go' })()" }))
+    const after = await probe('motion-after', () => b.run({ op: 'motion', selector: '#mv', ms: 600 }))
+
+    // 8) audit with planted violations
+    await step('eval-setup-audit', () => b.run({ op: 'eval', code: "(function(){ var s=document.createElement('style'); s.textContent='.bad{transition:all 500ms ease-in}.hov:hover{transform:scale(1.05)}'; document.head.appendChild(s); document.body.insertAdjacentHTML('beforeend','<div class=\"bad\" id=\"bad1\">x</div><div id=\"cd\" onclick=\"void 0\">clicavel</div><input id=\"tiny\" style=\"font-size:12px\"><div class=\"hov\" id=\"hov\">hover</div><button id=\"small\" style=\"width:20px;height:20px\">a</button>'); return 'ok' })()" }))
+    const audit = await probe('audit', () => b.run({ op: 'audit' }))
+
+    out.motion = { before: before && before.data, after: after && after.data }
+    out.audit = audit && audit.data
     await step('eval-final', () => b.run({ op: 'eval', code: 'document.title' }))
 
     return out
