@@ -1,5 +1,6 @@
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -18,6 +19,7 @@ import {
   isHarnessStartupProbeHealthy,
   readActiveProfilePlugins,
   resolveEnvironmentPath,
+  reservePort,
   resolveShellEnvironment,
   updateReadyStability
 } from '../src/main/runtime/harness-runtime'
@@ -303,6 +305,26 @@ describe('Harness launch contract', () => {
     expect(formatExitCode(4294930435)).toContain(
       '0xFFFF7003, Crashpad handler unavailable'
     )
+  })
+})
+
+describe('harness port reservation', () => {
+  it('reuses the previous port, so a restart keeps the origin and the login session', async () => {
+    const first = await reservePort()
+    expect(await reservePort(first)).toBe(first)
+  })
+
+  it('falls back to a free port when the previous one is taken', async () => {
+    const busy = createServer()
+    await new Promise<void>(resolve => busy.listen({ host: '127.0.0.1', port: 0 }, resolve))
+    const taken = (busy.address() as { port: number }).port
+    try {
+      const port = await reservePort(taken)
+      expect(port).not.toBe(taken)
+      expect(port).toBeGreaterThan(0)
+    } finally {
+      await new Promise<void>(resolve => busy.close(() => resolve()))
+    }
   })
 })
 

@@ -396,6 +396,13 @@ export class HarnessRuntime {
   private launchDirectory?: string
   private url?: string
   private launchToken?: string
+  /**
+   * The port of the previous start, tried first on the next one. The web
+   * client's login session lives in the window's `localStorage`, which is keyed
+   * by origin, so a restart on a new port would sign the person out even though
+   * their token is still valid.
+   */
+  private lastPort?: number
   private readonly logLines: string[] = []
   private readonly logRemainders: Record<'stdout' | 'stderr', string> = {
     stdout: '',
@@ -444,7 +451,8 @@ export class HarnessRuntime {
     await mkdir(dirname(this.options.logPath), { recursive: true })
     this.logStream ??= createWriteStream(this.options.logPath, { flags: 'a' })
 
-    const port = await reservePort()
+    const port = await reservePort(this.lastPort)
+    this.lastPort = port
     const url = `http://127.0.0.1:${port}`
     const args = buildNodeArguments(
       this.options.nodeEntryPath,
@@ -847,12 +855,35 @@ export function formatExitCode(code: number): string {
   return `exit code ${code} (${hexadecimal})`
 }
 
-async function reservePort(): Promise<number> {
+/**
+ * Reserve a loopback port, preferring one the previous start used.
+ * @param preferred - the port to try first; a busy or absent one falls back to
+ *   a random free port.
+ * @returns the reserved port, released for the Harness to bind.
+ */
+export async function reservePort(preferred?: number): Promise<number> {
+  if (preferred !== undefined) {
+    try {
+      return await listenOnce(preferred)
+    } catch {
+      // EADDRINUSE or EACCES: another process took the port since the last
+      // start. A new origin costs a sign-in, which is still better than failing.
+    }
+  }
+  return listenOnce(0)
+}
+
+/**
+ * Bind and release one loopback port.
+ * @param port - the port to bind, or 0 for any free one.
+ * @returns the port that was bound.
+ */
+function listenOnce(port: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.unref()
     server.once('error', reject)
-    server.listen({ host: '127.0.0.1', port: 0 }, () => {
+    server.listen({ host: '127.0.0.1', port }, () => {
       const address = server.address()
       if (!address || typeof address === 'string') {
         server.close()
