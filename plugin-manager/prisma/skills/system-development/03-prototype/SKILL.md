@@ -40,6 +40,7 @@ Drive it with the `prototype_automation` tool — no curl, no manual HTTP. **You
 | `read` | `selector:'.total'` or `attr:'href'` | Assertion data |
 | `eval` | `code:'localStorage.getItem("proto_x_users")'` | Inspect mock state |
 | `wait_for` | `selector:'.modal', timeoutMs:5000` | Wait for an element |
+| `wait_stable` | `quietMs:500` (optional) | Wait until the page stops changing — use it after `navigate` or an action and before `screenshot`; answers `{stable:false}` instead of failing if the page keeps animating |
 | `screenshot` | — | Full screen (chat + prototype); saved to `prototype/.shots/shot-<ts>.png` |
 | `console` | — | Captured error/warn + runtime errors |
 | `results` | — | Last 50 command results |

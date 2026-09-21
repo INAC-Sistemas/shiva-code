@@ -466,7 +466,7 @@ function injectShim(html) {
  * to one shim command; `console`, `results`, `submit` and `wait` are exposed
  * raw because the tab and the agent share the same queue.
  */
-const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'screenshot']
+const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'wait_stable', 'screenshot']
 const RAW_OPS = ['console', 'results', 'submit', 'wait']
 const AUTOMATION_OPS = [...INTERACTIVE_OPS, ...RAW_OPS]
 
@@ -493,7 +493,7 @@ async function runAutomation(queue, scope, args) {
     return body
   }
   const cmd = { op }
-  for (const key of ['selector', 'text', 'value', 'code', 'path', 'attr', 'timeoutMs']) {
+  for (const key of ['selector', 'text', 'value', 'code', 'path', 'attr', 'quietMs', 'timeoutMs']) {
     if (args[key] !== undefined) cmd[key] = args[key]
   }
   const submitted = await queue.call('submit', { cmd }, scope)
@@ -516,7 +516,9 @@ function createAutomationTool(ctx, queue) {
     name: 'prototype_automation',
     description:
       'Drive the live Prototype browser view of the workspace: navigate, click, fill, read, eval, wait_for, ' +
-      'screenshot, plus the raw console/results/submit/wait queue ops. Use it to self-test every prototype screen ' +
+      'wait_stable, screenshot, plus the raw console/results/submit/wait queue ops. Use wait_stable after navigate ' +
+      'or an action and before a screenshot, so a page that is still mounting or animating is not captured ' +
+      'half-drawn. Use it to self-test every prototype screen ' +
       'before handing it over and to reproduce what the requester reports. It opens the Prototype tab automatically ' +
       'when it is closed; screenshots capture the app window and are always available.',
     parameters: {
@@ -527,7 +529,8 @@ function createAutomationTool(ctx, queue) {
       code: { type: 'string', description: 'Expression to evaluate in the page (eval).' },
       path: { type: 'string', description: 'Page path inside prototype/ (navigate).' },
       attr: { type: 'string', description: 'Attribute to read instead of value/text (read).' },
-      timeoutMs: { type: 'number', description: 'Deadline for the command in ms; default 8000, capped at 10000.' },
+      quietMs: { type: 'number', description: 'wait_stable: how long the DOM must stay unchanged, in ms; default 500, max 5000.' },
+      timeoutMs: { type: 'number', description: 'Deadline for the command in ms; default 8000, capped at 10000 (wait_stable: 8500, and it answers {stable:false} instead of failing).' },
       id: { type: 'string', description: 'Command id (wait).' },
       cmd: { type: 'object', additionalProperties: true, description: 'Raw command for op=submit, e.g. {"op":"click","selector":"#go"}.' },
     },

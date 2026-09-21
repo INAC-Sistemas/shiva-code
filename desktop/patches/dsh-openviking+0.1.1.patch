@@ -1,11 +1,26 @@
 diff --git a/node_modules/dsh-openviking/lib/client.js b/node_modules/dsh-openviking/lib/client.js
-index 341c8c8..a34cae1 100644
+index 341c8c8..7d9feda 100644
 --- a/node_modules/dsh-openviking/lib/client.js
 +++ b/node_modules/dsh-openviking/lib/client.js
-@@ -11,12 +11,55 @@ window.__ModuleLoader__.load({ id: 'dsh-openviking', factory: (require) => {
- const TAB_ID = 'dsh-openviking:memory'
- const STUDIO_URL = 'http://127.0.0.1:1933/studio'
+@@ -6,17 +6,68 @@ window.__ModuleLoader__.load({ id: 'dsh-openviking', factory: (require) => {
  
+ // dsh-openviking client half: the Memory tab. States: installing (live log),
+ // unconfigured (one-screen wizard for the embedding/VLM providers), running
+-// (status bar + the OpenViking Web Studio framed over same-host :1933).
++// (status bar + the OpenViking Web Studio of this installation's server, framed).
+ 
+ const TAB_ID = 'dsh-openviking:memory'
+-const STUDIO_URL = 'http://127.0.0.1:1933/studio'
++/**
++ * The Studio page of the server this installation runs. The host reports its
++ * own base URL (`status.baseUrl`, which follows DSH_OPENVIKING_PORT); a fixed
++ * port here would frame whatever else listens there — the web checkout's
++ * server on 1933 — or nothing.
++ */
++function studioUrlOf(st) {
++  return st?.baseUrl ? `${st.baseUrl}/studio` : null
++}
++
 +// ── debug log ─────────────────────────────────────────────────────────────
 +// Entries are batched to the host, which writes them to the plugin's log file
 +// (path in status.logFile) next to the server output and API calls.
@@ -31,7 +46,7 @@ index 341c8c8..a34cae1 100644
 +  if (LOG_QUEUE.length > 200) LOG_QUEUE.splice(0, LOG_QUEUE.length - 200)
 +  if (!logTimer) logTimer = setTimeout(flushLog, 400)
 +}
-+
+ 
  function api(method, payload) {
 +  const started = Date.now()
    return fetch('/openviking/api/' + method, {
@@ -59,7 +74,54 @@ index 341c8c8..a34cae1 100644
  }
  
  const PROVIDERS = {
-@@ -127,6 +170,32 @@ function MemoryView() {
+@@ -66,6 +117,7 @@ function MemoryView() {
+   const [models, setModels] = React.useState(null)
+   const [form, setForm] = React.useState(null)
+   const [busy, setBusy] = React.useState(false)
++  const [reconfig, setReconfig] = React.useState(false) // configuration form reopened on a configured install
+   const [toast, setToast] = React.useState(null)
+   const toastTimer = React.useRef(null)
+ 
+@@ -116,17 +168,70 @@ function MemoryView() {
+     setBusy(true)
+     const r = await api('configure', {
+       embedding: form.embedding.provider ? form.embedding : null,
+-      vlm: form.vlm?.api_base ? form.vlm : null,
++      // VLM is optional; without a model it is off, and a model-less block
++      // makes the server refuse to start ("VLM configuration requires …").
++      vlm: form.vlm?.api_base && form.vlm?.model ? form.vlm : null,
+     })
+     setBusy(false)
+     if (!r.ok) return say(r.error || 'falhou ao salvar', true)
++    setReconfig(false)
+     say('Configuração salva — server reiniciando')
+     refresh()
+   }
+ 
++  // Reopen the configuration: the host stops the server and any orphan
++  // OpenViking still holding the data directory, and returns the saved
++  // settings (keys replaced by `hasKey`) to prefill the form.
++  const startReconfigure = async () => {
++    setBusy(true)
++    const r = await api('reconfigure')
++    setBusy(false)
++    if (!r.ok) return say(r.error || 'não foi possível reconfigurar', true)
++    const saved = r.settings ?? {}
++    setForm({
++      embedding: { provider: 'openrouter', api_base: PROVIDERS.openrouter.base, api_key: '', model: '', dimension: '', ...(saved.embedding ?? {}) },
++      vlm: { provider: '', api_base: PROVIDERS.openrouter.base, api_key: '', model: '', ...(saved.vlm ?? {}) },
++    })
++    setReconfig(true)
++    say(r.released?.killed
++      ? `Processo antigo do OpenViking (PID ${r.released.pid}) encerrado — revise e salve`
++      : r.released?.pid
++        ? `O processo ${r.released.pid} ainda segura os dados e não pôde ser encerrado`
++        : 'Revise a configuração e salve para reiniciar', !!r.released?.pid && !r.released?.killed)
++    refresh()
++  }
++
++  const cancelReconfigure = () => { setReconfig(false); refresh() }
++
    const setEmb = (patch) => setForm({ ...form, embedding: { ...form.embedding, ...patch } })
    const setVlm = (patch) => setForm({ ...form, vlm: { ...form.vlm, ...patch } })
  
@@ -68,7 +130,7 @@ index 341c8c8..a34cae1 100644
 +    : st.phase === 'installing' ? 'installing'
 +      : st.phase === 'error' ? 'install-error'
 +        : !st.installed ? 'not-installed'
-+          : !st.configured ? 'wizard'
++          : !st.configured || reconfig ? 'wizard'
 +            : st.running ? 'studio' : 'server-down'
 +  React.useEffect(() => {
 +    if (!st) return clientLog('info', 'view: loading')
@@ -76,7 +138,7 @@ index 341c8c8..a34cae1 100644
 +      phase: st.phase, installed: st.installed, configured: st.configured, running: st.running,
 +      adopted: st.adopted, port: st.port, baseUrl: st.baseUrl, studio: st.studio,
 +    }
-+    if (view === 'studio') facts.frameSrc = STUDIO_URL
++    if (view === 'studio') facts.frameSrc = studioUrlOf(st)
 +    if (view === 'server-down') facts.spawnLog = st.spawnLog
 +    if (view === 'install-error') facts.installLog = st.log
 +    clientLog(view === 'install-error' || view === 'server-down' ? 'warn' : 'info', `view: ${view}`, facts)
@@ -92,25 +154,66 @@ index 341c8c8..a34cae1 100644
    const field = (key, label, value, onChange, type = 'text', placeholder = '') =>
      h('div', { className: 'ov-field', key },
        h('label', null, label),
-@@ -243,9 +312,16 @@ function MemoryView() {
+@@ -171,8 +276,8 @@ function MemoryView() {
+       toast && h('div', { className: 'ov-toast' + (toast.err ? ' err' : '') }, toast.msg))
+   }
+ 
+-  // ── wizard de configuração (uma tela) ──
+-  if (!st.configured) {
++  // ── wizard de configuração (uma tela); também a reconfiguração ──
++  if (!st.configured || reconfig) {
+     if (!form) {
+       setForm({
+         embedding: { provider: 'openrouter', api_base: PROVIDERS.openrouter.base, api_key: '', model: '', dimension: '' },
+@@ -185,11 +290,13 @@ function MemoryView() {
+     const embList = isOpenRouter && models?.embedding ? models.embedding : []
+     const visList = isOpenRouter && models?.vision ? models.vision : []
+     const keyFromDsh = isOpenRouter && st?.openrouterKey
+-    const needKey = !isOpenRouter && form.embedding.provider !== 'ollama'
++    const needKey = !isOpenRouter && form.embedding.provider !== 'ollama' && !form.embedding.hasKey
+     return h('div', { className: 'ov-root' },
+       h('div', { className: 'ov-center' },
+-        h('h3', null, 'Conectar a memória semântica'),
+-        h('p', null, 'O OpenViking precisa de um serviço de embeddings para indexar memórias.')),
++        h('h3', null, reconfig ? 'Reconfigurar a memória semântica' : 'Conectar a memória semântica'),
++        h('p', null, reconfig
++          ? 'O servidor foi parado. Revise o provedor e o modelo e salve para reiniciá-lo. Uma chave já salva é mantida se o campo ficar em branco.'
++          : 'O OpenViking precisa de um serviço de embeddings para indexar memórias.')),
+       h('div', { style: { display: 'flex', justifyContent: 'center', paddingBottom: 24 } },
+         h('div', { className: 'ov-form' },
+           h('div', { className: 'ov-field' },
+@@ -228,6 +335,7 @@ function MemoryView() {
+                   : h('input', { type: 'text', value: form.vlm.model ?? '', onChange: (e) => setVlm({ model: e.target.value }), placeholder: 'google/gemini-2.0-flash' })))),
+           h('button', { className: 'ov-btn primary', disabled: busy || (needKey && !form.embedding.api_key), onClick: saveConfig },
+             busy ? 'Salvando…' : 'Salvar e conectar'),
++          reconfig && h('button', { className: 'ov-btn', disabled: busy, onClick: cancelReconfigure }, 'Cancelar'),
+           h('p', { className: 'ov-note' },
+             'Privacidade: os dados ficam no seu computador; o texto das memórias é enviado ao provedor de embeddings escolhido para vetorização. Ollama mantém tudo local.')),
+       ),
+@@ -243,16 +351,56 @@ function MemoryView() {
          st.running ? `${st.adopted ? 'adotado' : 'gerenciado pelo dsh'} · porta ${st.port}${st.studio ? ' · studio ok' : ''}` : 'iniciando…'),
        h('span', { className: 'ov-spacer' }),
        h('button', { className: 'ov-btn', disabled: busy, onClick: restart, title: 'Reiniciar o servidor OpenViking' }, '⟳ Reiniciar'),
+-      h('a', { className: 'ov-btn', href: STUDIO_URL, target: '_blank', rel: 'noreferrer' }, 'Abrir externo')),
++      h('button', { className: 'ov-btn', disabled: busy, onClick: startReconfigure, title: 'Parar o servidor, liberar os dados e revisar a configuração' }, 'Reconfigurar'),
 +      h('button', { className: 'ov-btn', onClick: showLog, title: st.logFile || 'Arquivo de log do OpenViking' }, 'Log'),
-       h('a', { className: 'ov-btn', href: STUDIO_URL, target: '_blank', rel: 'noreferrer' }, 'Abrir externo')),
++      h('a', { className: 'ov-btn', href: studioUrlOf(st) ?? undefined, target: '_blank', rel: 'noreferrer' }, 'Abrir externo')),
      st.running
 -      ? h('iframe', { className: 'ov-frame', src: STUDIO_URL, title: 'OpenViking Studio' })
 +      ? h('iframe', {
 +        className: 'ov-frame',
-+        src: STUDIO_URL,
++        src: studioUrlOf(st),
 +        title: 'OpenViking Studio',
-+        onLoad: () => clientLog('info', 'iframe do Studio disparou load', { frameSrc: STUDIO_URL }),
-+        onError: () => clientLog('error', 'iframe do Studio disparou error', { frameSrc: STUDIO_URL }),
++        onLoad: () => clientLog('info', 'iframe do Studio disparou load', { frameSrc: studioUrlOf(st) }),
++        onError: () => clientLog('error', 'iframe do Studio disparou error', { frameSrc: studioUrlOf(st) }),
 +      })
        : h('div', { className: 'ov-center' },
          h('p', null, 'O servidor não está respondendo.'),
          h('div', { className: 'ov-log' }, (st.spawnLog ?? []).join('\n')),
-@@ -253,6 +329,36 @@ function MemoryView() {
+-        h('button', { className: 'ov-btn primary', disabled: busy, onClick: restart }, 'Tentar novamente')),
++        h('div', { style: { display: 'flex', gap: 8 } },
++          h('button', { className: 'ov-btn primary', disabled: busy, onClick: restart }, 'Tentar novamente'),
++          h('button', { className: 'ov-btn', disabled: busy, onClick: startReconfigure, title: 'Parar o servidor, liberar os dados e revisar a configuração' }, 'Reconfigurar'))),
      toast && h('div', { className: 'ov-toast' + (toast.err ? ' err' : '') }, toast.msg))
  }
  
@@ -147,7 +250,7 @@ index 341c8c8..a34cae1 100644
  function MemoryIcon(size) {
    return React.createElement('svg', {
      width: size || 16, height: size || 16, viewBox: '0 0 16 16', fill: 'none',
-@@ -269,15 +375,20 @@ function apply(ctx) {
+@@ -269,15 +417,20 @@ function apply(ctx) {
      inject: ['betterSidebar'],
      apply(sidebarCtx) {
        const betterSidebar = sidebarCtx.betterSidebar
@@ -159,7 +262,7 @@ index 341c8c8..a34cae1 100644
 +      if (!(window.__profileTabEnabled || (() => true))(TAB_ID)) {
 +        return clientLog('info', 'aba Memory desabilitada pelo perfil')
 +      }
-+      clientLog('info', 'aba Memory registrada', { studioUrl: STUDIO_URL, userAgent: navigator.userAgent })
++      clientLog('info', 'aba Memory registrada', { userAgent: navigator.userAgent })
        ctx.effect(() => betterSidebar.registerTab({
          id: TAB_ID,
          title: 'Memory',
@@ -172,7 +275,7 @@ index 341c8c8..a34cae1 100644
      },
    })
 diff --git a/node_modules/dsh-openviking/lib/index.js b/node_modules/dsh-openviking/lib/index.js
-index c5f22dd..51a2958 100644
+index c5f22dd..53e2fa8 100644
 --- a/node_modules/dsh-openviking/lib/index.js
 +++ b/node_modules/dsh-openviking/lib/index.js
 @@ -5,10 +5,10 @@
@@ -180,7 +283,7 @@ index c5f22dd..51a2958 100644
  
  import { spawn } from 'node:child_process'
 -import { existsSync } from 'node:fs'
-+import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
++import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
  import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
  import { homedir } from 'node:os'
 -import { join } from 'node:path'
@@ -307,7 +410,98 @@ index c5f22dd..51a2958 100644
        const r = await run(cmd, [...args, '--version'])
        const version = r.code === 0 ? parsePythonVersion(r.out) : null
        if (!supportedPython(version)) {
-@@ -309,10 +391,11 @@ async function spawnServer() {
+@@ -181,6 +263,80 @@ function spawnInstaller(candidates) {
+ }
+ 
+ // ── settings → ov.conf ────────────────────────────────────────────────────
++/**
++ * The server's data-directory lock. `ov.conf` sets no `storage.workspace`, so
++ * the server keeps its data in `data/` under its cwd (`OV_DIR`), and
++ * OpenViking's `acquire_data_dir_lock` writes the holder's PID here.
++ */
++const DATA_LOCK_FILE = join(OV_DIR, 'data', '.openviking.pid')
++
++/**
++ * Whether `pid` is a live OpenViking process, checked the way OpenViking
++ * itself does (a live PID whose command line names openviking). Off Linux the
++ * command line is unreadable, so the answer is false and nothing is killed.
++ * @param pid - process id from the lock file.
++ * @param deps - injected for tests: `alive(pid)` and `cmdline(pid)`.
++ * @returns true only for a verified OpenViking process.
++ */
++export function isOpenVikingProcess(pid, deps = processProbe) {
++  if (!Number.isInteger(pid) || pid <= 0 || !deps.alive(pid)) return false
++  const cmdline = deps.cmdline(pid)
++  return typeof cmdline === 'string' && cmdline.toLowerCase().includes('openviking')
++}
++
++const processProbe = {
++  alive(pid) {
++    try { process.kill(pid, 0); return true } catch (e) { return e?.code === 'EPERM' }
++  },
++  cmdline(pid) {
++    // /proc is Linux-only; elsewhere the check fails closed.
++    try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').replaceAll('\0', ' ') } catch { return undefined }
++  },
++  kill(pid, signal) { process.kill(pid, signal) },
++  sleep(ms) { return new Promise((r) => setTimeout(r, ms)) },
++}
++
++/**
++ * Free the data directory from an OpenViking process this plugin no longer
++ * controls — an orphan left by an earlier app run holds the lock, and every
++ * new server then exits with DataDirectoryLocked. Only a verified OpenViking
++ * process other than `ownPid` is stopped: SIGTERM, then SIGKILL after 5 s.
++ * @param lockFile - the `.openviking.pid` path.
++ * @param ownPid - the pid of the server this plugin spawned, if any.
++ * @param deps - injected for tests.
++ * @returns `{ pid, killed }`, or `{ pid: null }` when no live process holds the lock.
++ */
++export async function releaseStaleLock(lockFile, ownPid, deps = processProbe) {
++  let pid
++  try { pid = Number.parseInt((await readFile(lockFile, 'utf8')).trim(), 10) } catch { return { pid: null, killed: false } }
++  if (!Number.isInteger(pid) || pid <= 0 || pid === ownPid || pid === process.pid) return { pid: null, killed: false }
++  // A dead pid holds nothing: OpenViking ignores it on its next start.
++  if (!deps.alive(pid)) return { pid: null, killed: false }
++  if (!isOpenVikingProcess(pid, deps)) return { pid, killed: false }
++  deps.kill(pid, 'SIGTERM')
++  for (let waited = 0; waited < 5000 && deps.alive(pid); waited += 250) await deps.sleep(250)
++  if (deps.alive(pid)) {
++    deps.kill(pid, 'SIGKILL')
++    for (let waited = 0; waited < 2000 && deps.alive(pid); waited += 250) await deps.sleep(250)
++  }
++  return { pid, killed: !deps.alive(pid) }
++}
++
++/**
++ * The saved settings as the reconfigure form shows them: every API key
++ * replaced by whether one is stored, so no secret reaches the browser.
++ * @param s - the settings file content.
++ * @returns the form seed.
++ */
++export function settingsForForm(s) {
++  const strip = (block) => {
++    if (!block) return null
++    const { api_key: key, ...rest } = block
++    return { ...rest, api_key: '', hasKey: typeof key === 'string' && key !== '' }
++  }
++  return { embedding: strip(s?.embedding), vlm: strip(s?.vlm) }
++}
++
+ async function readSettings() {
+   try { return JSON.parse(await readFile(SETTINGS_FILE, 'utf8')) } catch { return null }
+ }
+@@ -201,7 +357,8 @@ async function writeOvConf() {
+   if (s.embedding?.api_base) {
+     conf.embedding = { dense: { api_base: s.embedding.api_base, api_key: s.embedding.api_key ?? '', provider: toOvProvider(s.embedding.provider), dimension: Number(s.embedding.dimension) || 1024, model: s.embedding.model ?? '' } }
+   }
+-  if (s.vlm?.api_base) {
++  // A VLM block without a model is refused by the server at startup; no model means no VLM.
++  if (s.vlm?.api_base && s.vlm?.model) {
+     conf.vlm = { api_base: s.vlm.api_base, api_key: s.vlm.api_key ?? '', provider: toOvProvider(s.vlm.provider), model: s.vlm.model ?? '' }
+   }
+   await mkdir(join(homedir(), '.openviking'), { recursive: true })
+@@ -309,10 +466,11 @@ async function spawnServer() {
      windowsHide: true,
      stdio: ['ignore', 'pipe', 'pipe'],
    })
@@ -323,14 +517,14 @@ index c5f22dd..51a2958 100644
    const deadline = Date.now() + 90_000
    while (Date.now() < deadline) {
      if (await serverAlive(1500)) { log(`servidor saudável na porta ${OV_PORT}`); return true }
-@@ -347,9 +430,34 @@ function statusPayload() {
+@@ -347,9 +505,34 @@ function statusPayload() {
      studio: null,
      spawnLog: spawnLog.slice(-8),
      baseUrl: OV_BASE,
 +    logFile: LOG_FILE,
-   }
- }
- 
++  }
++}
++
 +/**
 + * Check a URL the Memory tab is about to frame and log whether it answers, so a
 + * blank tab can be told apart from a Studio that is simply unreachable. Only
@@ -349,16 +543,16 @@ index c5f22dd..51a2958 100644
 +  } catch (e) {
 +    const cause = e?.cause?.code ?? e?.name ?? 'erro'
 +    debugLog('error', 'probe', `iframe ${src} → sem resposta (${cause}); o servidor desta instalação escuta em ${OV_BASE}`, { error: String(e?.message ?? e) })
-+  }
-+}
-+
+   }
+ }
+ 
 +/** Methods polled by the tab; logged only when they fail, so the log stays readable. */
 +const QUIET_METHODS = new Set(['status', 'client-log', 'log-info'])
 +
  // ── MCP bridge ────────────────────────────────────────────────────────────
  // Mounts the harness mcp-client AFTER the server is healthy, so the first
  // connection succeeds and the model gains mcp__openviking__* tools without a
-@@ -494,14 +602,24 @@ export function apply(ctx, config = {}) {
+@@ -494,14 +677,24 @@ export function apply(ctx, config = {}) {
  
    // Configured order wins whole; otherwise this platform's probe order.
    const interpreters = config.pythonCandidates?.length ? config.pythonCandidates : platformInterpreters()
@@ -386,7 +580,7 @@ index c5f22dd..51a2958 100644
      try {
        switch (method) {
          case 'status': {
-@@ -509,17 +627,32 @@ export function apply(ctx, config = {}) {
+@@ -509,21 +702,46 @@ export function apply(ctx, config = {}) {
            p.configured = await isConfigured()
            p.studio = p.running ? await studioAvailable() : null
            p.openrouterKey = !!await resolveOpenRouterKey(ctx)
@@ -423,7 +617,21 @@ index c5f22dd..51a2958 100644
            const s = {
              embedding: payload.embedding ?? null,
              vlm: payload.vlm ?? null,
-@@ -535,7 +668,7 @@ export function apply(ctx, config = {}) {
+           }
++          // Reconfiguring shows a blank key field for a stored key: keep the
++          // stored one when the provider did not change and nothing was typed.
++          const prev = await readSettings()
++          for (const block of ['embedding', 'vlm']) {
++            const next = s[block]
++            if (next) delete next.hasKey
++            if (next && !next.api_key && prev?.[block]?.api_key && prev[block].provider === next.provider) {
++              next.api_key = prev[block].api_key
++            }
++          }
+           // OpenRouter sem chave digitada → importa a chave que o usuário já
+           // tem no dsh (via credentials seam); a chave nunca vai pro browser.
+           if (s.embedding?.provider === 'openrouter' && !s.embedding.api_key) {
+@@ -535,7 +753,7 @@ export function apply(ctx, config = {}) {
            await mkdir(OV_DIR, { recursive: true })
            await writeFile(SETTINGS_FILE, JSON.stringify(s, null, 2), 'utf8')
            const wrote = await writeOvConf()
@@ -432,7 +640,7 @@ index c5f22dd..51a2958 100644
            // Reinicia apenas o processo que nós spawnamos; um servidor adotado
            // recarrega ov.conf sozinho ("picked up without a restart").
            if (child) {
-@@ -548,7 +681,7 @@ export function apply(ctx, config = {}) {
+@@ -548,7 +766,7 @@ export function apply(ctx, config = {}) {
            }
            mountMcp(ctx); hookLive = true
            log(`configuração salva (ov.conf escrito) — servidor no ar`)
@@ -441,7 +649,7 @@ index c5f22dd..51a2958 100644
          }
          case 'restart': {
            if (child) {
-@@ -556,24 +689,25 @@ export function apply(ctx, config = {}) {
+@@ -556,24 +774,41 @@ export function apply(ctx, config = {}) {
              child = null
              await new Promise((r) => setTimeout(r, 1500))
              await ensureServer()
@@ -453,6 +661,22 @@ index c5f22dd..51a2958 100644
            await ensureServer()
 -          return json(res, 200, { ok: true, restarted: false, adopted })
 +          return reply(200, { ok: true, restarted: false, adopted })
++        }
++        case 'reconfigure': {
++          // Stop what holds the data directory — our own child, and an orphan
++          // server from an earlier run — then hand the saved settings to the
++          // form. `configure` starts the server again when the form is saved.
++          const ownPid = child?.pid
++          if (child) { try { child.kill() } catch { /* já saiu */ } child = null }
++          adopted = false
++          const released = await releaseStaleLock(DATA_LOCK_FILE, ownPid)
++          if (released.pid !== null) {
++            log(released.killed
++              ? `reconfigurar: processo OpenViking órfão (PID ${released.pid}) encerrado, lock liberado`
++              : `reconfigurar: o PID ${released.pid} do lock não foi encerrado (não é um OpenViking verificável ou não saiu)`,
++            released.killed ? 'info' : 'warn', { lock: DATA_LOCK_FILE })
++          }
++          return reply(200, { ok: true, released, settings: settingsForForm(await readSettings()) })
          }
          case 'reset': {
            // Desinstalação limpa: mata nosso processo e apaga venv.
@@ -473,7 +697,7 @@ index c5f22dd..51a2958 100644
      }
    }
  
-@@ -603,7 +737,7 @@ export function apply(ctx, config = {}) {
+@@ -603,7 +838,7 @@ export function apply(ctx, config = {}) {
      try {
        await ensureServer()
        mountMcp(ctx); hookLive = true

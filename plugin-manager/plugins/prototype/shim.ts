@@ -10,7 +10,7 @@
 // existe para que os logs dos dois lados digam qual cópia está no ar.
 
 /** Versão da fonte. Suba a cada mudança de comportamento do shim. */
-export const SHIM_VERSION = "1";
+export const SHIM_VERSION = "2";
 
 /**
  * Código do shim, em ES5 e sem dependências: ele roda dentro do protótipo do
@@ -89,6 +89,28 @@ var ops = {
         if (el) return resolveP({ found: true });
         if (Date.now() > deadline) return rejectP(new Error('wait_for timeout: ' + a.selector));
         setTimeout(check, 120);
+      })();
+    });
+  },
+  wait_stable: function (a) {
+    // Settles once the DOM has been quiet for quietMs with the page loaded,
+    // or at the deadline; never throws, like the browser tool's wait_stable.
+    // The deadline stays under the tab's 9 s cap on a shim answer.
+    var quiet = Math.min(Number(a.quietMs) || 500, 5000);
+    var cap = Math.min(Number(a.timeoutMs) || 8000, 8500);
+    return new Promise(function (resolveP) {
+      var last = Date.now(), started = Date.now();
+      var obs = new MutationObserver(function () { last = Date.now(); });
+      try { obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true }); } catch (e) {}
+      (function check() {
+        var idle = Date.now() - last;
+        var busy = document.readyState !== 'complete';
+        if ((idle >= quiet && !busy) || Date.now() - started >= cap) {
+          try { obs.disconnect(); } catch (e) {}
+          resolveP({ stable: idle >= quiet && !busy, quietMs: idle, elapsedMs: Date.now() - started });
+          return;
+        }
+        setTimeout(check, 100);
       })();
     });
   },

@@ -45,6 +45,7 @@ const KNOWN_OPS = new Set([
   "read",
   "eval",
   "wait_for",
+  "wait_stable",
   "console_dump",
 ]);
 
