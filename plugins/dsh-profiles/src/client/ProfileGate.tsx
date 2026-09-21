@@ -31,6 +31,7 @@ import {
   ROW, ROW_CURRENT, ROW_HINT, SECONDARY, SUBTITLE, TITLE,
 } from './styles.ts'
 import type { LoginSessionFace } from './context-types.ts'
+import type { SessionSwitch } from './sessions.ts'
 import type { ProfileStore } from './store.ts'
 import type { ProfileState, ProfileSummary } from '../wire.ts'
 
@@ -56,6 +57,8 @@ export interface ProfileGateProps {
   session: LoginSessionFace
   /** Shared state with the sidebar badge, which is how a deliberate switch opens this. */
   store: ProfileStore
+  /** Moves the window to a new conversation after the profile changes. */
+  sessions: SessionSwitch
 }
 
 /**
@@ -116,7 +119,7 @@ export function planFrom(state: ProfileState, grantedAt: number): {
  * @param props - the login session face.
  * @returns the cover, or null once a profile is materialized.
  */
-export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
+export function ProfileGate({ session, store, sessions }: ProfileGateProps): ReactNode {
   const subscribeSession = useCallback((listener: () => void) => session.subscribe(listener), [session])
   const signedIn = useSyncExternalStore(
     subscribeSession,
@@ -172,9 +175,18 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
    * asking them to confirm the consequence of their own choice is a second
    * question with one right answer. The notice survives for the browser, where
    * there is no process the page can restart.
+   *
+   * A different profile also means a new conversation: the open session keeps
+   * the composition it started with. With a restart, the selection is forgotten
+   * first so the reloaded page opens a new session; without one, a new session
+   * opens now. A refresh of the same profile keeps the conversation.
    */
-  const settle = useCallback((result: { name: string; restartRequired: boolean }) => {
+  const settle = useCallback((result: { name: string; restartRequired: boolean; changed: boolean }) => {
     store.closePicker()
+    if (result.changed) {
+      if (result.restartRequired) sessions.forgetCurrent()
+      else sessions.startNew()
+    }
     if (!result.restartRequired) {
       setPhase({ kind: 'done' })
       return
@@ -185,7 +197,7 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
     }
     setPhase({ kind: 'restarting', name: result.name })
     void restart(desktop, result.name)
-  }, [store, desktop, restart])
+  }, [store, desktop, restart, sessions])
 
   const apply = useCallback(async (state: ProfileState) => {
     store.setActive(state.signedIn ? state.active : null)
@@ -202,8 +214,9 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
         : { kind: 'done' })
       return
     }
+    const changed = store.getSnapshot().active?.id !== result.active.id
     store.setActive(result.active)
-    settle({ name: result.active.name, restartRequired: result.restartRequired })
+    settle({ name: result.active.name, restartRequired: result.restartRequired, changed })
   }, [store, settle, grantedAt])
 
   useEffect(() => {
@@ -252,8 +265,9 @@ export function ProfileGate({ session, store }: ProfileGateProps): ReactNode {
         : { kind: 'done' })
       return
     }
+    const changed = store.getSnapshot().active?.id !== result.active.id
     store.setActive(result.active)
-    settle({ name: result.active.name, restartRequired: result.restartRequired })
+    settle({ name: result.active.name, restartRequired: result.restartRequired, changed })
   }, [store, settle, grantedAt])
 
   const cancel = useCallback(() => {

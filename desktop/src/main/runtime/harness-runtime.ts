@@ -15,6 +15,8 @@ export interface HarnessRuntimeOptions {
   logPath: string
   /** Absolute path to the bundled Python interpreter dsh-openviking should prefer; undefined where none is staged. */
   pythonPath?: string
+  /** Absolute path to the desktop's own agent-preset root (holds the `profile` preset). */
+  agentPresetRoot?: string
   launchProcess(
     executablePath: string,
     args: string[],
@@ -277,7 +279,8 @@ export function buildHarnessSpawnOptions(
   platform: NodeJS.Platform = process.platform,
   environment: NodeJS.ProcessEnv = process.env,
   pythonPath?: string,
-  profilePlugins?: string[]
+  profilePlugins?: string[],
+  agentPresetRoot?: string
 ): SpawnOptionsWithoutStdio {
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = environment
   const pathKey = platform === 'win32' ? 'Path' : 'PATH'
@@ -326,6 +329,11 @@ export function buildHarnessSpawnOptions(
       // own default candidate list. undefined here (every platform besides a
       // packaged win32 build) leaves the plugin's own defaults untouched.
       ...(pythonPath === undefined ? {} : { DSH_OPENVIKING_PYTHON: pythonPath }),
+      // The `agent-presets` row in dsh-desktop.patch.yml adds this directory to
+      // the preset roster: the packaged harness ships no `profile` preset, and
+      // that preset is the only one carrying the VPS skill library and the
+      // vps_status tool.
+      ...(agentPresetRoot === undefined ? {} : { DSH_DESKTOP_PRESET_ROOT: agentPresetRoot }),
       // package-import-method/child-concurrency are left at pnpm's defaults
       // (hardlink, auto concurrency): forcing clone-or-copy made every
       // install do a full physical file copy across the profile's 150+
@@ -485,7 +493,8 @@ export class HarnessRuntime {
           process.platform,
           resolveShellEnvironment(),
           this.options.pythonPath,
-          profilePlugins
+          profilePlugins,
+          this.options.agentPresetRoot
         )
       )
     } catch (error) {

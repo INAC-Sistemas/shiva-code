@@ -308,6 +308,15 @@ describe('Harness launch contract', () => {
   })
 })
 
+describe('desktop agent-preset root', () => {
+  it('reaches the Harness as DSH_DESKTOP_PRESET_ROOT', () => {
+    const options = buildHarnessSpawnOptions(
+      '/launch-root', '/harness', 'linux', { PATH: '/usr/bin' }, undefined, undefined, '/resources/agent-presets'
+    )
+    expect(options.env?.DSH_DESKTOP_PRESET_ROOT).toBe('/resources/agent-presets')
+  })
+})
+
 describe('harness port reservation', () => {
   it('reuses the previous port, so a restart keeps the origin and the login session', async () => {
     const first = await reservePort()

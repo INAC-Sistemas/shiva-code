@@ -55,4 +55,10 @@ export interface LoginSessionFace {
 export interface ClientContext {
   slots: SlotRegistry
   loginSession: LoginSessionFace
+  /**
+   * Resolve a service by name, or undefined while it is not provided.
+   * @param name - the service key.
+   * @returns the service instance, or undefined.
+   */
+  get(name: string): unknown
 }

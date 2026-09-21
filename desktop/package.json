@@ -371,6 +371,10 @@
         "to": "dsh-desktop.patch.yml"
       },
       {
+        "from": "build/agent-presets",
+        "to": "agent-presets"
+      },
+      {
         "from": "build/splash.html",
         "to": "splash.html"
       },

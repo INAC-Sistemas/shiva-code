@@ -24,6 +24,18 @@
 # dsh-market normally offers to restart its own Node process after mutations.
 # The desktop shell has the real lifecycle authority, so keep that behavior off
 # whenever the optional plugin is present in the composed profile.
+# The preset roster. The packaged harness ships no `profile` preset, so the
+# desktop supplies it from build/agent-presets (resources/agent-presets when
+# packaged), passed in as $DSH_DESKTOP_PRESET_ROOT by harness-runtime.ts. It is
+# the default for new sessions because it is the only preset carrying the
+# selected profile's agent-plane plugins (the VPS skill library and
+# vps_status); without a profile it behaves exactly like `standard`. This row
+# replaces the web-app bundle's whole config, so `default` is restated here.
+- id: agent-presets
+  config:
+    default: profile
+    roots: !!js "[{ path: process.env.DSH_DESKTOP_PRESET_ROOT, trust: 'system' }]"
+
 - id: dsh-market
   inject: [desktopProfiles]
   config:

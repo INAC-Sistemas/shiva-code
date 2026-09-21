@@ -2428,6 +2428,7 @@ async function bootstrap(): Promise<void> {
     dshHome: join(app.getPath('userData'), 'harness'),
     logPath: join(app.getPath('logs'), 'harness.log'),
     pythonPath: bundledPythonPath(),
+    agentPresetRoot: desktopResourcePath('agent-presets'),
     launchProcess: (executablePath, args, options) =>
       process.platform === 'darwin'
         ? launchDisclaimedUtilityProcess(utilityProcess, args, options, {

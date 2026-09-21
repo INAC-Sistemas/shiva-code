@@ -17,6 +17,7 @@
  */
 import { ProfileBadge } from './ProfileBadge.tsx'
 import { ProfileGate } from './ProfileGate.tsx'
+import { sessionSwitch } from './sessions.ts'
 import { ProfileStore } from './store.ts'
 import type { ClientContext } from './context-types.ts'
 
@@ -76,9 +77,10 @@ export const inject = ['slots', 'loginSession']
  */
 export function apply(ctx: ClientContext): void {
   const store = new ProfileStore()
+  const sessions = sessionSwitch(name => ctx.get(name))
   ctx.slots.inject(OVERLAY_SLOT, () => ctx.slots.register(
     { name: OVERLAY_SLOT, id: ENTRY_ID, order: ENTRY_ORDER },
-    () => ProfileGate({ session: ctx.loginSession, store }),
+    () => ProfileGate({ session: ctx.loginSession, store, sessions }),
   ))
   ctx.slots.inject(FOOTER_SLOT, () => ctx.slots.register(
     { name: FOOTER_SLOT, id: ENTRY_ID, order: FOOTER_ORDER },
