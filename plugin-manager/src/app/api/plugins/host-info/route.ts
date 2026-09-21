@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { authenticateRequest } from "@/lib/api-auth";
+import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import { getHostStatus } from "@plugins/host-info";
 
 /**
  * GET /api/plugins/host-info
  * Header: Authorization: Bearer <token>
+ * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
+ *         selecionado não inclui `dsh-vps-status`
  * 200:    { disk: {totalBytes, usedBytes}, memory: {totalBytes, usedBytes} }
  */
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request);
+  const auth = await authenticatePluginRequest(request, "dsh-vps-status");
 
   if (!auth.ok) return auth.response;
 

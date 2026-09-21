@@ -130,8 +130,12 @@ numa release seguinte deixa de ser servido sem migração de dados.
 ### Fronteira real
 
 A filtragem de skills é enforcement de verdade: o corpo vem do servidor, então
-uma skill fora do perfil não existe para aquele token. Já quais **plugins** o
-cliente carrega é uma fronteira de composição — a casca roda na máquina do
+uma skill fora do perfil não existe para aquele token. O mesmo vale para as
+rotas de plugin: cada uma exige o plugin da casca que a consome no perfil
+selecionado (`authenticatePluginRequest` em
+[src/lib/plugin-auth.ts](src/lib/plugin-auth.ts)) e responde `403`
+`{ code: "plugin-not-in-profile", plugin }` fora dele. Já quais plugins o
+cliente **carrega** é uma fronteira de composição — a casca roda na máquina do
 usuário, que pode editar a própria composição. A VPS é a fonte da verdade do
 recorte; ela não defende a máquina contra o dono dela.
 
@@ -254,6 +258,19 @@ Serviços em [plugins/](plugins/), importáveis pelo alias `@plugins/*`. Cada um
 um módulo puro; a rota HTTP fica em `src/app/api/plugins/<nome>/route.ts` e só
 faz a autenticação e o wiring.
 
+Toda rota de plugin autentica com `authenticatePluginRequest(request, <id>)`,
+que além do token exige o plugin da casca no perfil selecionado. Fora do perfil,
+ou sem perfil selecionado, responde `403` `{ error, code:
+"plugin-not-in-profile", plugin }`, e a casca repassa ao modelo que o perfil não
+contempla aquela ferramenta. A exceção é `/api/plugins/profile`: é por ela que a
+casca descobre qual perfil aplicar.
+
+| Rota | Plugin exigido no perfil |
+| --- | --- |
+| `/api/plugins/host-info` | `dsh-vps-status` |
+| `/api/plugins/skill-library/*` | `dsh-skill-library` |
+| `/api/plugins/prototype/*` | `dsh-prototype` |
+
 ### host-info
 
 `GET /api/plugins/host-info` (Bearer) → disco e memória do host, em bytes:
@@ -282,11 +299,12 @@ Só leitura: quem cadastra é o painel, por server action com sessão de cookie.
 | Rota | Resposta |
 | --- | --- |
 | `GET /api/plugins/skill-library/skills` | `{ revision, skills: [...] }` — catálogo **sem corpo** |
-| `GET /api/plugins/skill-library/skills/<nome>` | a skill com `content`, sem frontmatter |
+| `GET /api/plugins/skill-library/skills/<nome>` | a skill com `content`, sem frontmatter; `403` `{ error, code: "skill-not-in-profile" }` quando está publicada mas fora do perfil selecionado |
 
 Nenhuma das duas ramifica em papel: toda sessão autenticada lê a mesma
-biblioteca, e é isso que faz uma skill publicada no painel valer para todos. Um
-`403` aqui seria uma regra nova, não um refinamento.
+biblioteca, e é isso que faz uma skill publicada no painel valer para todos. O
+`403` ramifica em **perfil**: a casca repassa o `code` ao modelo, que responde ao
+usuário que o perfil selecionado não contempla aquela ferramenta.
 
 O corpo sai só pela segunda rota. A primeira é relida a cada refresh de
 descoberta do cliente, e mandar as instruções inteiras nela colocaria a
@@ -295,7 +313,8 @@ naturalmente o ponto onde o token é exigido.
 
 Nome fora do kebab-case responde `400`; desconhecido **ou despublicado**
 responde `404`, sem distinguir os dois, para não vazar trabalho que ainda não
-foi liberado.
+foi liberado. Revelar que uma skill publicada existe fora do perfil não vaza
+nada: a biblioteca publicada é a mesma para todos.
 
 ### prototype
 

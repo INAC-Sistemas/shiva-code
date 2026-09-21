@@ -16,6 +16,10 @@ A plugin-manager user had one "active" profile, `User.activeProfileId`, could se
 
 **A new sign-in is detected from the login session.** `dsh-login` stores `grantedAt` with each session: a restored session keeps it, a new sign-in replaces it, and a record without it reads as `0`. The picker sends that value with each selection, and the host half stores it in `profile/active.json` as `loginGrantedAt` (`-1` when absent). `planFrom(state, grantedAt)` asks, with no Cancel, when the two differ, taking the only selectable profile without asking; within the same login it materializes a selection changed elsewhere or a `revision` bump from a panel edit, and asks again when the selection is no longer in the roster.
 
+**A skill outside the selected profile is refused, and the model says so.** `GET /api/plugins/skill-library/skills/<name>` answers `403` `{ code: "skill-not-in-profile" }` for a published skill outside the selection (or with nothing selected); unknown and unpublished names still answer `404` alike. Because the catalog lists only profile skills, the `skill` tool reports any other name as unknown without reaching the library, so `dsh-skill-library` listens to `tools/post-execute`: on a failed `skill` call it asks the body endpoint, and on that `403` it blocks the result with text telling the model the profile does not cover the tool and that the user can switch profiles or ask the owner. `LibrarySkillProvider.get()` maps the same `403` to the same text for a catalog that went stale.
+
+**Plugin routes require their plugin in the selected profile.** `authenticatePluginRequest(request, pluginId)` in `plugin-manager/src/lib/plugin-auth.ts` authenticates the token and then requires `pluginId` in the selected profile's plugins, answering `403` `{ code: "plugin-not-in-profile", plugin }` otherwise (or with nothing selected). `host-info` requires `dsh-vps-status`, `skill-library/*` requires `dsh-skill-library`, and `prototype/*` requires `dsh-prototype`; `/api/plugins/profile` is exempt because the shell reads the selection through it. `dsh-vps-status` maps that `403` to text telling the model the profile does not cover the tool, and `dsh-skill-library` treats it as an authoritative empty catalog and a refusal on body loads. `dsh-prototype` ships only built output here, so its tool still reports the `403` as a rejected session.
+
 **Panel.** The profile form has Visibilidade and Estado choices; the list shows status, visibility, and "em uso" badges with Ativar/Desativar; a "Perfis públicos de outros usuários" section offers other owners' public active profiles with a "Usar" button.
 
 ## Alternatives considered
@@ -25,6 +29,10 @@ A plugin-manager user had one "active" profile, `User.activeProfileId`, could se
 **Ask the server for a per-login selection.** Rejected: tokens are stateless JWTs with no login record, and the selection is deliberately per user so every request resolves the same slice. A fresh sign-in is a client-side fact, so the shell detects it.
 
 **Key a new login on the token string.** Rejected: storing the token, or a hash of it, in `active.json` puts credential material on disk outside `dsh-login`, while a timestamp carries no secret.
+
+**List out-of-profile skills in the catalog, marked unavailable.** Rejected: the catalog is prompt-visible on every step, so every excluded skill would cost context and invite the model to try it. Probing only after a failed call costs one request per refusal.
+
+**Change the `skill` tool's unknown-name error in `dsh-tool-skill`.** Rejected: the profile is a plugin-manager concept, and the tool registry's `tools/post-execute` waterfall is the documented place for a plugin to replace a result.
 
 **Admin-owned profiles assigned to users.** Rejected by the product owner: every user creates and publishes profiles themselves.
 

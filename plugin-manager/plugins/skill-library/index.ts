@@ -161,25 +161,33 @@ export async function listSkills(scope: ProfileScope): Promise<{
   return { revision, skills: rows.map(toSummary), profileId: selectedProfileId };
 }
 
+/** O resultado de {@link readSkill}. */
+export type SkillRead =
+  | { kind: "found"; skill: SkillLibraryEntry }
+  /** Publicada, mas fora do perfil selecionado — ou nenhum perfil selecionado. */
+  | { kind: "not-in-profile" }
+  /** Inexistente ou despublicada. */
+  | { kind: "not-found" };
+
 /**
  * Uma skill do perfil selecionado, com o corpo.
  *
- * Despublicada, fora do perfil selecionado ou inexistente respondem igual: quem
- * consome não precisa distinguir os três, e distinguir vazaria tanto a existência
- * de trabalho ainda não liberado quanto o conteúdo da biblioteca fora do recorte.
+ * Publicada e fora do recorte responde `not-in-profile`, que a rota traduz em
+ * 403: o agente precisa dizer ao usuário que o perfil não contempla a skill, e
+ * não que ela não existe. Revelar o nome não vaza nada — a biblioteca publicada
+ * é a mesma para todos, e o painel já a lista a qualquer usuário. Despublicada e
+ * inexistente continuam iguais (`not-found`): distinguir as duas vazaria a
+ * existência de trabalho ainda não liberado.
  * @param scope - quem está lendo, vindo do token.
  * @param name - nome já validado por {@link assertSkillName}.
- * @returns a skill, ou `null` quando não alcançável por este perfil.
+ * @returns a skill, ou por que ela não é alcançável por este perfil.
  */
 export async function readSkill(
   scope: ProfileScope,
   name: string,
-): Promise<SkillLibraryEntry | null> {
+): Promise<SkillRead> {
   const selectedProfileId = await readSelectedProfileId(scope);
-
-  if (selectedProfileId === null) return null;
-
-  const row = await prisma.librarySkill.findFirst({
+  const row = selectedProfileId === null ? null : await prisma.librarySkill.findFirst({
     where: { name, ...scopedWhere(scope, selectedProfileId) },
     select: {
       name: true,
@@ -192,5 +200,13 @@ export async function readSkill(
     },
   });
 
-  return row === null ? null : { ...toSummary(row), content: row.content };
+  if (row !== null) {
+    return { kind: "found", skill: { ...toSummary(row), content: row.content } };
+  }
+
+  const published = await prisma.librarySkill.count({
+    where: { name, published: true },
+  });
+
+  return published > 0 ? { kind: "not-in-profile" } : { kind: "not-found" };
 }

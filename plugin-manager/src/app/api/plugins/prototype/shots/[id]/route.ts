@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { authenticateRequest } from "@/lib/api-auth";
+import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import { readShot } from "@plugins/prototype";
 
 /**
  * GET /api/plugins/prototype/shots/<id>
  * Header: Authorization: Bearer <token>
+ * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
+ *         selecionado não inclui `dsh-prototype`
  * 200:    a imagem, com o `content-type` que ela foi gravada
  *
  * Só devolve captura do próprio usuário — um id de outra conta responde 404, e
@@ -14,7 +16,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authenticateRequest(request);
+  const auth = await authenticatePluginRequest(request, "dsh-prototype");
 
   if (!auth.ok) return auth.response;
 

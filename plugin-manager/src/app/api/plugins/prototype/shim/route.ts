@@ -1,9 +1,11 @@
-import { authenticateRequest } from "@/lib/api-auth";
+import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import { SHIM_JS, SHIM_VERSION } from "@plugins/prototype/shim";
 
 /**
  * GET /api/plugins/prototype/shim
  * Header: Authorization: Bearer <token>
+ * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
+ *         selecionado não inclui `dsh-prototype`
  * 200:    o JavaScript do shim, com `x-shim-version`
  *
  * Quem busca é a casca, não a página: um `<script src>` não manda header de
@@ -11,7 +13,7 @@ import { SHIM_JS, SHIM_VERSION } from "@plugins/prototype/shim";
  * guarda o resultado em cache e o serve em `/prototype/shim.js`.
  */
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request);
+  const auth = await authenticatePluginRequest(request, "dsh-prototype");
 
   if (!auth.ok) return auth.response;
 

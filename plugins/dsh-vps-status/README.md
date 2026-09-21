@@ -121,7 +121,8 @@ Every failure message is written for its actual reader — the model — and ter
 | the signed-in session expired | *The signed-in session expired. Tell the user to sign in again… Do not retry until they have.* |
 | no credential store mounted | *This harness mounts no credential store, so a sign-in has nowhere to be recorded. …* |
 | the stored record is unreadable | *The stored session record could not be read. Tell the user to sign out and in again…* |
-| endpoint answers 401/403 | *The status endpoint rejected the signed-in session (`<status>`). Tell the user to sign in again and do not retry.* |
+| endpoint answers 403 `plugin-not-in-profile` | *The status endpoint denied access (403) because the user's selected profile does not include the VPS status plugin. Tell the user… their current profile does not cover this tool… Do not retry.* |
+| endpoint answers 401, or 403 without that code | *The status endpoint rejected the signed-in session (`<status>`). Tell the user to sign in again and do not retry.* |
 | other non-2xx answer | *The status endpoint answered `<status>`. Tell the user and do not retry.* |
 | body is not JSON | *The status endpoint did not answer JSON. …* |
 | body breaks the contract | *… invalid `disk.totalBytes`: expected a number, got string. …* |

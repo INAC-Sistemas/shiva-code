@@ -246,6 +246,29 @@ export async function readSelectedProfileId(
   return selectable > 0 ? selectedId : null;
 }
 
+/**
+ * Os plugins do perfil selecionado pelo usuário, ou `null` sem seleção.
+ *
+ * Interseção com `KNOWN_PLUGIN_IDS`, como o spec: um nome que a release não
+ * conhece não habilita rota nenhuma.
+ * @param scope - quem chama, vindo do token.
+ * @returns os ids dos plugins, ou `null` quando nenhum perfil selecionável está escolhido.
+ */
+export async function readSelectedPlugins(
+  scope: ProfileScope,
+): Promise<string[] | null> {
+  const selectedId = await readSelectedProfileId(scope);
+
+  if (selectedId === null) return null;
+
+  const row = await prisma.profile.findUnique({
+    where: { id: selectedId },
+    select: { plugins: true },
+  });
+
+  return row === null ? null : row.plugins.filter((id) => KNOWN_PLUGIN_IDS.has(id));
+}
+
 /** Monta o spec de um perfil já resolvido como selecionável pelo usuário. */
 async function specFor(profileId: string): Promise<ProfileSpec | null> {
   const row = await prisma.profile.findUnique({

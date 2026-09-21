@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authenticateRequest } from "@/lib/api-auth";
+import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import {
   PrototypeRequestError,
   assertWorkspace,
@@ -15,6 +15,8 @@ import {
 /**
  * POST /api/plugins/prototype/automation/<op>
  * Header: Authorization: Bearer <token>
+ * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
+ *         selecionado não inclui `dsh-prototype`
  * Body:   { workspace: "<16 hex>", ... }
  *
  * Uma rota por operação da fila, com os mesmos nomes que a casca já expõe ao
@@ -36,7 +38,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ op: string }> },
 ) {
-  const auth = await authenticateRequest(request);
+  const auth = await authenticatePluginRequest(request, "dsh-prototype");
 
   if (!auth.ok) return auth.response;
 

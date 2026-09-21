@@ -22,11 +22,17 @@ Signing in or out invalidates the catalog through `credentials/record-updated`, 
 | --- | --- | --- |
 | Nobody signed in, session expired, record unreadable, no credential store | empty, **authoritative** | refuses, with text telling the model to have the user sign in |
 | Library unreachable, 5xx, or malformed | empty, **incomplete** — not cached, retried next step | throws, telling the model not to retry |
-| Library rejects the session (401/403) | empty, incomplete | throws; **the stored session is left alone** |
+| Library rejects the session (401, or 403 without a code) | empty, incomplete | throws; **the stored session is left alone** |
+| Skill outside the selected profile (403 `skill-not-in-profile`) | not listed | throws, telling the model the profile does not cover the tool |
+| Profile excludes the skill library plugin (403 `plugin-not-in-profile`) | empty, **authoritative** | throws, telling the model the profile does not cover library skills |
 
 The split is whether the fact is decidable without leaving the machine. An authoritative empty catalog is cacheable, which matters: reporting "incomplete" forever would keep `snapshot.complete` false on every read and disable the registry's discovery cache for the other providers too.
 
 A rejected session is reported, not acted on. Retiring the local session here would let a transient upstream fault wipe a good one; the browser's own revalidation owns that.
+
+## Skills outside the selected profile
+
+The catalog only lists skills in the user's selected profile, so the `skill` tool reports any other name as unknown without reaching `get()`. A `tools/post-execute` listener covers that case: when a `skill` call fails, it asks the body endpoint for the name, and if the library answers `403` with `code: "skill-not-in-profile"` it replaces the error with text telling the model that the profile does not cover this tool and to tell the user they can switch profiles or ask the owner to add it. Any other answer leaves the tool's own error unchanged. `get()` maps the same `403` to the same text, which covers a catalog that went stale after a profile switch. The event is declared structurally in [src/tool-events.ts](src/tool-events.ts) rather than imported, because the desktop resolves this plugin against a packaged harness.
 
 There is no offline mode. When the library cannot be reached, its skills are simply absent — local skills are unaffected.
 
@@ -60,7 +66,7 @@ Every field is checked at load, not on the first lookup: a provider that throws 
 | `GET <endpoint>/skills` | the published catalog — names, descriptions, invocation controls. No bodies |
 | `GET <endpoint>/skills/<name>` | one skill with its `content`, frontmatter already stripped by the server |
 
-Served by [plugin-manager](../../plugin-manager/README.md), where the skills are cadastered. A skill unpublished there answers `404`, exactly like one that does not exist.
+Served by [plugin-manager](../../plugin-manager/README.md), where the skills are cadastered. A skill unpublished there answers `404`, exactly like one that does not exist; a published skill outside the selected profile answers `403` with `code: "skill-not-in-profile"`.
 
 ## Install
 

@@ -56,6 +56,26 @@ const NO_SESSION_TEXT: Record<'no-store' | 'absent' | 'expired' | 'malformed', s
     + 'Tell the user to sign out and in again and do not retry.',
 }
 
+/**
+ * What the model is told when the library refuses a skill outside the selected
+ * profile. Written for its reader: the answer the user needs is that their
+ * profile does not cover this tool, not that the tool does not exist.
+ * @param name - the skill that was refused.
+ * @returns the model-facing text.
+ */
+export function notInProfileText(name: string): string {
+  return `The skill "${name}" exists in the skill library but the user's selected profile does not include it, `
+    + 'so access was denied (403). Tell the user, in their language, that their current profile does not '
+    + 'cover this tool, and that they can switch to a profile that includes it (the profile row at the foot '
+    + 'of the sidebar) or ask the profile\'s owner to add it. Do not retry and do not try to reproduce the skill.'
+}
+
+/** What the model is told when the selected profile does not include the skill library at all. */
+export const LIBRARY_NOT_IN_PROFILE_TEXT = 'The skill library denied access (403) because the user\'s selected '
+  + 'profile does not include the skill library plugin. Tell the user, in their language, that their current '
+  + 'profile does not cover library skills, and that they can switch to a profile that includes them (the profile '
+  + 'row at the foot of the sidebar) or ask the profile\'s owner to add the plugin. Do not retry.'
+
 /** An empty catalog that the registry may cache. */
 const AUTHORITATIVELY_EMPTY: readonly SkillCandidate[] = []
 
@@ -106,6 +126,8 @@ export class LibrarySkillProvider implements SkillProvider {
       body = await this.request('skills', authorization.authorization, options.signal, this.options.listTimeoutMs)
     } catch (error) {
       if (options.signal?.aborted) throw error
+      // The profile excludes the library: that is a decided answer, not an outage.
+      if (error instanceof PluginNotInProfile) return AUTHORITATIVELY_EMPTY
       this.options.warn(`skill catalog unavailable: ${(error as Error).message}`)
       return TRANSIENTLY_EMPTY
     }
@@ -148,6 +170,8 @@ export class LibrarySkillProvider implements SkillProvider {
     } catch (error) {
       if (options.signal?.aborted) throw error
       if (error instanceof SkillNotFound) return undefined
+      if (error instanceof SkillNotInProfile) throw new Error(notInProfileText(locator.name))
+      if (error instanceof PluginNotInProfile) throw new Error(LIBRARY_NOT_IN_PROFILE_TEXT)
       throw error
     }
 
@@ -187,6 +211,31 @@ export class LibrarySkillProvider implements SkillProvider {
     }
   }
 
+  /**
+   * Ask the library whether a skill the catalog does not offer is refused by
+   * the selected profile.
+   *
+   * The `skill` tool only reaches {@link get} for names in the catalog, and the
+   * catalog is already narrowed to the profile, so a skill outside it never hits
+   * the body endpoint on its own. This is that call, made after the tool reported
+   * the name unknown.
+   * @param name - the skill name the model asked for.
+   * @param signal - the caller's signal.
+   * @returns true only when the library answered 403 `skill-not-in-profile`.
+   */
+  async refusedByProfile(name: string, signal: AbortSignal | undefined): Promise<boolean> {
+    const authorization = await this.options.authorize(this.options.store())
+    if (!authorization.ok) return false
+    try {
+      await this.request(`skills/${encodeURIComponent(name)}`, authorization.authorization, signal, this.options.getTimeoutMs)
+    } catch (error) {
+      // Every other answer — found, not found, unreachable, rejected session —
+      // leaves the tool's own error standing.
+      return error instanceof SkillNotInProfile
+    }
+    return false
+  }
+
   /** Project one catalog entry into a registry candidate. */
   private candidateOf(summary: WireSummary): SkillCandidate {
     return {
@@ -213,7 +262,9 @@ export class LibrarySkillProvider implements SkillProvider {
    * @param signal - the caller's signal, raced against this plugin's deadline.
    * @param timeoutMs - this plugin's own deadline.
    * @returns the decoded JSON body.
-   * @throws SkillNotFound on 404; Error with model-facing text otherwise.
+   * @throws SkillNotFound on 404; SkillNotInProfile or PluginNotInProfile on a
+   *   403 carrying `skill-not-in-profile` or `plugin-not-in-profile`; Error with
+   *   model-facing text otherwise.
    */
   private async request(
     path: string,
@@ -249,6 +300,11 @@ export class LibrarySkillProvider implements SkillProvider {
     }
 
     if (response.status === 404) throw new SkillNotFound()
+    if (response.status === 403) {
+      const code = await refusalCode(response)
+      if (code === 'skill-not-in-profile') throw new SkillNotInProfile()
+      if (code === 'plugin-not-in-profile') throw new PluginNotInProfile()
+    }
     if (response.status === 401 || response.status === 403) {
       // The session is dead at the library, but this is the wrong place to act
       // on that: a transient upstream fault would wipe a good session. The
@@ -287,6 +343,40 @@ export class LibrarySkillProvider implements SkillProvider {
     } catch {
       throw new Error('The skill library did not answer JSON. Tell the user and do not retry.')
     }
+  }
+}
+
+/**
+ * The `code` of a refusal body. A refusal is a short JSON error, so it is read
+ * without the body cap.
+ * @param response - a 403 answer.
+ * @returns the code, or undefined when the body carries none.
+ */
+async function refusalCode(response: Response): Promise<string | undefined> {
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    // Not JSON: an upstream proxy's own 403 page, which is a session refusal.
+    return undefined
+  }
+  const code = typeof body === 'object' && body !== null ? (body as { code?: unknown }).code : undefined
+  return typeof code === 'string' ? code : undefined
+}
+
+/** The selected profile does not include the skill. Mapped to model-facing text by the caller. */
+class SkillNotInProfile extends Error {
+  constructor() {
+    super('skill not in the selected profile')
+    this.name = 'SkillNotInProfile'
+  }
+}
+
+/** The selected profile does not include the skill library plugin. */
+class PluginNotInProfile extends Error {
+  constructor() {
+    super('skill library not in the selected profile')
+    this.name = 'PluginNotInProfile'
   }
 }
 
