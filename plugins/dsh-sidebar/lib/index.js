@@ -1,8 +1,13 @@
 // dsh-sidebar host half: the agent's control of the sidebar tabs. The client
 // half owns the better-sidebar service (list/focus/close/open); this host half
 // relays one command at a time and returns the client's answer to the tool.
+//
+// It also owns AUTO-OPEN: the one place that opens a sidebar tab because an
+// agent created a file. Rules come from config (`autoOpen`), one observer
+// watches the tool pipeline, and one channel carries the events to the client.
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { AutoOpenBoard, compileAutoOpen, writeTargetOf } from './auto-open.js'
 
 export const inject = ['webServer', 'tools']
 
@@ -86,7 +91,25 @@ function sameOrigin(req) {
   try { return new URL(origin).host === String(req.headers.host ?? '') } catch { return false }
 }
 
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
+  const board = new AutoOpenBoard(compileAutoOpen(config?.autoOpen))
+  if (board.rules.length > 0) {
+    // Both listeners delegate first, so the guard and every other policy keep
+    // their say; a write another listener denied never reaches the file.
+    ctx.on('tools/pre-execute', async (exec, next) => {
+      const decision = await next()
+      // `ask` may still be approved; a later denial reaches post-execute as an error.
+      if (decision?.kind !== 'deny') board.before(writeTargetOf(exec))
+      return decision
+    })
+    ctx.on('tools/post-execute', async (exec, result, next) => {
+      const decision = await next()
+      board.after(writeTargetOf(exec), result?.isError === true || decision?.kind === 'block')
+      return decision
+    })
+    log(`auto-open: ${board.rules.map((rule) => `${rule.path} → ${rule.tab}`).join(', ')}`)
+  }
+
   const webServer = ctx.get('webServer')
   if (!webServer || typeof webServer.register !== 'function') {
     log('webServer unavailable — plugin inactive')
@@ -106,6 +129,10 @@ export function apply(ctx) {
           const cmd = pending
           pending = null
           return json(res, 200, { ok: true, cmd })
+        }
+        case 'auto_open': {
+          const after = typeof payload.after === 'number' ? payload.after : Number.MAX_SAFE_INTEGER
+          return json(res, 200, { ok: true, ...board.since(after) })
         }
         case 'result':
           settle(payload.id, { ok: payload.ok !== false, ...(payload.data ?? {}), error: payload.error ?? null })

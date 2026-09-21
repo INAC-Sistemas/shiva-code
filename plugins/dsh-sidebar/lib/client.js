@@ -6,6 +6,15 @@ window.__ModuleLoader__.load({ id: 'dsh-sidebar', factory: (require) => {
 // dsh-sidebar client half: owns the better-sidebar service calls for the agent's
 // `sidebar` tool. It registers no tab — it lists, focuses, closes and opens the
 // session's tabs on request.
+//
+// It also applies AUTO-OPEN events: the host turns an agent-created file that
+// matches a configured rule into an event; this half opens the rule's tab and,
+// for a revealing rule, hands the file to it as
+// `tab.meta.reveal = { path, seq }` (workspace-relative path). A tab that
+// wants the file reads its own `props.tab.meta.reveal` and acts on a new `seq`.
+
+/** How often the client asks for auto-open events. */
+const AUTO_OPEN_POLL_MS = 1000
 
 function api(method, payload) {
   return fetch('/sidebar-agent/api/' + method, {
@@ -80,6 +89,44 @@ function apply(ctx) {
         tick()
         return () => { alive = false; if (timer) clearTimeout(timer) }
       }, 'dsh-sidebar: command poll')
+
+      // Auto-open. The first answer only sets the baseline, so a page load
+      // never replays creations that happened before it.
+      ctx.effect(() => {
+        let alive = true
+        let timer = null
+        let lastSeq = null
+        const applyEvent = (event) => {
+          const meta = event.reveal ? { reveal: { path: event.path, seq: event.seq } } : undefined
+          betterSidebar.openTab({ type: event.tab, ...(meta ? { meta } : {}) }, scope())
+          if (!meta) return
+          // An already-open single tab keeps its seed, so patch every open tab
+          // of that type with the reveal as well.
+          const snap = betterSidebar.getSnapshot?.() ?? {}
+          const tabs = []
+          collectTabs(snap.state?.splits, tabs)
+          collectTabs(snap.state?.bottomSplits, tabs)
+          for (const tab of tabs) {
+            if (tab.type === event.tab && typeof betterSidebar.updateTab === 'function') betterSidebar.updateTab(tab.id, { meta })
+          }
+        }
+        const tick = async () => {
+          try {
+            const r = await api('auto_open', { after: lastSeq ?? Number.MAX_SAFE_INTEGER })
+            if (alive && r?.ok) {
+              if (lastSeq !== null) {
+                for (const event of r.events ?? []) {
+                  try { applyEvent(event) } catch { /* unknown tab type: nothing to open */ }
+                }
+              }
+              lastSeq = r.seq
+            }
+          } catch { /* offline */ }
+          if (alive) timer = setTimeout(tick, AUTO_OPEN_POLL_MS)
+        }
+        tick()
+        return () => { alive = false; if (timer) clearTimeout(timer) }
+      }, 'dsh-sidebar: auto-open poll')
     },
   })
 }

@@ -8,6 +8,10 @@ Workspace-scoped markdown artifacts for dsh web: one folder — `mds/` at the wo
 2. Folder exists → a tree of folders and files (folders first, `.md` highlighted), search, **+ File** (new files start with a heading template), **+ Folder**.
 3. Click a file → editor with dirty indicator and **Ctrl+S** to save; **Open** hands the file to VS Code (or `$DSH_EDITOR`); per-row **✕** deletes with confirmation.
 
+## Opening on new artifacts
+
+When an agent creates a new file under `mds/`, dsh-sidebar's auto-open rule (`mds/**` → `dsh-mds:artifacts`, `reveal: true`, configured in the desktop patch) opens this tab and sets `tab.meta.reveal = { path, seq }`. The view then refreshes the tree, unfolds the file's folders, and opens it in the editor, unless the editor holds unsaved edits. Each `seq` is handled once per page.
+
 ## API
 
 `POST /mds/api/<method>` (same-origin only, every path relative and guarded inside `mds/`):

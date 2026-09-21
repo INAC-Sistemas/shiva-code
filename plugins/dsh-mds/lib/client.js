@@ -10,6 +10,7 @@ window.__ModuleLoader__.load({ id: 'dsh-mds', factory: (require) => {
 
 const TAB_ID = 'dsh-mds:artifacts'
 
+
 // The active session's scope, set by the view on every render from
 // better-sidebar's TabComponentProps ({sessionId, cwd}) so every API call
 // resolves the workspace the user is actually looking at.
@@ -22,6 +23,11 @@ function api(method, payload) {
     body: JSON.stringify({ ...(SCOPE ?? {}), ...(payload ?? {}) }),
   }).then((r) => r.json())
 }
+
+// The last reveal this page handled, so a re-render or a remount of the tab
+// never re-applies one. dsh-sidebar's auto-open sets the tab's
+// `meta.reveal = { path, seq }` with a workspace-relative path.
+let HANDLED_REVEAL_SEQ = null
 
 function injectStyles() {
   const id = 'mds-styles'
@@ -111,6 +117,10 @@ function MdsView(props) {
   const [toast, setToast] = React.useState(null)
   const toastTimer = React.useRef(null)
   const newInputRef = React.useRef(null)
+  const selectedRef = React.useRef(null)
+  const draftRef = React.useRef('')
+  selectedRef.current = selected
+  draftRef.current = draft
 
   const say = React.useCallback((msg, err) => {
     setToast({ msg, err })
@@ -158,6 +168,27 @@ function MdsView(props) {
     setSelected({ path, content: r.content })
     setDraft(r.content)
   }
+
+  // An agent created an artifact and dsh-sidebar's auto-open rule opened this
+  // tab on it: refresh the tree, unfold its folders, and open the file. A file
+  // with unsaved edits in the editor is not replaced.
+  const revealMeta = props?.tab?.meta?.reveal
+  React.useEffect(() => {
+    const seq = revealMeta?.seq
+    const full = typeof revealMeta?.path === 'string' ? revealMeta.path : ''
+    if (typeof seq !== 'number' || seq === HANDLED_REVEAL_SEQ || !full.startsWith('mds/')) return
+    HANDLED_REVEAL_SEQ = seq
+    const path = full.slice('mds/'.length)
+    loadStatus(); loadList()
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      const parts = path.split('/').slice(0, -1)
+      for (let i = 1; i <= parts.length; i += 1) next.add(parts.slice(0, i).join('/'))
+      return next
+    })
+    if (selectedRef.current && draftRef.current !== selectedRef.current.content) return
+    openFile(path)
+  }, [revealMeta?.seq])
 
   const save = async () => {
     if (!selected || busy) return
