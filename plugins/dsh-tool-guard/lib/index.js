@@ -57,6 +57,9 @@ const NET_DENY_RE = /\b(curl|wget|ssh|scp|sftp|ftp|telnet|nc|npm\s+(install|i|pu
  *  - PRODUCT CODE (`src/`, `public/`) — written by the builder role; the
  *    principal may only fast-fix what the live browser proof exposed
  *    (edit → re-test immediately). Not widened here.
+ *  - PROJECT SCAFFOLD (`PROJECT_SCAFFOLD_FILES`, `TEST_RUNNER_FILES`) — the
+ *    root files a web app needs outside src/: index.html and the bundler,
+ *    style, lint, component-registry and test-runner configs.
  *  - CONFIG & TOOLING (`DEFAULT_ALLOWED_TOOLING_ROOTS` + root config files) —
  *    build/tooling scripts and root-level configuration. These are NOT product
  *    code: a defect in a packaging script or a tsconfig path has no
@@ -86,6 +89,25 @@ const PRINCIPAL_CONFIG_FILES = [
   'railway.toml', 'railway.json', // deploy configuration
   '.npmrc', '.editorconfig', // tool configuration
 ]
+
+/**
+ * Root-level files a web project cannot live without, outside src/ and public/:
+ * the Vite entry page and the build, style, lint and component-registry
+ * configs the pipeline's skills require (`/shadcn-ui` writes components.json,
+ * `/tailwind-patterns` the Tailwind config). Without them no agent could
+ * scaffold the app — the builder was confined to src/ and public/, and the
+ * principal's config list held only manifests and deploy files.
+ */
+const PROJECT_SCAFFOLD_FILES = [
+  'index.html', // Vite's entry page, which must sit at the project root
+  'vite.config.*', 'next.config.*', // bundler / framework config
+  'tailwind.config.*', 'postcss.config.*', // styling pipeline
+  'eslint.config.*', // lint config
+  'components.json', // shadcn/ui component registry
+]
+
+/** Test-runner configs: qa owns the tests, so it owns how they run. */
+const TEST_RUNNER_FILES = ['vitest.config.*', 'playwright.config.*']
 
 /** Role-scoped write allowlists, relative to the workspace. */
 const BUILDER_ALLOW_ROOTS = ['src', 'public']
@@ -197,12 +219,12 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
 
   // Role-scoped write surface first: the allowlist IS the policy.
   if (role === 'builder') {
-    if (!BUILDER_ALLOW_ROOTS.some((f) => inside(cwd, file, f))) {
-      return `GUARD[builder]: bloqueado — escrita fora de ${BUILDER_ALLOW_ROOTS.join('/, ')} (got ${file || '<empty>'}); permitido só código — o teste é do principal`
+    if (!BUILDER_ALLOW_ROOTS.some((f) => inside(cwd, file, f)) && !isRootConfigFile(cwd, file, PROJECT_SCAFFOLD_FILES)) {
+      return `GUARD[builder]: bloqueado — escrita fora de ${BUILDER_ALLOW_ROOTS.join('/, ')}/ e dos arquivos de raiz do projeto (${PROJECT_SCAFFOLD_FILES.join(', ')}) (got ${file || '<empty>'}); permitido só código — o teste é do principal`
     }
   } else if (role === 'qa') {
-    if (!inside(cwd, file, QA_ALLOW_ROOTS[0])) {
-      return `GUARD[qa]: bloqueado — escrita fora de testes/ (got ${file || '<empty>'}); qa só escreve testes`
+    if (!inside(cwd, file, QA_ALLOW_ROOTS[0]) && !isRootConfigFile(cwd, file, TEST_RUNNER_FILES)) {
+      return `GUARD[qa]: bloqueado — escrita fora de testes/ e das configs de teste (${TEST_RUNNER_FILES.join(', ')}) (got ${file || '<empty>'}); qa só escreve testes`
     }
   } else if (depth === 0) {
     // The principal agent's law: process artifacts, the fast-fix code window,
@@ -212,9 +234,11 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
       allowedRoots.some((folder) => inside(cwd, file, folder)) ||
       PRINCIPAL_CODE_ROOTS.some((folder) => inside(cwd, file, folder)) ||
       DEFAULT_ALLOWED_TOOLING_ROOTS.some((folder) => inside(cwd, file, folder)) ||
-      isRootConfigFile(cwd, file, PRINCIPAL_CONFIG_FILES)
+      isRootConfigFile(cwd, file, PRINCIPAL_CONFIG_FILES) ||
+      isRootConfigFile(cwd, file, PROJECT_SCAFFOLD_FILES) ||
+      isRootConfigFile(cwd, file, TEST_RUNNER_FILES)
     if (!allowed) {
-      return `Blocked: the principal agent writes only ${allowedRoots.join('/, ')}/, ${PRINCIPAL_CODE_ROOTS.join('/, ')}/, ${DEFAULT_ALLOWED_TOOLING_ROOTS.join('/, ')}/ and root config files (${PRINCIPAL_CONFIG_FILES.join(', ')}) — testes/ is qa-only (got ${file || '<empty>'})`
+      return `Blocked: the principal agent writes only ${allowedRoots.join('/, ')}/, ${PRINCIPAL_CODE_ROOTS.join('/, ')}/, ${DEFAULT_ALLOWED_TOOLING_ROOTS.join('/, ')}/ and root config files (${[...PRINCIPAL_CONFIG_FILES, ...PROJECT_SCAFFOLD_FILES, ...TEST_RUNNER_FILES].join(', ')}) — testes/ is qa-only (got ${file || '<empty>'})`
     }
   }
 

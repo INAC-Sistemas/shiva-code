@@ -24,7 +24,7 @@ For a deploy or database surface, run it through the workspace's connection tool
 
 Spawn with the `subagent` tool. Every spawned agent's prompt contains: the ticket file path, the context-manifest paths, its single role, and the frozen-UX reminder ("prototype.md is a binding contract; mocks/CDNs allowed as declared; do not redesign"). Auditors/evaluators always `read` the artifacts themselves — never trust your summary, never trust the builder's.
 
-**The guard is active**: `dsh-tool-guard` denies your own `write`/`edit` outside `mds/` and `prototype/`, and denies `status: done` for every agent. A write you expected to succeed coming back denied is the law, not a bug — delegate it to the builder.
+**The guard is active**: `dsh-tool-guard` limits your own `write`/`edit` to `mds/`, `prototype/`, the fast-fix window in `src/`/`public/`, `.scripts/` and the root config and scaffold files (`package.json`, `tsconfig*.json`, `index.html`, `vite.config.*`, `tailwind.config.*`, `components.json` and similar); a builder writes `src/`, `public/` and the root scaffold files; qa writes `testes/` and the test-runner configs. It denies `status: done` for every agent. A write you expected to succeed coming back denied is the law, not a bug — delegate it to the builder.
 
 ## Spawn briefing
 

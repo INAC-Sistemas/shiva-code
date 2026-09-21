@@ -108,6 +108,27 @@ test('builder and qa surfaces are unchanged (regression)', () => {
   assert.ok(write('src/app.js', 'x', qa), 'qa must not write src/')
 })
 
+test('the web project scaffold at the root is writable by the principal and builders', () => {
+  const builder = { depth: 1, role: 'builder' }
+  for (const file of [
+    'index.html', 'vite.config.js', 'vite.config.ts', 'next.config.mjs',
+    'tailwind.config.ts', 'postcss.config.cjs', 'eslint.config.js', 'components.json',
+  ]) {
+    assert.equal(write(file), ALLOW, `principal must write ${file}`)
+    assert.equal(write(file, 'x', builder), ALLOW, `builder must write ${file}`)
+  }
+  assert.ok(write('sub/index.html'), 'a nested index.html is not the project root')
+  assert.ok(write('package.json', 'x', builder), 'builder still does not own the manifest')
+})
+
+test('qa owns the test-runner configs, and nothing else at the root', () => {
+  const qa = { depth: 1, role: 'qa' }
+  assert.equal(write('vitest.config.ts', 'x', qa), ALLOW)
+  assert.equal(write('playwright.config.ts', 'x', qa), ALLOW)
+  assert.ok(write('vite.config.ts', 'x', qa), 'qa must not write the build config')
+  assert.equal(write('vitest.config.ts'), ALLOW, 'the principal may write it too')
+})
+
 test('a denial names the rule and the allowed surface', () => {
   const reason = write('qualquer/arquivo.txt')
   assert.match(reason, /Blocked: the principal agent writes only/)

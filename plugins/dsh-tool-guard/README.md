@@ -5,11 +5,20 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
 
 ## Rules
 
-1. **The principal agent writes only artifacts.** A `write`/`edit` by the
-   principal agent (delegation depth 0) is denied unless its `file_path` is
-   inside `<workspace>/mds/` or `<workspace>/prototype/`. Product code is a
-   subagent's job. Subagents (depth ≥ 1) are exempt — writing code is exactly
-   what they are for.
+1. **Each role writes only its own surface.** A `write`/`edit` is denied
+   unless its `file_path` is inside the caller's surface:
+   - **Principal agent** (delegation depth 0): `mds/`, `prototype/`, the
+     fast-fix window `src/` and `public/`, `.scripts/`, and root files — the
+     manifests and deploy configs (`package.json`, lockfiles, `tsconfig*.json`,
+     `railway.*`, ignore files), the project scaffold (`index.html`,
+     `vite.config.*`, `next.config.*`, `tailwind.config.*`,
+     `postcss.config.*`, `eslint.config.*`, `components.json`) and the test
+     runner configs (`vitest.config.*`, `playwright.config.*`).
+   - **builder**: `src/`, `public/` and the project scaffold files at the root.
+   - **qa**: `testes/` and the test-runner configs at the root.
+   Root files match only directly at the workspace root, never nested. Without
+   the scaffold files no agent could create a Vite app's `index.html` or
+   `vite.config.*`.
 2. **Done is the human's move.** Any `write`/`edit` whose text contains a
    frontmatter `status: done` is denied for every agent. The human sets Done on
    the Kanban board, which writes the file host-side, not through a tool call.
