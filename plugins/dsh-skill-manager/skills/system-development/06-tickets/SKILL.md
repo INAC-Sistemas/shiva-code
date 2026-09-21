@@ -38,12 +38,14 @@ title: <imperative title>
 ## Implementation contract
 - Files and concrete symbols (never "find where…" — that is a research task)
 - APIs/schemas/error codes · state transitions · events/cleanup/rollback
+- Request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and component split — with the stack's actual names (`skill engineering-standards`)
 - Compatibility constraints
 ## Steps (concrete implementation + evidence steps)
 ## Done when
 - [ ] <observable condition>
 - [ ] <exact command → expected output>
 - [ ] Regression: <prior flow still works>
+- [ ] Engineering standards that apply (`skill engineering-standards`, "In /06-tickets"): request validator, controller that only receives/delegates/responds, rules in use cases, response serialized by the response serializer in the envelope, API specification entry with inputs, outputs, errors, authentication and status codes, design-system tokens and components only (Tailwind), charts with the project's standard library (Recharts), background work dispatched after commit, idempotent, with timeout, retries and failure handling
 ## Agent protocol
 ### Implementer prompt
 Read this ticket and the context-manifest files. Implement only this scope. Do not redesign frozen UX or invent requirements. Run every check; report files, commands and results.
