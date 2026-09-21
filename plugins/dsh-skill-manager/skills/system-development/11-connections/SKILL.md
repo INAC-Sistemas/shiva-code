@@ -1,7 +1,7 @@
 ---
 name: 11-connections
 description: Use the machine's connection CLIs (GitHub, Supabase, Railway, Vercel) through the agent tools — check status, install the CLI, log in (browser or token), run actions (deploy/redeploy/open dashboard), and bring the provider tab to the front.
-whenToUse: When the plan or build needs a real repo, database, deploy or hosting connection (typically /04-tech-plan, /07-build, /08-review).
+whenToUse: When the plan or build needs a real repo, database, deploy or hosting connection (typically /04-tech-plan, /07-build, /08-review). Requires /00-start-here loaded earlier in this session.
 ---
 
 # Connections (GitHub · Supabase · Railway · Vercel)
@@ -74,3 +74,7 @@ A deploy that "returned success" but landed on the wrong service is a **failure*
 - A deploy is the human's decision — confirm the target before `action up`.
 - Report the CLI's real output; never claim a deploy succeeded without it. `/08-review` verifies the deployed URL, not the exit code.
 - Never run `up` or `domain` without an explicit `--service`. A command's success is not proof the deploy landed on the right service — the right service answering on the right URL is.
+
+## Next
+
+This is a helper, not a stage: return to the pipeline stage you were in.

@@ -1,7 +1,7 @@
 ---
 name: 06-tickets
 description: Break an audited GREEN tech plan into self-contained implementation tickets — markdown files under mds/epics/<epic>/06-tickets/ with status frontmatter, full context manifest, agent protocols (implementer + independent auditor) — verified by a subagent, then close the stage by deciding and recording the execution strategy in mds/epics/<epic>/06-plano-de-execucao.md (real file-sharing dependency graph, sequential vs parallel, loop type, agent roles, verification and failure rules), confirmed by the requester. Tickets appear on the Kanban tab.
-whenToUse: After /04-tech-plan is audited GREEN. Before /07-build.
+whenToUse: After /04-tech-plan is audited GREEN. Before /07-build. Requires /00-start-here and /04-tech-plan loaded earlier in this session.
 ---
 
 # Ticket Breakdown
@@ -153,3 +153,7 @@ ticket is not restarted from zero; two rounds with the same finding = escalate>
 - Do not write code here. `/07-build` performs it.
 - The stage closes only with a **validated** `06-plano-de-execucao.md`; the loop type and the parallelism are the requester's decision, asked in plain language — never improvised by the agent.
 - **Traceability must be real.** If a ticket or the coverage matrix cites an id (`UX-…`), that id MUST exist in the frozen `prototype.md`. In one epic 63 `UX-*` ids were cited while `prototype.md` contained none (only `data-screen` names), so "UX ids covered" was unverifiable for the whole build. Validate **mechanically** that every cited id resolves in the frozen contract, and fail if it does not. Also check the ticket does not contradict the plan's matrix (one epic's matrix said `POST /auth/login-{role}` while the ticket said a single `POST /auth/login`).
+
+## Next
+
+When the tickets and `06-plano-de-execucao.md` are validated, load `/07-build` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

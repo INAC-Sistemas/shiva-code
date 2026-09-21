@@ -1,7 +1,7 @@
 ---
 name: 10-profiles
 description: Profiles owned by the plugin manager — each user has many, each selects which library skills and which client plugins an agent gets; see /00-start-here for the process context.
-whenToUse: When the user wants to change what an agent can see or do — which skills reach the model, which plugins load — or to switch between work styles.
+whenToUse: When the user wants to change what an agent can see or do — which skills reach the model, which plugins load — or to switch between work styles. Requires /00-start-here loaded earlier in this session.
 ---
 
 # Profiles
@@ -34,3 +34,7 @@ The roster lives on the plugin manager (the VPS), not on the machine. The client
 
 - `/00-start-here` — process conventions (this file is a helper, not a pipeline stage).
 - Profiles don't isolate data (same home); by design. For real isolation run separate `$DSH_HOME` instances.
+
+## Next
+
+This is a helper, not a stage: return to the pipeline stage you were in.

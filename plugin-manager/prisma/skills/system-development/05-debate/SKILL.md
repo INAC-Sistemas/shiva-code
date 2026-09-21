@@ -1,7 +1,7 @@
 ---
 name: 05-debate
 description: Run a structured multi-perspective argument over one consequential, genuinely ambiguous technical decision and synthesise a verdict into mds/epics/<epic>/05-debates.md — with cross-examination and recorded rejections.
-whenToUse: When /04-tech-plan hits a fork where choosing wrong is expensive and one viewpoint is not enough.
+whenToUse: When /04-tech-plan hits a fork where choosing wrong is expensive and one viewpoint is not enough. Requires /00-start-here and /04-tech-plan loaded earlier in this session.
 ---
 
 # Debate
@@ -40,3 +40,7 @@ Run a structured argument over one consequential, genuinely ambiguous choice, th
 - A tie is legitimate: "either works; chose A for <reason>", tiebreak = reversibility, said out loud.
 - Never present the synthesis as unanimous when it was not.
 - One debate per decision; bundle nothing.
+
+## Next
+
+Record the verdict in `/04-tech-plan`, then load `/06-tickets` with the `skill` tool. This stage is optional and never replaces `/04-tech-plan`. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

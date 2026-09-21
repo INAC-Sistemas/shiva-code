@@ -1,7 +1,7 @@
 ---
 name: 04-tech-plan
 description: Settle the technical direction — architecture, mechanisms, boundaries, trade-offs — as mds/epics/<epic>/04-tech-plan.md with a traceability matrix into the frozen prototype contract, audited GREEN by a subagent. Brings only consequence-bearing decisions to the requester.
-whenToUse: After /03-prototype is fully GREEN (prototype.md + audits). Before /06-tickets.
+whenToUse: After /03-prototype is fully GREEN (prototype.md + audits). Before /06-tickets. Requires /00-start-here and /03-prototype loaded earlier in this session.
 ---
 
 # Tech Plan
@@ -72,3 +72,7 @@ status: draft
 - The plan describes the code as of its writing; when they later disagree, the code is right — `edit` the plan.
 - Leave genuinely open questions open, each with what evidence would settle it. Never invent a decision.
 - Do not create tickets here. That is `/06-tickets`.
+
+## Next
+
+When the plan is audited GREEN, load `/06-tickets` with the `skill` tool. If a decision is a costly fork first, load `/05-debate`, record the verdict here, then continue to `/06-tickets`. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

@@ -1,7 +1,7 @@
 ---
 name: 03-prototype
 description: 'Build the initiative as a live HTML prototype (CDN-first: Tailwind, lucide, Motion, three.js, shadcn-style patterns; every screen animated; localStorage as the database; zero backend), validate every screen and flow with the requester in the Prototype tab using the browser-use API (navigate, click, fill, screenshot, console), and only after full GREEN produce prototype.md with every BDD scenario plus db-schema.json — each audited by a subagent. UX is frozen afterwards.'
-whenToUse: After /02-core-flows is validated and before /04-tech-plan.
+whenToUse: After /02-core-flows is validated and before /04-tech-plan. Requires /00-start-here and /02-core-flows loaded earlier in this session.
 ---
 
 # Prototype
@@ -95,3 +95,7 @@ design: mds/epics/<epic>/03-design.md (<aesthetic name>)
 - **Frozen text is amended, never edited.** Once `prototype.md` is frozen, never edit it in place. Every change enters as a recorded **amendment**: what it was, what it becomes, why, and the owner's decision (their words). In one epic the agent edited the frozen `prototype.md` to match the code — the owner's decision was right, the mechanism was wrong (adjusting the spec to the code), and QA flagged it as a governance defect.
 - If prototype and contract diverge, the contract rules — but register the divergence, do not silence it.
 - Contract text existing in **three versions** (prototype, contract, ticket) means the ticket stage did not check the quotes: require byte-for-byte equality.
+
+## Next
+
+When the prototype and `prototype.md` are GREEN, load `/04-tech-plan` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

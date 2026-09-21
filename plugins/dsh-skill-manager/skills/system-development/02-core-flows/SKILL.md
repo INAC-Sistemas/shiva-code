@@ -1,7 +1,7 @@
 ---
 name: 02-core-flows
 description: Map what the user actually does — actors, journeys, happy and unhappy paths, and the UX decisions each flow forces — as mds/epics/<epic>/02-flows.md, before any technical design freezes them.
-whenToUse: Right after /01-epic-brief is validated, before /03-prototype.
+whenToUse: Right after /01-epic-brief is validated, before /03-prototype. Requires /00-start-here and /01-epic-brief loaded earlier in this session.
 ---
 
 # Core Flows
@@ -56,3 +56,7 @@ Use a mermaid diagram when a flow has more than three participants or branches. 
 - Every flow needs at least one unhappy path. No failure modes = not thought through.
 - The empty state is a flow, not an afterthought — it is the first thing every new user sees.
 - Do not settle technical mechanism here. That is `/04-tech-plan` — and only after `/03-prototype` validates the UX.
+
+## Next
+
+When the flows are validated, load `/03-prototype` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

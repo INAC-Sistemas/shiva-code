@@ -1,7 +1,7 @@
 ---
 name: 08-review
 description: Final gate — run the full verification of everything delivered against the epic artifacts, produce the cold-machine human walkthrough, and write the honest delivery report (verified vs not verified) as mds/epics/<epic>/08-review.md.
-whenToUse: When every ticket from /07-build is human_test/done and delivery is next.
+whenToUse: When every ticket from /07-build is human_test/done and delivery is next. Requires /00-start-here and /07-build loaded earlier in this session.
 ---
 
 # Review & Handover
@@ -48,3 +48,7 @@ status: delivered
 ## Suspect the deploy path, not the code
 
 - Build passes + deploy fails with **no log** + retry fails the same way = suspect the **trigger path**, not the code. In one epic the GitHub-push deploy failed silently three times (build OK, container never started, zero logs) while `railway up` of the same code succeeded. Prove the start locally against the real database, and use `railway up --service <svc>` as the workaround, telling the owner.
+
+## Next
+
+This is the last stage; the pipeline ends with the handover.

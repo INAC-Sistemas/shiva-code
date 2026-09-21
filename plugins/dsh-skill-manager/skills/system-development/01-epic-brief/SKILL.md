@@ -1,7 +1,7 @@
 ---
 name: 01-epic-brief
 description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape and features through staged questioning — stored as mds/epics/<epic>/01-brief.md. No solutions, no tech.
-whenToUse: Starting any new initiative. First pipeline stage, after /00-start-here.
+whenToUse: Starting any new initiative. First pipeline stage, after /00-start-here. Requires /00-start-here loaded earlier in this session.
 ---
 
 # Epic Brief
@@ -82,3 +82,7 @@ Set `status: validated` only after the requester reads it and says yes explicitl
 - Do not invent constraints or answers — an unverified constraint narrows the design for nothing.
 - Ask in the requester's language and vocabulary. A vague answer is not an answer: re-ask from a different angle.
 - If a stage is genuinely not applicable (internal tool, no revenue), say so out loud and record why — never silently drop it.
+
+## Next
+
+When the brief is `validated`, load `/02-core-flows` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

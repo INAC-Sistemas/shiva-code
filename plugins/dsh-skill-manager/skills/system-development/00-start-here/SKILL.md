@@ -104,3 +104,16 @@ Console rendering is not evidence about a file's bytes. Two rules:
 
 - **Judge encoding only by reading bytes in Node** (`fs.readFileSync(p, 'utf8')`, counting U+FFFD and the mojibake pair). Mojibake on screen does not prove mojibake in the file; PowerShell 5.1's `Get-Content` renders UTF-8 as Latin-1. Before "fixing" corruption, prove it: an empty `git diff` with a correct `git log -p` means the fault is your instrument, not the file. In Portuguese a lone `Ã` is not a mojibake marker (the word has no legitimate `Ã`) — require the full pair. Separate the two modes, because the remedies are opposite: **mojibake** (information survives, reversible) vs **U+FFFD** (byte destroyed, unrecoverable — report it, never guess a repair).
 - **Never mass-rewrite artifacts through the shell.** A prior incident corrupted 15 files (577 U+FFFD) with a PowerShell bulk markdown rewrite. Require an explicit, context-anchored mapping that **aborts** on an unmapped sequence — never a byte-wise generic transform. Snapshot before; verify by bytes after.
+
+## Load order
+
+The `skill` tool enforces this order within a session: loading a stage fails until `/00-start-here` and the previous stage have been loaded earlier in the same session. In a new session, load `/00-start-here` and the previous stage again to resume where the work stopped.
+
+`/00-start-here` → `/01-epic-brief` → `/02-core-flows` → `/03-prototype` → `/04-tech-plan` → `/06-tickets` → `/07-build` → `/08-review`
+
+- `/05-debate` is optional and needs `/04-tech-plan` loaded first.
+- `/10-profiles` and `/11-connections` are helpers and need only `/00-start-here`.
+
+## Next
+
+Load `/01-epic-brief` with the `skill` tool to open the first stage.

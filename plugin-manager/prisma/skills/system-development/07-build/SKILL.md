@@ -1,7 +1,7 @@
 ---
 name: 07-build
 description: Execute tickets through subagent orchestration — the principal agent NEVER writes or edits code; it reads context, spawns a builder, a qa-tester (tests only, RED/GREEN with typecheck/e2e/regression) and an evaluator (verifies the work against the ticket's .md artifacts), loops until GREEN, and keeps the Kanban honest. The execution strategy (loop type, parallelism, phases, failure rule) comes from the validated 06-plano-de-execucao.md, never improvised.
-whenToUse: When tickets from /06-tickets exist and it is time to build.
+whenToUse: When tickets from /06-tickets exist and it is time to build. Requires /00-start-here and /06-tickets loaded earlier in this session.
 ---
 
 # Build (orchestration)
@@ -89,3 +89,7 @@ Anything the loop cannot settle (ambiguous ticket, conflicting artifacts, missin
 ## Close-out
 
 When all tickets are `human_test`/`done`: hand to `/08-review` for the final verification and honest walkthrough.
+
+## Next
+
+When every ticket is `human_test`/`done`, load `/08-review` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.
