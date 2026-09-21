@@ -12,7 +12,7 @@
 /** `GET` route answering the roster plus the local selection. */
 export const STATE_ROUTE = '/profiles/api/state'
 
-/** `POST` route that makes one profile the active one. */
+/** `POST` route that selects one profile and materializes it on this machine. */
 export const SELECT_ROUTE = '/profiles/api/select'
 
 /** `GET` route answering what a new profile can be built from. */
@@ -60,7 +60,7 @@ export const PLUGIN_ROWS: Readonly<Record<string, PluginPlane>> = {
   'dsh-sidebar-qa': 'host',
 }
 
-/** One row of the picker. */
+/** One row of the picker: a profile the signed-in user may select. */
 export interface ProfileSummary {
   id: string
   name: string
@@ -68,6 +68,12 @@ export interface ProfileSummary {
   pluginCount: number
   skillCount: number
   revision: number
+  /** `PUBLIC` profiles are selectable by every user; `PRIVATE` ones only by the owner. */
+  visibility: 'PRIVATE' | 'PUBLIC'
+  /** True when the signed-in user owns the profile. */
+  isOwn: boolean
+  /** The owner's display name; two owners may publish profiles with the same name. */
+  ownerName: string
 }
 
 /** The selection this machine has materialized, as recorded on disk. */
@@ -77,6 +83,11 @@ export interface ActiveProfile {
   /** Plugin names, already narrowed to what {@link PLUGIN_ROWS} knows. */
   plugins: string[]
   revision: number
+  /**
+   * The `grantedAt` of the login session the selection was made under. A
+   * session with a different value is a new sign-in, which asks again.
+   */
+  loginGrantedAt: number
 }
 
 /**
@@ -91,8 +102,11 @@ export type ProfileState =
   | {
     signedIn: true
     profiles: ProfileSummary[]
-    /** The profile the server considers active, or null. */
-    serverActiveId: string | null
+    /**
+     * The profile the server has selected for this user, or null when none is
+     * selected or the selected one stopped being selectable.
+     */
+    serverSelectedId: string | null
     /** What this machine last materialized, or null before any selection. */
     active: ActiveProfile | null
   }

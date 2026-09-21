@@ -66,7 +66,7 @@ instalação: não há dono por linha, e o que separa os papéis é a escrita.
 
 - **ADMIN** cria, edita, publica, despublica e remove.
 - **GUEST** vê a lista — e, com um token de API válido, consome as publicadas
-  **que estiverem selecionadas no perfil ativo dele** (ver [Perfis](#perfis)).
+  **que estiverem marcadas no perfil selecionado por ele** (ver [Perfis](#perfis)).
 
 Publicar não entrega a skill a ninguém: entrega ao conjunto de onde os perfis
 escolhem. Quem decide o que chega a um agente é o perfil.
@@ -81,21 +81,33 @@ para tirar de circulação sem perder o texto.
 ## Perfis
 
 Um perfil é o recorte que um agente enxerga: quais skills da biblioteca e quais
-plugins do cliente valem enquanto ele roda. Cada usuário tem quantos quiser, e um
-deles é o **ativo**.
+plugins do cliente valem enquanto ele roda. Cada usuário cria quantos quiser, e
+cada perfil tem:
 
-O ativo mora em `User.activeProfileId`, **não numa claim do token**. Trocar de
-perfil é uma escrita numa coluna: nenhum token é emitido nem revogado, e a
+- **Visibilidade** — **privado** (só o dono usa) ou **público** (qualquer
+  usuário pode selecioná-lo; só o dono edita e remove).
+- **Estado** — **ativo** (aparece no seletor do Shiva Code) ou **inativo**. Vários
+  perfis podem estar ativos ao mesmo tempo.
+
+Um usuário pode **selecionar** os próprios perfis ativos e os públicos ativos de
+outros donos. A regra está num lugar só, `selectableWhere` em
+[plugins/profile](plugins/profile/index.ts), usada pela listagem, pela escrita da
+seleção e pela biblioteca de skills.
+
+A seleção mora em `User.selectedProfileId`, **não numa claim do token**. Trocar
+de perfil é uma escrita numa coluna: nenhum token é emitido nem revogado, e a
 requisição seguinte — de qualquer dispositivo — já resolve o perfil novo. A
-consequência aceita é que o perfil ativo é por **usuário**, não por dispositivo:
-duas máquinas na mesma conta compartilham a escolha.
+consequência aceita é que a seleção é por **usuário**, não por dispositivo. O
+Shiva Code pede a escolha a cada login (sozinho quando há uma opção só). Uma
+seleção que deixou de ser selecionável — perfil desativado, tornado privado pelo
+dono ou removido — é lida como nenhuma, e a casca reabre o seletor.
 
 Cada um administra os próprios perfis, guest inclusive. Isso é seguro porque um
-perfil **só estreita**: `readActiveSpec` filtra a seleção por `published`, o
-mesmo predicado da biblioteca, então nenhum perfil alcança uma linha que a
-biblioteca publicada já não concedesse.
+perfil **só estreita**: `readSelectedSpec` filtra a seleção por `published`, o
+mesmo predicado da biblioteca, então nenhum perfil — próprio ou público de outro
+— alcança uma linha que a biblioteca publicada já não concedesse.
 
-Sem perfil ativo o catálogo vem **vazio**, não completo. Se "sem perfil" lesse
+Sem perfil selecionado o catálogo vem **vazio**, não completo. Se "sem perfil" lesse
 tudo, bastaria uma casca nunca escolher um perfil para o recorte virar
 decorativo. `GET /api/plugins/skill-library/skills` responde
 `x-skill-library-profile: none` nesse estado, para o cliente saber abrir o
@@ -142,7 +154,7 @@ Toda skill de produto mora em
 única categoria é `system-development/`; o seed ignora uma pasta que repita o
 `name` de outra categoria.
 Uma skill que não passar por esse seed não entra na biblioteca da VPS no
-próximo deploy, e portanto não pode ser servida ao perfil ativo do usuário
+próximo deploy, e portanto não pode ser servida ao perfil selecionado do usuário
 logado. A regra completa está em [AGENTS.md](AGENTS.md#biblioteca-de-skills).
 
 `npm run db:seed` (e o entrypoint de cada container) **recria** as linhas a
@@ -177,11 +189,11 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
 | POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
-| GET    | `/api/profiles`   | Bearer | Os perfis do usuário e qual está ativo            |
+| GET    | `/api/profiles`   | Bearer | Os perfis selecionáveis e qual está selecionado   |
 | POST   | `/api/profiles`   | Bearer | Cria um perfil para o dono do token               |
 | GET    | `/api/profiles/catalog` | Bearer | Plugins e skills que a criação oferece      |
-| POST   | `/api/profiles/active` | Bearer | Recebe `{profileId}` e troca o perfil ativo  |
-| GET    | `/api/plugins/profile` | Bearer | O recorte do perfil ativo, para a casca      |
+| POST   | `/api/profiles/selected` | Bearer | Recebe `{profileId}` e troca o perfil selecionado |
+| GET    | `/api/plugins/profile` | Bearer | O recorte do perfil selecionado, para a casca |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
 | POST   | `/api/plugins/prototype/automation/<op>` | Bearer | Fila de automação do protótipo   |
 | GET    | `/api/plugins/prototype/shots/<id>` | Bearer | Um screenshot gravado             |

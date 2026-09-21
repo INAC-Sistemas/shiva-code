@@ -35,17 +35,19 @@ export async function fetchState(signal?: AbortSignal): Promise<ProfileState> {
 }
 
 /**
- * Make one profile the active one.
+ * Select one profile and materialize it on this machine.
  * @param profileId - the profile to select.
+ * @param loginGrantedAt - the current login session's `grantedAt`, recorded so
+ *   the next sign-in asks again.
  * @returns the recorded selection, or the reason it did not happen.
  */
-export async function selectProfile(profileId: string): Promise<SelectResult> {
+export async function selectProfile(profileId: string, loginGrantedAt: number): Promise<SelectResult> {
   let response: Response
   try {
     response = await fetch(SELECT_ROUTE, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ profileId }),
+      body: JSON.stringify({ profileId, loginGrantedAt }),
     })
   } catch (error) {
     return {

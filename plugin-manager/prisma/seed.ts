@@ -266,8 +266,8 @@ async function attachNewSkillsToDefaultProfiles(
 }
 
 /**
- * Dá ao usuário um perfil "Padrão" com toda a biblioteca publicada, e o deixa
- * ativo.
+ * Dá ao usuário um perfil "Padrão" privado e ativo, com toda a biblioteca
+ * publicada, e o deixa selecionado.
  *
  * Cria e nunca atualiza: o seed roda a cada start do container, e sobrescrever
  * apagaria toda edição de perfil feita no painel. Só age quando o usuário não
@@ -298,7 +298,7 @@ async function seedDefaultProfile(userId: string) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { activeProfileId: profile.id },
+    data: { selectedProfileId: profile.id },
   });
 
   console.log(

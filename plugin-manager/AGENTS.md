@@ -34,7 +34,7 @@ Consequências para quem mexe no código:
 # Biblioteca de skills
 
 Uma skill nova do produto só chega ao agente autenticado se existir como linha
-`LibrarySkill` e estiver marcada no perfil ativo de quem chama. Por isso **toda
+`LibrarySkill` e estiver marcada no perfil selecionado por quem chama. Por isso **toda
 skill nova entra no seed** antes de o PR fechar:
 
 1. Crie `plugins/dsh-skill-manager/skills/<categoria>/<nome>/SKILL.md` — fonte
@@ -50,7 +50,7 @@ O seed em [prisma/seed.ts](prisma/seed.ts) **recria** essas linhas a cada
 deploy (`docker/entrypoint.sh` e o start de desenvolvimento). O id permanece,
 então as seleções de perfil sobrevivem; o corpo, a descrição e os interruptores
 saem do arquivo. Uma skill nova entra no perfil "Padrão" de quem já o tem. O
-corpo continua só sendo servido na interseção entre publicado e perfil ativo —
+corpo continua só sendo servido na interseção entre publicado e perfil selecionado —
 uma skill fora do perfil do usuário logado não existe para aquele token.
 
 Skills criadas só no painel, sem pasta em `prisma/skills/`, o seed não apaga.

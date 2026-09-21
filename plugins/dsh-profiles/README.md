@@ -6,9 +6,9 @@ The plugin manager owns the roster and every rule about it. This plugin **materi
 
 ```
 browser ──GET /profiles/api/state───▶ dsh-profiles (host) ──▶ GET  /api/profiles
-        ◀── roster + local selection      │             ◀── profiles, activeId
+        ◀── roster + local selection      │             ◀── profiles, selectedId
 
-browser ──POST /profiles/api/select─▶ dsh-profiles (host) ──▶ POST /api/profiles/active
+browser ──POST /profiles/api/select─▶ dsh-profiles (host) ──▶ POST /api/profiles/selected
         ◀── { active, restartRequired }   │             ◀── the profile's spec
                                           ▼
                               $DSH_HOME/profile/active.json
@@ -26,12 +26,12 @@ browser ──POST /profiles/api/create─▶ dsh-profiles (host) ──▶ POST
 
 | Surface | Seat | When it shows |
 | --- | --- | --- |
-| The picker | `shell.overlay`, order `9_999` | nothing materialized, or the badge asked for it |
+| The picker | `shell.overlay`, order `9_999` | after every sign-in, when the selection stopped being selectable, or when the badge asked for it |
 | The profile row | `sidebar.footer.below`, order `90` | always, once signed in |
 
 The picker's order sits just below `dsh-login`'s `10_000`, so when neither is satisfied the login screen is on top: choosing a profile requires being signed in.
 
-**The row in the sidebar foot is the only way to switch.** The picker opens itself only when there is nothing to materialize, so without that row a machine that already has a profile would never see it again, and changing profiles would mean the plugin manager's dashboard plus a reload. The two surfaces sit in different slots and never share a React tree, so they share a `ProfileStore` instead.
+**The row in the sidebar foot is the only way to switch within a login.** The picker opens itself only after a sign-in or when the selection became invalid, so without that row changing profiles mid-session would mean the plugin manager's dashboard plus a reload. The two surfaces sit in different slots and never share a React tree, so they share a `ProfileStore` instead.
 
 ### Applying a host-plane change
 
@@ -43,7 +43,7 @@ It costs an in-flight turn. A harness restart ends the conversation that is stre
 
 The restart notice survives for the two cases the automatic path cannot serve: a plain browser, where the same page is served but there is no process for it to restart, and a restart that came back not ready — the manual instruction has to stay reachable, or a selection that failed to apply would leave nothing to do. `desktopBridge()` checks the method rather than assuming it, because the object is injected by another process's preload and an older shell would otherwise fail inside the click.
 
-Cancelling is offered only for a deliberate switch. With nothing materialized there is no state to go back to, so the gate has no way out but a choice — or authoring one.
+Cancelling is offered only for a deliberate switch. After a sign-in, or when the selection stopped being selectable, there is no choice to go back to, so the gate has no way out but a choice — or authoring one.
 
 ## Authoring from the picker
 
@@ -53,16 +53,24 @@ The catalog is read from the server, never from a list in this bundle — the li
 
 The draft goes upstream as typed. This half re-states none of the rules — name length, unknown plugin, missing skill, duplicate name are all refused by the plugin manager, with the message shown in the form. A created profile is then selected straight away: leaving someone on the roster to click the profile they just authored would be a second question with one right answer.
 
-## The active profile lives on the server
+## Which profiles can be chosen
 
-`User.activeProfileId` on the plugin manager, not a claim in the token. Switching is a column write: no token is minted or revoked, and the next request from any device resolves the new profile.
+The roster is every profile the user may **select**: their own **active** profiles, plus other owners' **public** active ones. The plugin manager decides that list (`selectableWhere`); the picker labels another owner's profile with "público, de <dono>", since two owners may publish the same name. Only the owner edits a profile, in the panel.
+
+## The selection lives on the server
+
+`User.selectedProfileId` on the plugin manager, not a claim in the token. Switching is a column write: no token is minted or revoked, and the next request from any device resolves the new profile.
 
 Two consequences, both deliberate:
 
-- The active profile is per **user**, not per device. Two machines signed into the same account share the choice.
+- The selection is per **user**, not per device. Two machines signed into the same account share it.
 - A token that was copied out of the dashboard keeps working across a switch, and starts answering for the new profile.
 
-When the server names a profile this machine has not materialized — a new machine, or a switch made elsewhere — the picker selects it **silently** rather than asking. The person already chose; asking again would be a question with one right answer.
+## Asking after every sign-in
+
+`dsh-login` records `grantedAt` with each session; a restored session keeps it, a new sign-in replaces it. The picker writes the value it chose under into `active.json` as `loginGrantedAt`, so a different one means a new login and the picker asks again — with exactly one selectable profile it selects that one without asking. Reopening the app on a stored session does not ask.
+
+Within one login the server stays the authority: a selection changed on another device, or a `revision` bump from a panel edit, is materialized **silently**. A selection that stopped being selectable — deactivated, made private by its owner, or deleted — reads as none on the server, and the picker opens with no way out but a choice.
 
 ## What selecting one costs
 
@@ -81,7 +89,7 @@ The list reaches the composition as `$DSH_PROFILE_PLUGINS`, written into the har
 
 ## What this is not
 
-Which plugins load is a **composition** boundary, not a security one. The client runs on the user's machine and they can edit their own composition. The enforced half is the server's: a skill outside the active profile is never served to that user's token.
+Which plugins load is a **composition** boundary, not a security one. The client runs on the user's machine and they can edit their own composition. The enforced half is the server's: a skill outside the selected profile is never served to that user's token.
 
 `window.__profileTabEnabled` is gone, and nothing replaces it. The old build published that helper and let seven plugins gate their own sidebar tabs on it — which hid tabs while their plugins stayed loaded, tools registered and routes serving, and which raced its own bootstrap fetch and failed open. A profile now decides what loads, so a plugin outside it has no tab to hide.
 
@@ -91,8 +99,8 @@ Both are same-origin fenced (reusing `dsh-login`'s `isSameOriginRequest`) and bo
 
 | Route | Answer |
 | --- | --- |
-| `GET /profiles/api/state` | `{ signedIn: false }`, or the roster plus `serverActiveId` and this machine's `active` |
-| `POST /profiles/api/select` | `{ ok, active, restartRequired }`, or `{ ok: false, message }` |
+| `GET /profiles/api/state` | `{ signedIn: false }`, or the roster plus `serverSelectedId` and this machine's `active` |
+| `POST /profiles/api/select` | body `{ profileId, loginGrantedAt }`; `{ ok, active, restartRequired }`, or `{ ok: false, message }` |
 | `GET /profiles/api/catalog` | `{ plugins, skills }`, already narrowed to the composable rows |
 | `POST /profiles/api/create` | `{ ok, profile }`, or `{ ok: false, message }` carrying the manager's refusal |
 
@@ -103,8 +111,8 @@ Both are same-origin fenced (reusing `dsh-login`'s `isSameOriginRequest`) and bo
 | Field | Meaning |
 | --- | --- |
 | `profilesEndpoint` | Full URL listing the user's profiles, and where a new one is posted. **Required.** Plain http is refused off loopback |
-| `activeEndpoint` | Full URL that makes one profile active. **Required.** |
-| `specEndpoint` | Full URL answering the active profile's spec. **Required** — validated at load even though only the client reads it |
+| `selectedEndpoint` | Full URL that selects one profile for the user. **Required.** |
+| `specEndpoint` | Full URL answering the selected profile's spec. **Required** — validated at load even though only the client reads it |
 | `catalogEndpoint` | Full URL answering what a new profile can be built from. **Required.** |
 | `timeoutMs` | Deadline per forwarded request, default `5000` |
 | `dshHome` | Harness home holding `profile/active.json`; defaults to `$DSH_HOME` |

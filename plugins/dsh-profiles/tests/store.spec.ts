@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStore } from '../src/client/store.ts'
 
-const PROFILE = { id: 'p1', name: 'Web', plugins: ['dsh-mds'], revision: 1 }
+const PROFILE = { id: 'p1', name: 'Web', plugins: ['dsh-mds'], revision: 1, loginGrantedAt: 1_000 }
 
 describe('the shared profile state', () => {
   it('starts with nothing materialized and the picker closed', () => {

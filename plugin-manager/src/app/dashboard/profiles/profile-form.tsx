@@ -26,7 +26,48 @@ export type EditableProfile = {
   description: string | null;
   plugins: string[];
   skillIds: string[];
+  visibility: "PRIVATE" | "PUBLIC";
+  status: "ACTIVE" | "INACTIVE";
 };
+
+const radioClass =
+  "size-4 border-zinc-300 text-indigo-500 focus:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900";
+
+/** Um grupo de rádio de duas opções, com a dica de cada uma. */
+function Choice({
+  legend,
+  name,
+  value,
+  options,
+}: {
+  legend: string;
+  name: string;
+  value: string;
+  options: { value: string; label: string; hint: string }[];
+}) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className={labelClass}>{legend}</legend>
+      {options.map((option) => (
+        <label key={option.value} className="flex items-start gap-2.5">
+          <input
+            type="radio"
+            name={name}
+            value={option.value}
+            defaultChecked={value === option.value}
+            className={`mt-0.5 ${radioClass}`}
+          />
+          <span className="flex flex-col">
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">
+              {option.label}
+            </span>
+            <span className={hintClass}>{option.hint}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -91,6 +132,43 @@ function ProfileFields({
           />
           <FieldError message={fieldErrors.description} />
         </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Choice
+          legend="Visibilidade"
+          name="visibility"
+          value={profile?.visibility ?? "PRIVATE"}
+          options={[
+            {
+              value: "PRIVATE",
+              label: "Privado",
+              hint: "Só você pode usar este perfil.",
+            },
+            {
+              value: "PUBLIC",
+              label: "Público",
+              hint: "Qualquer usuário pode escolhê-lo no Shiva Code; só você edita.",
+            },
+          ]}
+        />
+        <Choice
+          legend="Estado"
+          name="status"
+          value={profile?.status ?? "ACTIVE"}
+          options={[
+            {
+              value: "ACTIVE",
+              label: "Ativo",
+              hint: "Aparece no seletor de perfil do Shiva Code.",
+            },
+            {
+              value: "INACTIVE",
+              label: "Inativo",
+              hint: "Some do seletor; quem o usava escolhe outro.",
+            },
+          ]}
+        />
       </div>
 
       {/* `min-w-0`: um fieldset nasce com `min-width: min-content` no UA

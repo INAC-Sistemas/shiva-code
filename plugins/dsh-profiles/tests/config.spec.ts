@@ -9,7 +9,7 @@ describe('resolveEndpoint', () => {
 
   it('accepts plain http on loopback, where the plugin manager runs in development', () => {
     for (const host of ['localhost', '127.0.0.1', '[::1]']) {
-      expect(() => resolveEndpoint('activeEndpoint', `http://${host}:3000/api/profiles/active`))
+      expect(() => resolveEndpoint('selectedEndpoint', `http://${host}:3000/api/profiles/selected`))
         .not.toThrow()
     }
   })

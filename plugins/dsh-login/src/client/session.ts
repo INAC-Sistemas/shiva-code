@@ -29,6 +29,12 @@ export interface StoredSession {
   user: unknown
   /** Instant (browser clock) after which the gate returns, or null for no expiry. */
   expiresAt: number | null
+  /**
+   * Instant (browser clock) the session was granted. A restored session keeps
+   * it, and a new sign-in replaces it, so consumers such as the profile picker
+   * can tell the two apart. `0` for a record written before the field existed.
+   */
+  grantedAt: number
 }
 
 /**
@@ -76,9 +82,15 @@ function parseSession(raw: string): StoredSession | null {
   const record = value as Record<string, unknown>
   const token = record['token']
   const expiresAt = record['expiresAt']
+  const grantedAt = record['grantedAt']
   if (typeof token !== 'string' || token === '') return null
   if (expiresAt !== null && typeof expiresAt !== 'number') return null
-  return { token, user: record['user'] ?? null, expiresAt }
+  return {
+    token,
+    user: record['user'] ?? null,
+    expiresAt,
+    grantedAt: typeof grantedAt === 'number' ? grantedAt : 0,
+  }
 }
 
 /**
@@ -99,6 +111,7 @@ export function writeSession(
     token: session.token,
     user: session.user,
     expiresAt: session.expiresInMs === null ? null : now + session.expiresInMs,
+    grantedAt: now,
   }
   try {
     storage?.setItem(STORAGE_KEY, JSON.stringify(stored))

@@ -73,7 +73,7 @@ describe('provideLoginSession', () => {
     const { ctx, dispose } = await mount(store)
     store.grant({ token: 'abc', user: { id: 7 }, expiresInMs: null })
     expect(service(ctx).token()).toBe('abc')
-    expect(service(ctx).getSnapshot()).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null })
+    expect(service(ctx).getSnapshot()).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null, grantedAt: expect.any(Number) })
     await dispose()
   })
 

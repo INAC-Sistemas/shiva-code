@@ -3,23 +3,24 @@ import { authenticateRequest } from "@/lib/api-auth";
 import {
   ProfileRequestError,
   assertProfileId,
-  setActiveProfile,
+  setSelectedProfile,
 } from "@plugins/profile";
 
 /**
- * POST /api/profiles/active
+ * POST /api/profiles/selected
  * Header: Authorization: Bearer <token>
  * Body:   { profileId: "<uuid>" }
  * 200:    o spec do perfil que passou a valer (ver GET /api/plugins/profile)
  * 400:    corpo não-JSON, ou profileId fora do formato
- * 404:    perfil inexistente OU de outro dono — a mesma resposta, de propósito
+ * 404:    perfil inexistente, inativo OU privado de outro dono — a mesma
+ *         resposta, de propósito
  *
- * Trocar de perfil é uma escrita em `User.activeProfileId`, não a emissão de uma
- * credencial: o token não muda, e a requisição seguinte de qualquer dispositivo
- * já resolve o perfil novo. O `profileId` é o ÚNICO valor de perfil que chega do
- * cliente em toda a API, e é conferido contra o `userId` do token antes de
- * qualquer escrita — essa checagem é o portão em que a funcionalidade inteira se
- * apoia.
+ * Trocar de perfil é uma escrita em `User.selectedProfileId`, não a emissão de
+ * uma credencial: o token não muda, e a requisição seguinte de qualquer
+ * dispositivo já resolve o perfil novo. O `profileId` é o ÚNICO valor de perfil
+ * que chega do cliente em toda a API, e é conferido contra `selectableWhere`
+ * com o `userId` do token antes de qualquer escrita — essa checagem é o portão
+ * em que a funcionalidade inteira se apoia.
  */
 export async function POST(request: Request) {
   const auth = await authenticateRequest(request);
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const spec = await setActiveProfile(
+    const spec = await setSelectedProfile(
       { userId: auth.session.userId },
       assertProfileId(body.profileId),
     );
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.error("Falha ao trocar o perfil ativo:", error);
+    console.error("Falha ao trocar o perfil selecionado:", error);
 
     return NextResponse.json(
       { error: "Não foi possível trocar o perfil." },
