@@ -182,6 +182,13 @@
           - tab: 'dsh-prototype:view'
             path: 'prototype/**'
 
+    # Color palette picker for /03-prototype: the "Paletas" tab and the
+    # palette_pick tool, which opens the tab by itself and returns the
+    # requester's choice to the model. Never gated: the palette step belongs to
+    # the pipeline, and the tool is inert until the model calls it.
+    - id: palette
+      name: dsh-palette
+
     # User-registered MCP servers ("MCP" tab): the list persists in
     # $DSH_HOME/mcp/servers.json and each enabled server is mounted live through
     # dsh-mcp-client. Never gated: the registry is per machine, not per profile.

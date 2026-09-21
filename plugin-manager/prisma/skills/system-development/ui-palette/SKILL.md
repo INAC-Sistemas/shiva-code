@@ -1,6 +1,6 @@
 ---
 name: ui-palette
-description: Let the requester choose the product's color palette before the first prototype screen — show rendered palette options in the Prototype tab, accept a pick or custom colors through ask_user_question, check contrast, and record the result as mds/epics/<epic>/03-palette.md, the one source of every color the prototype and the React app use.
+description: Let the requester choose the product's color palette before the first prototype screen — propose palettes from the brief and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/03-palette.md, the one source of every color the prototype and the React app use.
 whenToUse: At the start of /03-prototype, before any screen is built. Also when /04-tech-plan records the frontend stack, when /07-build briefs a UI ticket, and whenever the requester asks to change the product's colors.
 ---
 
@@ -32,33 +32,26 @@ Read `01-brief.md` (tone, audience, sector, brand) and the project's `AGENTS.md`
 
 Every `*-foreground` on its surface meets **WCAG AA**: 4.5:1 for text, 3:1 for `border`/`ring` against `background`. Measure it (section 4), never judge by eye.
 
-## 2. Show them
+## 2. Show them and ask — `palette_pick`
 
-Write `prototype/palettes.html`, CDN-only like every prototype page (Tailwind Play CDN, lucide per `/ui-icons`). This page is the one prototype file allowed to hold color literals, because it shows several palettes at once; it is a chooser, not a product screen, and never enters `prototype.md`.
+Call the `palette_pick` tool. It opens the **Paletas** tab by itself and waits until the requester confirms:
 
-- One card per palette: its name, the consequence sentence, the recommendation badge on the first, and a swatch row per role with the hex and role name.
-- In each card, a **mini UI preview in light and dark side by side** built with that palette: a header bar, a primary and a secondary button, a text input with focus ring, a success and a destructive badge, and a card with muted helper text. The requester chooses by what the product will look like, not by squares.
-- A last section, "Personalizada" in the requester's language, explaining what they may send: hex codes, one color per role ("primária #0F766E, destaque #F59E0B"), or the path of a logo or reference image in the workspace.
-- Visible strings in the requester's language.
+- `question`: the choice in the requester's language, for example "Escolha a paleta de cores do sistema — as sugestões no topo foram feitas a partir do briefing."
+- `suggestions`: your 3 or 4 palettes from section 1, the recommended one first, each `{ name, colors, note }`: `colors` are the palette's defining colors (primary, secondary, accent, background, foreground, in that order), `note` its consequence sentence.
 
-Open it with `prototype_automation` `navigate` `path:'palettes.html'`, then `screenshot` and `read_image` it: every card renders, no console errors (`console`). Fix before asking.
+The tab also offers curated presets filterable by style and color family, a generator, and one hex field and color picker per role (Primária, Secundária, Destaque, Fundo, Texto), with a light/dark preview. Do not write a palettes page yourself.
 
-## 3. Ask
+The call returns `{ source, name, colors, roles }`: `source` is `suggestion`, `preset`, `generated` or `custom`, and `roles` maps `primary`, `secondary`, `accent`, `background` and `foreground` to hex as the requester saw them in the preview. `{ cancelled: true }` means they closed it: ask in chat what they want before calling again.
 
-One `ask_user_question` call, after the page is open:
+## 3. Treat the answer as custom colors
 
-- `question`: the choice, plus that the free-text answer accepts custom colors in the formats the page lists.
-- `options`: one per palette, `label` = the palette name exactly as the page shows it, the recommended one first with "(Recommended)" appended, `description` = its consequence sentence.
+Whatever the source, the answer defines five roles at most; section 1 needs every role. Continue with section 4 using `roles` as the requester's colors. A suggestion of yours that you already filled in section 1 keeps your full role set.
 
-The answer returns `selected` (a palette name) or `custom` (free text). A selected palette goes to section 5.
+## 4. Complete and check the palette
 
-## 4. Custom colors
-
-When the answer carries `custom`:
-
-1. **Parse.** Accept `#RGB`, `#RRGGBB`, `rgb(r, g, b)`, CSS color names, and role hints in any language ("primária", "fundo", "destaque"). A workspace image path: `read_image` it and propose colors taken from it. Anything you cannot parse is asked again with `ask_user_question`, quoting what was unclear; never invent a value.
-2. **Fill the roles.** Colors the requester gave keep their exact hex in the role they named; one unlabelled color is `primary`. Derive every missing role from them: neutrals tinted toward `primary`, `destructive`/`success`/`warning` in conventional hues adjusted to sit with `primary`, and the dark mode from the light one. State which roles you derived.
-3. **Measure contrast** for every pair in section 1 with `prototype_automation` `eval` on `palettes.html`:
+1. **Keep what they chose.** Each role in `roles` keeps its exact hex; record `requester_words` as the palette name and source.
+2. **Fill the roles.** Derive every missing role from them: neutrals tinted toward `primary`, `destructive`/`success`/`warning` in conventional hues adjusted to sit with `primary`, and the dark mode from the light one. State which roles you derived.
+3. **Measure contrast** for every pair in section 1 with this function, run through `bash` (`node -e`) or `prototype_automation` `eval` on any page:
 
    ```js
    const L = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -67,7 +60,7 @@ When the answer carries `custom`:
    ```
 
    For each failing pair, compute the smallest lightness change of the **derived** color (or of the requester's color when both sides are theirs) that passes.
-4. **Render and confirm.** Add the custom palette as a card on `palettes.html`, reload, screenshot, and ask once more: "Use as sent" and "Use with the contrast fix (Recommended)" when a pair failed — naming the pair, its ratio, and the adjusted hex — or just "Use this palette" when all pass. The requester's decision stands: a palette kept below AA is recorded with the failing pairs listed in `03-palette.md`.
+4. **Confirm a fix.** When a pair fails, call `palette_pick` again with two `suggestions` — "Como enviada" and "Com ajuste de contraste (recomendada)" — and a `question` naming the pair, its ratio and the adjusted hex. The requester's decision stands: a palette kept below AA is recorded with the failing pairs listed in `03-palette.md`.
 
 ## 5. Record `mds/epics/<epic>/03-palette.md`
 
@@ -120,7 +113,7 @@ if (window.tailwind) {
 }
 ```
 
-Screens use only the role classes (`bg-primary`, `text-primary-foreground`, `border-border`, `bg-muted/50`) — opacity modifiers work because the variables hold RGB channels. Dark mode is the `dark` class on `<html>`. Check with `grep -nE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]' prototype/*.html`: no hit outside `palettes.html`.
+Screens use only the role classes (`bg-primary`, `text-primary-foreground`, `border-border`, `bg-muted/50`) — opacity modifiers work because the variables hold RGB channels. Dark mode is the `dark` class on `<html>`. Check with `grep -nE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]' prototype/*.html`: no hit.
 
 ## 7. Apply in the React app
 

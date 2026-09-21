@@ -111,4 +111,9 @@ describe('dsh-openviking reconfigure patch', () => {
     expect(client).toContain('vlm: form.vlm?.api_base && form.vlm?.model ? form.vlm : null')
     expect(host).toContain('if (s.vlm?.api_base && s.vlm?.model) {')
   })
+
+  it('re-imports the OpenRouter key from dsh on every save instead of keeping the stored one', async () => {
+    const host = await readFile(new URL('../node_modules/dsh-openviking/lib/index.js', import.meta.url), 'utf8')
+    expect(host).toContain("next.provider !== 'openrouter' && !next.api_key && prev?.[block]?.api_key")
+  })
 })

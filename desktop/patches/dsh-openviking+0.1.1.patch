@@ -275,7 +275,7 @@ index 341c8c8..7d9feda 100644
      },
    })
 diff --git a/node_modules/dsh-openviking/lib/index.js b/node_modules/dsh-openviking/lib/index.js
-index c5f22dd..53e2fa8 100644
+index c5f22dd..de5ef70 100644
 --- a/node_modules/dsh-openviking/lib/index.js
 +++ b/node_modules/dsh-openviking/lib/index.js
 @@ -5,10 +5,10 @@
@@ -580,7 +580,7 @@ index c5f22dd..53e2fa8 100644
      try {
        switch (method) {
          case 'status': {
-@@ -509,21 +702,46 @@ export function apply(ctx, config = {}) {
+@@ -509,21 +702,48 @@ export function apply(ctx, config = {}) {
            p.configured = await isConfigured()
            p.studio = p.running ? await studioAvailable() : null
            p.openrouterKey = !!await resolveOpenRouterKey(ctx)
@@ -620,18 +620,20 @@ index c5f22dd..53e2fa8 100644
            }
 +          // Reconfiguring shows a blank key field for a stored key: keep the
 +          // stored one when the provider did not change and nothing was typed.
++          // Not for OpenRouter: its key is imported from dsh below, fresh on
++          // every save, so a key the person replaced in dsh is never kept stale.
 +          const prev = await readSettings()
 +          for (const block of ['embedding', 'vlm']) {
 +            const next = s[block]
 +            if (next) delete next.hasKey
-+            if (next && !next.api_key && prev?.[block]?.api_key && prev[block].provider === next.provider) {
++            if (next && next.provider !== 'openrouter' && !next.api_key && prev?.[block]?.api_key && prev[block].provider === next.provider) {
 +              next.api_key = prev[block].api_key
 +            }
 +          }
            // OpenRouter sem chave digitada → importa a chave que o usuário já
            // tem no dsh (via credentials seam); a chave nunca vai pro browser.
            if (s.embedding?.provider === 'openrouter' && !s.embedding.api_key) {
-@@ -535,7 +753,7 @@ export function apply(ctx, config = {}) {
+@@ -535,7 +755,7 @@ export function apply(ctx, config = {}) {
            await mkdir(OV_DIR, { recursive: true })
            await writeFile(SETTINGS_FILE, JSON.stringify(s, null, 2), 'utf8')
            const wrote = await writeOvConf()
@@ -640,7 +642,7 @@ index c5f22dd..53e2fa8 100644
            // Reinicia apenas o processo que nós spawnamos; um servidor adotado
            // recarrega ov.conf sozinho ("picked up without a restart").
            if (child) {
-@@ -548,7 +766,7 @@ export function apply(ctx, config = {}) {
+@@ -548,7 +768,7 @@ export function apply(ctx, config = {}) {
            }
            mountMcp(ctx); hookLive = true
            log(`configuração salva (ov.conf escrito) — servidor no ar`)
@@ -649,7 +651,7 @@ index c5f22dd..53e2fa8 100644
          }
          case 'restart': {
            if (child) {
-@@ -556,24 +774,41 @@ export function apply(ctx, config = {}) {
+@@ -556,24 +776,41 @@ export function apply(ctx, config = {}) {
              child = null
              await new Promise((r) => setTimeout(r, 1500))
              await ensureServer()
@@ -697,7 +699,7 @@ index c5f22dd..53e2fa8 100644
      }
    }
  
-@@ -603,7 +838,7 @@ export function apply(ctx, config = {}) {
+@@ -603,7 +840,7 @@ export function apply(ctx, config = {}) {
      try {
        await ensureServer()
        mountMcp(ctx); hookLive = true

@@ -10,7 +10,7 @@ Turn the validated Core Flows into screens the requester has actually seen, clic
 
 ## Part 0 — Palette
 
-`skill ui-palette` before any screen: render the palette options in `prototype/palettes.html`, let the requester pick one or send custom colors with `ask_user_question`, and record `mds/epics/<epic>/03-palette.md` with `status: validated`. No screen is built before that file exists; the palette is the first approved line of the validation ledger.
+`skill ui-palette` before any screen: propose palettes from the brief and let the requester choose with the `palette_pick` tool, which opens the Paletas tab by itself (presets, generator, custom hex), then record `mds/epics/<epic>/03-palette.md` with `status: validated`. No screen is built before that file exists; the palette is the first approved line of the validation ledger.
 
 Then `skill frontend-design` (it loads `ui-ux-pro-max` for the product type's style, fonts, landing pattern and effects): record `mds/epics/<epic>/03-design.md` — aesthetic direction, differentiation anchor, font pairing, composition and the motion tokens — and tell the requester the direction in one plain sentence. The first approved screen validates it (`status: validated`).
 

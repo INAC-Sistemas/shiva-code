@@ -77,6 +77,7 @@ const HOST_ALWAYS = new Set([
   'sidebar-agent',
   'mcp',
   'setup',
+  'palette',
 ])
 // These example files are overlays consumed by the built dsh app, so their bare
 // specifiers resolve from apps/cli rather than the examples workspace.
