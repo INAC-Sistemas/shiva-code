@@ -7,7 +7,7 @@ describe('the shared profile state', () => {
   it('starts with nothing materialized and the picker closed', () => {
     // The gate reads this before its first fetch resolves, and an unknown state
     // must not flash the picker over a signed-in app.
-    expect(new ProfileStore().getSnapshot()).toEqual({ active: null, picking: false })
+    expect(new ProfileStore().getSnapshot()).toEqual({ active: null, picking: false, promptingWorkspace: false })
   })
 
   it('opens the picker on demand, which is how a switch starts', () => {
@@ -31,7 +31,7 @@ describe('the shared profile state', () => {
 
     store.closePicker()
 
-    expect(store.getSnapshot()).toEqual({ active: PROFILE, picking: false })
+    expect(store.getSnapshot()).toEqual({ active: PROFILE, picking: false, promptingWorkspace: false })
   })
 
   it('notifies subscribers on every change', () => {

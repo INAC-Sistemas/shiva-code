@@ -18,6 +18,7 @@
 import { ProfileBadge } from './ProfileBadge.tsx'
 import { ProfileGate } from './ProfileGate.tsx'
 import { sessionSwitch } from './sessions.ts'
+import { guardAddWorkspace, WorkspacePrompt } from './WorkspacePrompt.tsx'
 import { ProfileStore } from './store.ts'
 import type { ClientContext } from './context-types.ts'
 
@@ -56,6 +57,15 @@ export const FOOTER_ORDER = 90
  */
 export const ENTRY_ORDER = 9_999
 
+/** The add-workspace prompt's cell key in the overlay slot. */
+export const WORKSPACE_PROMPT_ENTRY_ID = 'dsh-profiles-workspace-prompt'
+
+/**
+ * The prompt's order: below the picker (and the setup wizard at `9_998`), since
+ * it is only ever opened by a click inside the running app.
+ */
+export const WORKSPACE_PROMPT_ORDER = 9_990
+
 /**
  * Services required before mounting.
  *
@@ -82,6 +92,19 @@ export function apply(ctx: ClientContext): void {
     { name: OVERLAY_SLOT, id: ENTRY_ID, order: ENTRY_ORDER },
     () => ProfileGate({ session: ctx.loginSession, store, sessions }),
   ))
+  // Registered as its own overlay entry, just below the picker, so choosing
+  // "Mudar de perfil" hands straight over to it.
+  ctx.slots.inject(OVERLAY_SLOT, () => {
+    const guard = guardAddWorkspace(document, store)
+    const unregister = ctx.slots.register(
+      { name: OVERLAY_SLOT, id: WORKSPACE_PROMPT_ENTRY_ID, order: WORKSPACE_PROMPT_ORDER },
+      () => WorkspacePrompt({ store, guard }),
+    )
+    return () => {
+      unregister()
+      guard.dispose()
+    }
+  })
   ctx.slots.inject(FOOTER_SLOT, () => ctx.slots.register(
     { name: FOOTER_SLOT, id: ENTRY_ID, order: FOOTER_ORDER },
     props => ProfileBadge({ store, wide: props.wide === true }),

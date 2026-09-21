@@ -28,6 +28,9 @@ browser ──POST /profiles/api/create─▶ dsh-profiles (host) ──▶ POST
 | --- | --- | --- |
 | The picker | `shell.overlay`, order `9_999` | after every sign-in, when the selection stopped being selectable, or when the badge asked for it |
 | The profile row | `sidebar.footer.below`, order `90` | always, once signed in |
+| The add-workspace prompt | `shell.overlay`, order `9_990` | when "Adicionar workspace" is clicked |
+
+**The add-workspace prompt** asks "Mudar de perfil" or "Seguir no mesmo perfil" before a workspace is added, since the profile decides what the work in it gets. The button belongs to `@deepseek-ai/dsh-client-ui-workspace`, which offers no hook; the desktop's patch for that package marks it `data-dsh-action="add-workspace"`, and `guardAddWorkspace` stops its click in the capture phase, before React's root listener. "Mudar de perfil" opens the picker; "Seguir no mesmo perfil" replays the click with the guard stood down, so the package's own flow runs unchanged. Escape or a click on the backdrop dismisses it. Outside the desktop the button carries no marker, and the prompt never opens.
 
 The picker's order sits just below `dsh-login`'s `10_000`, so when neither is satisfied the login screen is on top: choosing a profile requires being signed in.
 
