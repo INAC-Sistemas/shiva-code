@@ -18,7 +18,7 @@ Decide alone and just state: language, libraries, layout, naming, schema shape, 
 
 ## User interface
 
-A web UI is React + Tailwind with shadcn/ui components unless the existing code or a requester constraint rules it out — decide it alone and `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`vite`, `next`, …), base (`radix` by default) and preset (`nova` by default), or with why shadcn does not apply. The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
+A web UI is React + Tailwind with shadcn/ui components unless the existing code or a requester constraint rules it out — decide it alone and `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`vite`, `next`, …), base (`radix` by default) and preset (`nova` by default), or with why shadcn does not apply. The project is created at the workspace root, never in a subfolder (`skill shadcn-ui` step 1). The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
 
 Icons are a separate Decisions row: Lucide (`lucide-react`) by default, Tabler (`@tabler/icons-react`) only when Lucide lacks the glyph or a requester names it — `skill ui-icons` for the rules. A pack already in the project's `package.json` wins over both defaults.
 

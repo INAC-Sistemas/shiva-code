@@ -12,6 +12,10 @@ You are the principal. **You never create or edit code.** You read context, sequ
 
 Requires the tickets from `/06-tickets` **and** a validated `mds/epics/<epic>/06-plano-de-execucao.md`. `read` that plan before spawning anything: it carries the real dependency graph (declared **and** by shared file/symbol), the execution phases, the loop the requester chose, the parallelism, the agent roles, the verification rule and the failure rule. If it is missing or not `status: validated`, **stop and report** — the strategy is the requester's decision, never improvised here.
 
+## Project root
+
+Before the first builder, make sure the project exists **at the workspace root**, beside `mds/` and `prototype/`. Without `components.json` at the root, create it yourself with the commands in `skill shadcn-ui` step 1 and the template, base and preset recorded in `04-tech-plan.md` — running the generator is setup, not hand-written code, and the guard denies `pnpm install` to builders. Confirm `components.json` at the root and a passing `pnpm run build` before spawning anyone. Never let a builder create the project in a subfolder: its writes are allowed only in the root's `src/`, `public/` and root scaffold files.
+
 ## The triad
 
 | Subagent | May do | May NOT do | Returns |
