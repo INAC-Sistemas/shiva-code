@@ -1,6 +1,6 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, Docker deployment whose application container runs migrations and seed on start), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, Docker deployment whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
 whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each ticket's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI ticket.
 ---
 
@@ -148,9 +148,18 @@ A failed migration or seed stops the container instead of serving on an old sche
 
 **What migrate and seed need ships in the runtime.** The migration files, the seed script and the CLI they run are in the runtime image. A standalone or compiled output keeps only what the application imports, so a CLI that is executed rather than imported (the Prisma CLI, `tsx` for a TypeScript seed) is installed into the runtime stage explicitly, at the manifest's versions.
 
-**Local run.** `docker-compose.yml` at the root starts the application with the same image and entrypoint as deploy, plus its services (database, queue, the workers of rule 6); the application waits for a healthy database (`depends_on` with `condition: service_healthy`).
+**Local run.** `docker-compose.yml` at the root starts the application with the same image and entrypoint as deploy, plus the services it needs (queue, the workers of rule 6, and a database server when development does not use SQLite); a service database is waited for with `depends_on` and `condition: service_healthy`.
 
 **Evidence.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing.
+
+### 8. Development database
+
+**A system that needs a database uses SQLite in development** — a file in the workspace (`data/dev.db`, gitignored and in `.dockerignore`), created by the migrations themselves. No database server to install, start or provision, and a broken state is fixed by deleting the file and starting again.
+
+- The database URL comes from the environment (`DATABASE_URL=file:./data/dev.db`), never hardcoded, so only the variable changes between environments.
+- `/04-tech-plan` records the production database. When it is not SQLite, it also records **how one schema serves both**: an ORM whose migrations are generated for the production engine, the migration command for each environment, and what the plan does about anything SQLite cannot represent (native enums, concurrent writers, `jsonb` operators, strict types). Prisma is the case to watch: `migrate dev` generates SQL for the provider configured at that moment, so migrations generated against SQLite do not apply to Postgres.
+- When the plan cannot keep one schema honest on both, it says so and development runs the production engine in `docker-compose.yml` instead — recorded as a decision, not improvised in a ticket.
+- The seed of rule 7 runs the same way on the development file and on the production database.
 
 ## Backend: mapping roles to a stack
 
@@ -191,6 +200,7 @@ Record the backend language and framework, then add one **Decisions** row per ru
 | Data visualization | Recharts via shadcn `chart`, colors from `chart-1` … `chart-5` — or "none" when the product has no charts |
 | Asynchronous processing | which operations run in the background and why (rule 6 criteria); the queue mechanism and queues by workload; timeout, attempts and backoff per task; failure handling and alerting; status resource and how the UI follows it; scheduled tasks; the worker process in the deployment — or "none" with the reason |
 | Containerized deployment | the Dockerfile stages and runtime base image; the production migration command and the seed command, with the stable key that makes the seed idempotent and which data is production-only vs demo; how the runtime gets the migration CLI; the `docker-compose.yml` services; a hosting target that runs the image |
+| Database | SQLite in development (the file path and the `DATABASE_URL` that names it) and the production database; when they differ, the ORM and migration command that keep one schema valid on both, and what is done about what SQLite cannot represent — or the recorded decision to run the production engine in development too |
 
 The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary. A rule the requester overrides is recorded with their words.
 
@@ -229,6 +239,7 @@ Builders of backend, API or UI tickets load this skill with the others the ticke
 - a short operation moved to the background although the caller needs its result right away;
 - a background task without timeout, attempts or failure handling; one that is not idempotent although it can run twice; one carrying whole models or secrets in its payload; one dispatched inside an open transaction; a scheduled task that can overlap itself;
 - a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason;
+- a development setup that requires a database server although the plan records SQLite, or a hardcoded database URL instead of one read from the environment;
 - a project without a multi-stage `Dockerfile`, `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
 
 Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend> --exclude-dir=node_modules --exclude-dir=.next` finds nothing.

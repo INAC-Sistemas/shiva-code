@@ -38,6 +38,8 @@ The workspace's connection tools are the real mechanism for these, and the plan 
 
 Check reality before writing the plan: call `status` on the provider the epic will use — it says whether the CLI is installed, the account is connected and the workspace is linked. `login` opens the browser for the human to authorize once. Name which provider the epic uses and the boundary it must not cross.
 
+Development runs on SQLite whenever the system needs a database (`skill engineering-standards` rule 8); this plan records the production database and how one schema stays valid on both.
+
 Every system deploys as the Docker image of `skill engineering-standards` rule 7, so the hosting target must run that image: Railway builds the root `Dockerfile`, and a VPS runs it with `docker compose` over `ssh_run`. Vercel does not run the image and its migrations-on-start entrypoint; choose it only when the requester asks, recorded with their words and with how migrations and seed run there instead.
 
 ## Procedure
