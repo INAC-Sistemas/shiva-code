@@ -37,9 +37,16 @@ status: delivered
 ## Decisions taken without asking (none, or list + why)
 ```
 
+## Deploy: only after they accept
+
+The whole epic is proven in its own container, locally. **Publishing is a separate conversation that starts only after the requester used the finished system and said it is what they wanted.** Only then — never in `/04-tech-plan`, never mid-build — ask, in one `ask_user_question` call: where it should run (Railway, their own VPS, elsewhere), who owns the account, and what the domain should be. Then follow `/11-connections`: `status`, `login` in the browser, the provisioning order, the explicit `--service`, and the proof that the right service answers on the right URL with a real-browser screenshot.
+
+Accepted but not published is a complete delivery: say plainly that the system is ready and works, and that publishing is one step whenever they want it.
+
 ## Rules
 
 - Walkthrough steps you have not executed yourself are guesses — run each one first, now, not "earlier".
+- Never ask about hosting, provider, domain, account or credentials before acceptance. A system that is not accepted is never published, so that question would have been spent on a decision nobody needed.
 - Never write "it is running at X"; write how to start it and what "working" looks like.
 - Honest partial delivery ("I could not verify C because …") keeps their trust; one false "done" spends it all.
 - Anything broken found here: say it first, plainly, with the fix or the proposal — never let them discover it.

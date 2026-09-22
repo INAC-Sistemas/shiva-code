@@ -1,7 +1,7 @@
 ---
 name: 11-connections
 description: Use the machine's connection CLIs (GitHub, Supabase, Railway, Vercel) through the agent tools — check status, install the CLI, log in (browser or token), run actions (deploy/redeploy/open dashboard), and bring the provider tab to the front.
-whenToUse: When the plan or build needs a real repo, database, deploy or hosting connection (typically /04-tech-plan, /07-build, /08-review). Requires /00-start-here loaded earlier in this session.
+whenToUse: When a real repo, database or hosting connection is needed. Deploy and hosting only after the requester accepted the finished system in /08-review — never during /04-tech-plan or the build. Requires /00-start-here loaded earlier in this session.
 ---
 
 # Connections (GitHub · Supabase · Railway · Vercel)

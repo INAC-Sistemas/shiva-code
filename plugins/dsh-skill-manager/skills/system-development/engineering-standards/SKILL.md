@@ -206,7 +206,7 @@ The traceability matrix names the request validator, use case and response seria
 
 ## In /06-tickets
 
-Each ticket's **Implementation contract** names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries the checks that apply to it:
+Each ticket's **Implementation contract** names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries **only the checks that apply to it**, with the symbols filled in — a ticket that touches no endpoint copies no endpoint check, and no ticket copies this list whole:
 
 - [ ] Input validated by `<RequestValidator>`; invalid input answers 422 (or the plan's validation status) in the error envelope.
 - [ ] Controller only receives, delegates to `<UseCase>` and returns what `<ResponseSerializer>` produces.

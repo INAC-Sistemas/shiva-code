@@ -29,7 +29,7 @@ Confirm `components.json` in the frontend folder and a passing build of every pa
 | **qa-tester** | **only create tests and run them** (`write`/`edit` test files, run `bash`/`pwsh`/`terminal_*`) — unit, typecheck, regression, e2e/flow checks where applicable; may fix tests, never product code | edit product code | **RED/GREEN** + full test evidence (commands + outputs) |
 | **evaluator** | `read` the ticket, the epic artifacts (brief/flows/prototype.md/plan) and the diff; judge match | edit anything | GREEN (work matches artifacts) or RED with the exact mismatch list |
 
-For a deploy or database surface, run it through the workspace's connection tools — `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database) — and verify with a real URL, not a local mock: `browser {op:'navigate', url}` then `browser {op:'screenshot'}`. A command that exits successfully is **not** proof the deploy is correct: it must land on the application service (never the database), and the proof is the right service answering on the right URL. Follow the provisioning order and the verification in `/11-connections`.
+**No publishing during the build**: tickets are proven in the local container, and hosting is neither chosen nor asked about here — that conversation starts in `/08-review`, after the requester accepts the system. When a ticket does reach a deploy or database surface after acceptance, run it through the workspace's connection tools — `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database) — and verify with a real URL, not a local mock: `browser {op:'navigate', url}` then `browser {op:'screenshot'}`. A command that exits successfully is **not** proof the deploy is correct: it must land on the application service (never the database), and the proof is the right service answering on the right URL. Follow the provisioning order and the verification in `/11-connections`.
 
 Spawn with the `subagent` tool. Every spawned agent's prompt contains: the ticket file path, the context-manifest paths, its single role, and the frozen-UX reminder ("prototype.md is a binding contract; mocks/CDNs allowed as declared; do not redesign"). Evaluators always `read` the artifacts themselves — never trust your summary, never trust the builder's.
 
@@ -63,12 +63,16 @@ If the full browser tool is unavailable in some environment: extract the repo's 
 
 Follow the phases and the parallelism from `06-plano-de-execucao.md`; the loop type recorded there (a fresh agent per attempt, or the same builder/qa/evaluator carrying the ticket) is the one to run — do not switch it mid-build without asking.
 
-1. **Pick the ticket** in `status: active` whose dependencies are all `done` (or human-accepted). Set `status: in_progress` (`edit` the frontmatter — the Kanban tab shows it).
-2. **Assemble context** and spawn **builder** with the ticket path. Builder reports files + build output.
+**Open the whole phase, not one ticket.** The plan's phase lists which tickets run together (`06 → … → 12 ∥ 19`, `14 ∥ 15 ∥ 16`): spawn a builder for **every** ticket of the phase whose dependencies are met, in the same turn, and only then stop. One builder at a time when the plan declares parallel fronts wastes the analysis that produced them. Each front then advances on its own notification.
+
+**Never wait.** After spawning, end the turn — the completion of each subagent comes back to you as a notification (`/00-start-here`, "Subagent truth"). A `sleep`, a polling loop or a repeated `list_agents` to check progress is a defect.
+
+1. **Pick the tickets** in `status: active` whose dependencies are all `done` (or human-accepted), as many as the phase allows. Set each to `status: in_progress` (`edit` the frontmatter — the Kanban tab shows it).
+2. **Assemble context** and spawn a **builder** per ticket with the ticket path. Builder reports files + build output.
 3. **Spawn qa-tester**: write/extend tests for the ticket's "Done when" (typecheck, unit, regression, flow). RED → findings go back to the **builder** (same ticket, `status: in_progress` again). GREEN with evidence → advance.
 4. **Spawn evaluator**: "does the diff match the ticket's requirements AND the epic artifacts?" GREEN → set `status: human_test` (queued for the owner's end-of-epic batch — not an invitation to test now). RED → mismatch list goes back to builder/qa.
 5. **No human mid-epic.** No intermediate proofs, no test scripts sent, no "go try it" per ticket. The principal publishes what passed the real flow and moves to the next ticket. The human tests exactly ONCE: when the LAST ticket closes — they get the link and use the whole app as a consumer, on their phone. No tables, no reports. Only then does final acceptance happen, and only there does anything move to `done` (whole-product acceptance, never per-piece). A rejected piece returns to the builder with the exact step that broke; two identical episodes in a row = escalate with `ask_user_question`.
-6. Next ticket. Two consecutive rounds with the **same** finding = stall: stop and escalate with `ask_user_question`.
+6. Next ticket, or the next phase once its predecessors are `human_test`. Two consecutive rounds with the **same** finding = stall: stop and escalate with `ask_user_question`.
 
 ## Round rules
 
@@ -91,7 +95,7 @@ Follow the phases and the parallelism from `06-plano-de-execucao.md`; the loop t
 - **Command success is not behavioural proof.** A passing build does not prove the container starts. Measure "before" and "after" with the same independent script when one exists.
 - **Instrument error ≠ product error.** Before reporting a defect, confirm the tool is not the cause; reproduce with a second tool when the result is strange. On Windows prefer `curl.exe` for HTTP and pass JSON bodies from a file (`--data-binary @file`), not inline. When testing a rate-limiter or shared state, use a **new value per case**.
 - **Closing hygiene is mandatory.** Any subagent that raised a server, browser or database ends with: the process killed by whoever owns the port, the disposable database deleted, and a printed confirmation (port free + database removed). Leftovers are the agent's failure, not the environment's — an orphaned leftover hijacks the next agent's work.
-- **The publish gate**: production deploy happens only with QA GREEN that includes a real-browser proof of the delivered flow. A GREEN suite does not authorize publishing: a delivery can pass hundreds of assertions and still be unusable under real navigation.
+- **The publish gate**: production deploy happens only after the requester accepted the system in `/08-review`, and then only with QA GREEN that includes a real-browser proof of the delivered flow. A GREEN suite does not authorize publishing: a delivery can pass hundreds of assertions and still be unusable under real navigation.
 
 ## Escalation
 

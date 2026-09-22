@@ -36,11 +36,11 @@ Fonts and motion are a separate Decisions row that cites `03-design.md`: how the
 
 The workspace's connection tools are the real mechanism for these, and the plan names them instead of hand-rolling. Each is an agent tool (see `/11-connections`): `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database/SQL/auth), `github_cli` (repo/PR), plus `ssh_run`/`ssh_transfer` (external VPS).
 
-Check reality before writing the plan: call `status` on the provider the epic will use — it says whether the CLI is installed, the account is connected and the workspace is linked. `login` opens the browser for the human to authorize once. Name which provider the epic uses and the boundary it must not cross.
+**Deploy is not decided here, and the requester is not asked about it now.** Hosting, provider, domain, account and credentials are questions for after they have the working system in their hands and accepted it (`/08-review`). Until then, asking costs a round trip on a decision that may never be needed — and a system that does not get accepted is never published. The plan records only what the system must satisfy to be publishable: the Docker image of `skill engineering-standards` rule 7, the environment variables it reads, the persistent volume or managed database it needs, and the boundary it must not cross. No `status`, no `login`, no provider tab during planning.
 
 Development runs on SQLite whenever the system needs a database (`skill engineering-standards` rule 8); this plan records the production database and how one schema stays valid on both.
 
-Every system deploys as the Docker image of `skill engineering-standards` rule 7, so the hosting target must run that image: Railway builds the root `Dockerfile`, and a VPS runs it with `docker compose` over `ssh_run`. Vercel does not run the image and its migrations-on-start entrypoint; choose it only when the requester asks, recorded with their words and with how migrations and seed run there instead.
+Every system deploys as the Docker image of `skill engineering-standards` rule 7, so whatever target is chosen later must run that image: Railway builds the root `Dockerfile`, and a VPS runs it with `docker compose` over `ssh_run`. Vercel does not run the image and its migrations-on-start entrypoint, so it is an option only if the requester asks for it after acceptance, recorded with their words and with how migrations and seed run there instead. Record this as a requirement on the target, not as a chosen provider.
 
 ## Procedure
 

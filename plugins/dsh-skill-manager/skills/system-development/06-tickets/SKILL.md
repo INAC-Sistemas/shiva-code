@@ -17,6 +17,7 @@ Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-vali
 - Location: `mds/epics/<epic>/06-tickets/NN-<slug>.md` (NN = execution order).
 - Frontmatter (the Kanban tab reads this): `ticket: <slug>`, `epic: <epic>`, `status: active`, `title: <imperative summary>`. Agents move a ticket `active → in_progress → code_test → human_test` (that is `/07-build`'s job). **Never write `status: done`** — Done is the human's move on the Kanban.
 - Coverage matrix first: every UX id, Must Do, contract and test requirement maps to ≥1 ticket. Nothing unmapped.
+- A publication ticket, when the epic has one, is the **last** one and stays `active` until the requester accepts the system in `/08-review`; its provider is not decided now. Containerization is not publication: the image and the local `docker compose` are built early, on purpose.
 - Containerization is one of the first tickets (`skill engineering-standards` rule 7): `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, and `docker-compose.yml`. Every later ticket that changes schema, seed or deploy carries the container check in its Done when.
 
 ## Ticket body contract
@@ -35,7 +36,7 @@ title: <imperative title>
 - brief: 01-brief.md · flows: 02-flows.md · prototype contract: prototype.md
 - tech plan: 04-tech-plan.md · db schema: db-schema.json
 - UX ids covered: UX-…
-## Requirements (exact excerpts from upstream artifacts)
+## Requirements (the exact lines of the upstream artifacts this ticket must satisfy — quoted, never a copied section)
 ## Implementation contract
 - Files and concrete symbols (never "find where…" — that is a research task)
 - APIs/schemas/error codes · state transitions · events/cleanup/rollback
@@ -46,10 +47,11 @@ title: <imperative title>
 - [ ] <observable condition>
 - [ ] <exact command → expected output>
 - [ ] Regression: <prior flow still works>
-- [ ] Engineering standards that apply (`skill engineering-standards`, "In /06-tickets"): request validator, controller that only receives/delegates/responds, rules in use cases, response serialized by the response serializer in the envelope, API specification entry with inputs, outputs, errors, authentication and status codes, design-system tokens and components only (Tailwind), charts with the project's standard library (Recharts), background work dispatched after commit, idempotent, with timeout, retries and failure handling
+- [ ] The engineering standards this ticket actually touches, named one by one with its symbols (`skill engineering-standards`, "In /06-tickets") — never the whole list copied
 ## Agent protocol
 ### Implementer prompt
 Read this ticket and the context-manifest files. Implement only this scope. Do not redesign frozen UX or invent requirements. Run every check; report files, commands and results.
+(Only what differs from this default is written per ticket.)
 ## Out of scope (adjacent behaviour that must not change)
 ## Depends on (<ticket files> or nothing)
 ```
@@ -62,7 +64,7 @@ Read this ticket and the context-manifest files. Implement only this scope. Do n
 4. `write` every ticket with the full body contract above.
 5. Verify the tree: every ticket inside `06-tickets/`, frontmatter complete, deps point at existing files, matrix fully mapped.
 6. **Analyse the real dependency graph** (below) — declared dependencies are not enough; find the tickets that touch the same files or symbols.
-7. **Ask the requester** the three execution questions (loop, parallelism, approval cadence) — plain language, options as consequences.
+7. **Ask the requester** the three execution questions (loop, parallelism, approval cadence) in one `ask_user_question` call — plain language, options as consequences.
 8. **Write `06-plano-de-execucao.md`** from the template below.
 9. Present it; set `status: validated` only after the requester confirms.
 10. Hand off: "tickets are on the Kanban and the execution plan is validated; execution is `/07-build`. Nothing has been coded."
@@ -75,7 +77,7 @@ The stage is **not** done when the tickets are written; it is done when the exec
 
 **Step B — classify.** For each ticket: `sequential (must follow <ticket>)` or `parallel with <tickets>` — always with the concrete reason (the shared file or symbol, or "writes a file no one else touches").
 
-**Step C — ask the requester.** Use `ask_user_question`, one question at a time, in plain language, each option as a **consequence** (what they gain, what they lose, how long it takes). No orchestration jargon. The three questions:
+**Step C — ask the requester.** These three are independent, so they go in **one** `ask_user_question` call, in plain language, each option as a **consequence** (what they gain, what they lose, how long it takes). No orchestration jargon. The three questions:
 
 1. **How each attempt works** — how a ticket gets done, and re-done when it fails:
    - "Each attempt starts from zero, with an agent that remembers nothing from the previous try" (exploratory work; each try is unbiased; costs more, because context is rebuilt every time).
@@ -147,7 +149,8 @@ ticket is not restarted from zero; two rounds with the same finding = escalate>
 ## Rules
 
 - "Done when" is observable or it does not exist — exact commands, expected outputs, recovery results.
-- Every ticket names files and symbols; full manifest in every ticket, excerpts included — IDs alone are not permission to skip normative requirements.
+- Every ticket names files and symbols, and carries the manifest paths plus the quoted lines it must satisfy — an id alone is not permission to skip a normative requirement.
+- **Budget: about 400 words per ticket.** Boilerplate repeated across tickets is the measured cost of this stage — in one epic, 21 tickets of ~1,200 words each, most of it the same manifest, the same standards list and the same prompts. Quote the lines that bind *this* ticket, point at the rest by path (`04-tech-plan.md` "Decisions" row 3, `prototype.md` `UX-CAT-02`), and write only what differs from the default prompt. A ticket that cannot fit is a ticket whose scope is too wide — split it.
 - Out of scope is not optional; it is what stops tickets silently widening.
 - Critical actions cannot be toast-only: visible state transition + recovery/cancel path required.
 - Do not write code here. `/07-build` performs it.
