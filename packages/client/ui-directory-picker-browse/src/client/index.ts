@@ -46,6 +46,8 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': '加载中…',
         'browser.truncated': '文件夹过多，仅显示开头部分。',
         'browser.showHidden': '显示隐藏文件',
+        'browser.search': '在此处搜索文件夹',
+        'browser.noMatches': '当前目录中没有匹配的文件夹。',
       }],
       ['en', {
         'browser.title': 'Select Workspace Directory',
@@ -61,6 +63,8 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': 'Loading…',
         'browser.truncated': 'Too many folders to list; only the beginning is shown.',
         'browser.showHidden': 'Show hidden files',
+        'browser.search': 'Search folders here',
+        'browser.noMatches': 'No folder here matches that name.',
       }],
     ]
     try {
