@@ -14,7 +14,12 @@ Requires the tickets from `/06-tickets` **and** a validated `mds/epics/<epic>/06
 
 ## Project root
 
-Before the first builder, make sure the project exists **at the workspace root**, beside `mds/` and `prototype/`. Without `components.json` at the root, create it yourself with the commands in `skill shadcn-ui` step 1 and the template, base and preset recorded in `04-tech-plan.md` — running the generator is setup, not hand-written code, and the guard denies `pnpm install` to builders. Confirm `components.json` at the root and a passing `pnpm run build` before spawning anyone. Never let a builder create the project in a subfolder: its writes are allowed only in the root's `src/`, `public/` and root scaffold files.
+Before the first builder, make sure the project exists **at the workspace root**, beside `mds/` and `prototype/`, in the layout `04-tech-plan.md` records. Create what is missing yourself, through the shell — running a generator is setup, not hand-written code, and the guard denies `pnpm install` to builders:
+
+- the backend with its framework's own generator, never hand-written; when the generator refuses a non-empty folder, generate into a temporary folder and move it to the root without overwriting, as `skill shadcn-ui` step 1 does;
+- the React + Tailwind frontend with `skill shadcn-ui` step 1, using the template, base, preset and frontend folder the plan records, then `pnpm add` in that folder for the packages the plan records (icon pack, `motion`, `@fontsource` fonts, query library). A builder that later needs a package reports it and you install it.
+
+Confirm `components.json` in the frontend folder and a passing build of every part before spawning anyone. The Docker files are not setup: the containerization ticket builds them (`skill engineering-standards` rule 7), and from then on the flow check of every ticket runs against `docker compose up --build`, never only a dev server. Never wrap the whole project in one extra folder.
 
 ## The triad
 
@@ -28,7 +33,7 @@ For a deploy or database surface, run it through the workspace's connection tool
 
 Spawn with the `subagent` tool. Every spawned agent's prompt contains: the ticket file path, the context-manifest paths, its single role, and the frozen-UX reminder ("prototype.md is a binding contract; mocks/CDNs allowed as declared; do not redesign"). Evaluators always `read` the artifacts themselves — never trust your summary, never trust the builder's.
 
-**The guard is active**: `dsh-tool-guard` limits your own `write`/`edit` to `mds/`, `prototype/`, the fast-fix window in `src/`/`public/`, `.scripts/` and the root config and scaffold files (`package.json`, `tsconfig*.json`, `index.html`, `vite.config.*`, `tailwind.config.*`, `components.json` and similar); a builder writes `src/`, `public/` and the root scaffold files; qa writes `testes/` and the test-runner configs. It denies `status: done` for every agent. A write you expected to succeed coming back denied is the law, not a bug — delegate it to the builder.
+**The guard is active**: `dsh-tool-guard` limits your own `write`/`edit` to `mds/`, `prototype/` and the product as a fast-fix window — the product is everything in the workspace except `mds/`, `prototype/`, `testes/` and `.git/`; a builder writes the product; qa writes `testes/` and the test-runner configs. It denies `status: done` for every agent. A write you expected to succeed coming back denied is the law, not a bug — delegate it to the builder.
 
 ## Spawn briefing
 

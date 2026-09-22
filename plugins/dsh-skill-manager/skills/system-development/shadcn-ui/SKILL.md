@@ -16,27 +16,36 @@ Standard UI comes from shadcn/ui. A hand-written button, dialog, form field, tab
 
 ## 1. Find or create the project
 
-**The project lives at the workspace root**, beside `mds/` and `prototype/`: `package.json`, `index.html`, `vite.config.*` and `components.json` at the root, code in `src/` and `public/`. Never a subfolder — `dsh-tool-guard` allows the builder's writes only in the root's `src/`, `public/` and root scaffold files, so a project in `<workspace>/<name>/` cannot be edited.
+The backend may be any language and framework; the frontend is always React + Tailwind from this CLI. The project lives at the workspace root, beside `mds/` and `prototype/`, and `04-tech-plan.md` records where the frontend sits: at the root, or in `frontend/` beside a backend in another language.
 
-`components.json` at the workspace root means shadcn is already set up: go to step 2.
+`components.json` in the frontend folder means shadcn is already set up: go to step 2.
 
-**New project** — the principal agent creates it once, at the start of `/07-build`, before the first builder (the guard denies `pnpm install` to builders). `init -n <name>` always creates the new folder `<name>/`, and `-n .` fails with `dest already exists` because the root already holds `mds/` and `prototype/`. So create it in a temporary folder and move it to the root, from the workspace root:
+**New frontend** — the principal agent creates it once, at the start of `/07-build`, before the first builder (the guard denies `pnpm install` to builders). `init -n <name>` always creates the new folder `<name>/` and installs its dependencies; `-n .` fails with `dest already exists` because the root already holds `mds/` and `prototype/`. Every template ships its own `.git`, which is dropped because git belongs to the human.
+
+**Frontend in `frontend/`** (a backend in another language owns the root), from the workspace root:
 
 ```sh
-pnpm dlx shadcn@latest init -y -t vite -n .scaffold -b radix -p nova --no-monorepo
+pnpm dlx shadcn@latest init -y -t vite -n frontend -b radix -p nova --no-monorepo
+rm -rf frontend/.git && pnpm --dir frontend run build
+```
+
+**Frontend at the root** (the default: a Next.js app is the whole project; also any template that creates the backend too, such as `laravel`) — create it in a temporary folder and move it to the root, from the workspace root:
+
+```sh
+pnpm dlx shadcn@latest init -y -t next -n .scaffold -b radix -p nova --no-monorepo
 rm -rf .scaffold/node_modules .scaffold/.git
 for f in .scaffold/* .scaffold/.[!.]*; do [ -e "$f" ] || continue; b=$(basename "$f"); if [ -e "$b" ]; then echo "CONFLICT $b"; else mv "$f" "$b"; fi; done
 rmdir .scaffold && pnpm install && pnpm run build
 ```
 
-- `-t`: `vite`, `next`, `start`, `react-router`, `astro`, `laravel` — take it from `/04-tech-plan`; `vite` for a plain SPA.
+- `-t`: `next`, `vite`, `start`, `react-router`, `astro`, `laravel` — take it from `/04-tech-plan`; `next` when the requester named no framework, `vite` for the frontend in `frontend/`. The `next` template puts `app/`, `components/`, `lib/` and `hooks/` at the root, with no `src/`.
 - `-b`: component base, `radix` unless the plan says `base` or `aria`.
 - `-p`: preset (`nova`, `vega`, `maia`, `lyra`, `mira`, `luma`, `sera`, `rhea`), `nova` unless the plan names another. **Omitting it is the silent no-op above.**
-- The move never overwrites: a `CONFLICT <file>` line leaves that file in `.scaffold/` and `rmdir` fails. Stop and report the list; never delete or replace a workspace file to make room. `.git` is dropped because git belongs to the human.
+- The move never overwrites: a `CONFLICT <file>` line leaves that file in `.scaffold/` and `rmdir` fails. Stop and report the list; never delete or replace a workspace file to make room.
 
-**Existing React + Tailwind project at the root without `components.json`** — run `init` at the root with `-y -b <base> -p <preset>`.
+**Existing React + Tailwind project without `components.json`** — run `init` in its folder with `-y -b <base> -p <preset>`.
 
-After `init`, `components.json` must exist at the workspace root and `pnpm run build` must pass. If either fails, stop and report the output; do not hand-write the components instead.
+After `init`, `components.json` must exist in the frontend folder and its `pnpm run build` must pass. If either fails, stop and report the output; do not hand-write the components instead.
 
 ## 2. Know what is there
 

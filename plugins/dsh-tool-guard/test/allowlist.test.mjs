@@ -2,11 +2,11 @@
 //
 // Drives the REAL guard registered by apply() (same code path the harness
 // uses) and asserts what passes and what does not, so the rule cannot regress:
-//   - the principal may edit config/tooling (.scripts/, root config files) and
-//     keeps its product-code fast-fix window;
-//   - testes/ stays qa-only for everyone but a qa agent;
+//   - the principal writes mds/, prototype/ and the whole product surface as its
+//     fast-fix window, in any language or framework layout;
+//   - testes/ stays qa-only and .git/ stays the human's;
 //   - `status: done` is denied to every agent;
-//   - a nested config path is not a root config file.
+//   - qa owns only the ROOT test-runner configs.
 //
 // Run: node --test test/   (or: npm test)
 
@@ -70,19 +70,22 @@ test('principal: product code and artifacts stay allowed (unchanged)', () => {
 
 test('principal: testes/ is denied with a clear message', () => {
   const reason = write('testes/qualquer.test.js')
-  assert.match(reason, /Blocked: the principal agent writes only/)
+  assert.match(reason, /Blocked: the principal agent writes/)
   assert.match(reason, /testes\/ is qa-only/)
 })
 
-test('principal: only ROOT config files match (nested paths denied)', () => {
-  for (const file of ['sub/tsconfig.json', 'build/package.json', 'out/tsconfig.json', 'node_modules/x.js']) {
-    assert.ok(write(file), `expected ${file} to be denied`)
+test('principal: the fast-fix window is the whole product, in any layout', () => {
+  for (const file of ['app/page.tsx', 'components/ui/button.tsx', 'lib/server/users.ts', 'Dockerfile', 'docker/entrypoint.sh', 'frontend/src/main.tsx', 'sub/tsconfig.json']) {
+    assert.equal(write(file), ALLOW, `expected ${file} to be allowed`)
   }
+  assert.ok(write('.git/config'), '.git/ is the human\'s')
 })
 
 test('principal: paths outside the workspace are denied', () => {
   assert.ok(write('../fora.js'))
-  assert.ok(write('C:/outro/lugar/tsconfig.json'))
+  assert.ok(write('/etc/hosts'))
+  // A drive path is absolute only on Windows; on POSIX it names a folder `C:`.
+  if (process.platform === 'win32') assert.ok(write('C:/outro/lugar/tsconfig.json'))
 })
 
 test('done is denied to every agent, even on an allowed path', () => {
@@ -98,27 +101,38 @@ test('done is denied to every agent, even on an allowed path', () => {
   )
 })
 
-test('builder and qa surfaces are unchanged (regression)', () => {
+test('builder writes any language or framework layout inside the workspace', () => {
   const builder = { depth: 1, role: 'builder' }
+  for (const file of [
+    'src/app.js', 'public/logo.svg', 'index.html', 'vite.config.ts', 'components.json', 'package.json',
+    'app/Http/Controllers/UserController.php', 'routes/api.php', 'resources/js/app.tsx', 'composer.json',
+    'cmd/server/main.go', 'internal/users/service.go', 'go.mod',
+    'backend/manage.py', 'frontend/src/main.tsx', 'Cargo.toml',
+  ]) {
+    assert.equal(write(file, 'x', builder), ALLOW, `builder must write ${file}`)
+  }
+})
+
+test('builder never writes the process surfaces, tests, git or outside the workspace', () => {
+  const builder = { depth: 1, role: 'builder' }
+  for (const file of ['mds/epics/e/01-brief.md', 'prototype/index.html', 'testes/x.test.js', '.git/config', '../fora.js', '/etc/hosts']) {
+    assert.ok(write(file, 'x', builder), `builder must not write ${file}`)
+  }
+})
+
+test('qa surface is unchanged (regression)', () => {
   const qa = { depth: 1, role: 'qa' }
-  assert.equal(write('src/app.js', 'x', builder), ALLOW)
-  assert.ok(write('testes/x.js', 'x', builder), 'builder must not write testes/')
-  assert.ok(write('tsconfig.json', 'x', builder), 'builder must not write root config')
   assert.equal(write('testes/x.test.js', 'x', qa), ALLOW)
   assert.ok(write('src/app.js', 'x', qa), 'qa must not write src/')
 })
 
-test('the web project scaffold at the root is writable by the principal and builders', () => {
-  const builder = { depth: 1, role: 'builder' }
+test('the web project scaffold at the root is writable by the principal', () => {
   for (const file of [
     'index.html', 'vite.config.js', 'vite.config.ts', 'next.config.mjs',
     'tailwind.config.ts', 'postcss.config.cjs', 'eslint.config.js', 'components.json',
   ]) {
     assert.equal(write(file), ALLOW, `principal must write ${file}`)
-    assert.equal(write(file, 'x', builder), ALLOW, `builder must write ${file}`)
   }
-  assert.ok(write('sub/index.html'), 'a nested index.html is not the project root')
-  assert.ok(write('package.json', 'x', builder), 'builder still does not own the manifest')
 })
 
 test('qa owns the test-runner configs, and nothing else at the root', () => {
@@ -130,10 +144,9 @@ test('qa owns the test-runner configs, and nothing else at the root', () => {
 })
 
 test('a denial names the rule and the allowed surface', () => {
-  const reason = write('qualquer/arquivo.txt')
-  assert.match(reason, /Blocked: the principal agent writes only/)
-  assert.match(reason, /\.scripts\//)
-  assert.match(reason, /tsconfig\.json/)
+  const reason = write('testes/qualquer.test.js')
+  assert.match(reason, /Blocked: the principal agent writes mds\/, prototype\//)
+  assert.match(reason, /testes\/ is qa-only/)
 })
 
 test.after(() => rmSync(ws, { recursive: true, force: true }))

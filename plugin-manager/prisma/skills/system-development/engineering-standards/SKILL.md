@@ -1,12 +1,12 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, Docker deployment whose application container runs migrations and seed on start), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
 whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each ticket's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI ticket.
 ---
 
 # Engineering standards
 
-These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts.
+These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system deploys with Docker (rule 7).
 
 ## The rules
 
@@ -128,18 +128,42 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 **Do not go asynchronous by default.** Do not move an operation to asynchronous execution solely for architectural purposes. Synchronous execution is preferred when the operation is short-lived and the caller requires its result immediately.
 
+### 7. Containerized deployment
+
+Every system is built to deploy as Docker containers, whatever the stack and hosting target.
+
+**The image.**
+- `Dockerfile` (multi-stage: dependencies, build, runtime) and `.dockerignore` at the workspace root. The runtime stage carries only what serving, migrating and seeding need; build tools stay in the earlier stages.
+- Next.js sets `output: 'standalone'` in `next.config.*`; the runtime copies `.next/standalone`, `.next/static` and `public/` and starts `node server.js`.
+- The container runs as a non-root user and listens on `0.0.0.0` and the `PORT` variable. Every setting (database URL, secrets, external keys) comes from environment variables; nothing environment-specific is baked into the image.
+
+**Migrations and seed run when the application container starts.** `docker/entrypoint.sh` is the image's entrypoint and, on every start, with `set -e`:
+1. applies pending migrations with the stack's production command — Prisma `migrate deploy`, Drizzle `migrate`, Laravel `php artisan migrate --force`, Django `manage.py migrate --noinput`, Rails `db:migrate` — never a development command that resets the database or generates migrations;
+2. runs the seed;
+3. `exec`s the server, so it receives the stop signal.
+
+A failed migration or seed stops the container instead of serving on an old schema. Only the application container migrates; workers from rule 6 run the same image with their own command and skip both steps.
+
+**The seed is idempotent.** It runs on every deploy, so it upserts by a stable key and never duplicates rows or overwrites data users changed. Reference data production needs is seeded everywhere; demo and test data runs only outside production, gated by an environment variable.
+
+**What migrate and seed need ships in the runtime.** The migration files, the seed script and the CLI they run are in the runtime image. A standalone or compiled output keeps only what the application imports, so a CLI that is executed rather than imported (the Prisma CLI, `tsx` for a TypeScript seed) is installed into the runtime stage explicitly, at the manifest's versions.
+
+**Local run.** `docker-compose.yml` at the root starts the application with the same image and entrypoint as deploy, plus its services (database, queue, the workers of rule 6); the application waits for a healthy database (`depends_on` with `condition: service_healthy`).
+
+**Evidence.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing.
+
 ## Backend: mapping roles to a stack
 
 The backend rules hold in any language; the plan records how the chosen stack realizes each role. The table only illustrates — it is not a list of allowed stacks.
 
-| Role | Laravel (PHP) | NestJS (TypeScript) | Spring Boot (Java/Kotlin) | ASP.NET Core (C#) | Django REST / FastAPI (Python) | Go |
-|---|---|---|---|---|---|---|
-| Controller | Controller | `@Controller` | `@RestController` | Controller / minimal API handler | ViewSet / path operation | HTTP handler |
-| Request validator | Form Request | DTO + `class-validator` pipe | `@Valid` request class | FluentValidation / DataAnnotations | Serializer / Pydantic model | request struct + validator |
-| Use case | Action / Service | Provider (service) | `@Service` | Service / MediatR handler | service module | service |
-| Response serializer | API Resource | response mapper / `class-transformer` | response DTO + mapper | response record + mapper | Serializer / response model | response struct + mapper |
-| API specification | Scramble / `l5-swagger` | `@nestjs/swagger` | springdoc-openapi | Swashbuckle / NSwag | drf-spectacular / built-in OpenAPI | swaggo / oapi-codegen |
-| Background tasks | Queued Jobs + Horizon | BullMQ | Spring Batch / a message broker consumer | Hangfire / a hosted worker | Celery / RQ | asynq / a broker consumer |
+| Role | Next.js (TypeScript, the default) | Laravel (PHP) | NestJS (TypeScript) | Spring Boot (Java/Kotlin) | ASP.NET Core (C#) | Django REST / FastAPI (Python) | Go |
+|---|---|---|---|---|---|---|---|
+| Controller | Route Handler (`app/api/**/route.ts`) | Controller | `@Controller` | `@RestController` | Controller / minimal API handler | ViewSet / path operation | HTTP handler |
+| Request validator | Zod schema | Form Request | DTO + `class-validator` pipe | `@Valid` request class | FluentValidation / DataAnnotations | Serializer / Pydantic model | request struct + validator |
+| Use case | service module under `lib/server/` | Action / Service | Provider (service) | `@Service` | Service / MediatR handler | service module | service |
+| Response serializer | serializer function | API Resource | response mapper / `class-transformer` | response DTO + mapper | response record + mapper | Serializer / response model | response struct + mapper |
+| API specification | `@asteasolutions/zod-to-openapi` | Scramble / `l5-swagger` | `@nestjs/swagger` | springdoc-openapi | Swashbuckle / NSwag | drf-spectacular / built-in OpenAPI | swaggo / oapi-codegen |
+| Background tasks | BullMQ worker | Queued Jobs + Horizon | BullMQ | Spring Batch / a message broker consumer | Hangfire / a hosted worker | Celery / RQ | asynq / a broker consumer |
 
 Whatever the stack, the plan names for rule 6 the queue mechanism, where timeouts, attempts, backoff and failure handlers are declared, how a task is dispatched only after commit, how scheduled tasks are kept from overlapping, and the worker process in the deployment.
 
@@ -166,6 +190,7 @@ Record the backend language and framework, then add one **Decisions** row per ru
 | Design system | tokens: colors from `03-palette.md`, typography and motion from `03-design.md`, the spacing/radius scale; implemented with Tailwind CSS + shadcn/ui, theme CSS file named |
 | Data visualization | Recharts via shadcn `chart`, colors from `chart-1` … `chart-5` — or "none" when the product has no charts |
 | Asynchronous processing | which operations run in the background and why (rule 6 criteria); the queue mechanism and queues by workload; timeout, attempts and backoff per task; failure handling and alerting; status resource and how the UI follows it; scheduled tasks; the worker process in the deployment — or "none" with the reason |
+| Containerized deployment | the Dockerfile stages and runtime base image; the production migration command and the seed command, with the stable key that makes the seed idempotent and which data is production-only vs demo; how the runtime gets the migration CLI; the `docker-compose.yml` services; a hosting target that runs the image |
 
 The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary. A rule the requester overrides is recorded with their words.
 
@@ -180,6 +205,9 @@ Each ticket's **Implementation contract** names its request validator, use case,
 - [ ] Endpoint documented in the API specification with its input, output, errors, authentication and every HTTP status it answers, matching its behavior.
 - [ ] Background work (when the ticket has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
 - [ ] UI built from the design system's tokens and components (Tailwind utilities and theme variables only); any chart uses the project's standard library (Recharts).
+- [ ] Schema, seed or deploy changes (when the ticket has any): `docker compose up --build` from an empty database applies the migrations, runs the seed and serves; a second start applies nothing and the seed duplicates no row.
+
+The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — is one of the first tickets, so every later ticket is verified in the container.
 
 ## In /07-build
 
@@ -200,6 +228,7 @@ Builders of backend, API or UI tickets load this skill with the others the ticke
 - a long-running, resource-intensive or externally dependent operation executed inside the request when the caller does not need its result immediately;
 - a short operation moved to the background although the caller needs its result right away;
 - a background task without timeout, attempts or failure handling; one that is not idempotent although it can run twice; one carrying whole models or secrets in its payload; one dispatched inside an open transaction; a scheduled task that can overlap itself;
-- a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason.
+- a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason;
+- a project without a multi-stage `Dockerfile`, `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
 
-Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend>/src <frontend>/package.json` finds nothing.
+Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend> --exclude-dir=node_modules --exclude-dir=.next` finds nothing.

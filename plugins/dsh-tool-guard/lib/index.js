@@ -3,15 +3,17 @@
 // and is monotonic — once it returns a reason the call is denied and no later
 // listener can turn it back into permission. The laws:
 //
-//   1. the principal agent (depth 0) writes process artifacts (`mds/`, the
-//      `prototype/` folder), product code in `src/`/`public/` only as a
-//      fast-fix window, and the config/tooling surface (`.scripts/` and
-//      root-level config files). `testes/` stays qa-only and git commit/push
-//      stays with the human;
+//   1. the principal agent (depth 0) writes the process artifacts (`mds/`,
+//      `prototype/`) and, as a fast-fix window, the product anywhere outside
+//      the process surfaces — the same surface as the builder, since the
+//      project may use any language and framework layout. `testes/` stays
+//      qa-only and `.git/` and git commit/push stay with the human;
 //   2. role policies for role-bound subagents: `builder` (fast code) may write
-//      only src/ and public/ and run build/typecheck — the testing is the
-//      principal's job; `qa` (post-human regression) may write only testes/ and
-//      run suites. Neither may spawn subagents; neither may git commit/push;
+//      anywhere in the workspace except the process surfaces (`mds/`,
+//      `prototype/`, `testes/`, `.git/`) — the project may use any language and
+//      framework layout — and run build/typecheck; `qa` (post-human regression)
+//      may write only testes/ and run suites. Neither may spawn subagents;
+//      neither may git commit/push;
 //   3. mechanical hooks on every write/edit: encoding integrity (no U+FFFD may
 //      be introduced), the frozen prototype contract, UX-* traceability, and
 //      the single Kanban transition rule (`active` only becomes `in_progress`);
@@ -50,67 +52,22 @@ const PG_DENY_RE = /\b(psql|createdb|dropdb|pg_dump|pg_restore|pg_ctl)\b/i
 const NET_DENY_RE = /\b(curl|wget|ssh|scp|sftp|ftp|telnet|nc|npm\s+(install|i|publish)|pnpm\s+(add|install|publish)|yarn\s+(add|install|publish)|pip3?\s+install)\b/i
 
 /**
- * The principal agent's write surface, declarative and grouped by reason:
- *
- *  - PROCESS ARTIFACTS (`mds/`, `prototype/`) — the epic's own files. The
- *    principal owns the process, so it owns these.
- *  - PRODUCT CODE (`src/`, `public/`) — written by the builder role; the
- *    principal may only fast-fix what the live browser proof exposed
- *    (edit → re-test immediately). Not widened here.
- *  - PROJECT SCAFFOLD (`PROJECT_SCAFFOLD_FILES`, `TEST_RUNNER_FILES`) — the
- *    root files a web app needs outside src/: index.html and the bundler,
- *    style, lint, component-registry and test-runner configs.
- *  - CONFIG & TOOLING (`DEFAULT_ALLOWED_TOOLING_ROOTS` + root config files) —
- *    build/tooling scripts and root-level configuration. These are NOT product
- *    code: a defect in a packaging script or a tsconfig path has no
- *    builder-shaped owner, and blocking it left real build defects unfixable by
- *    any agent (a human had to hand-edit).
- *
- * `testes/` is deliberately absent: tests are qa-only. Paths outside the
- * workspace are refused by the resolution itself.
+ * Process folders the principal writes and no builder may: the epic's
+ * artifacts and the frozen prototype. Configurable as `allowedRoots`.
  */
 const DEFAULT_ALLOWED_ROOTS = ['mds', 'prototype']
-
-/** Fast-fix mode: the principal may edit product code directly (fix found in the browser → edit → re-test). */
-const PRINCIPAL_CODE_ROOTS = ['src', 'public']
-
-/** Tooling folders the principal may edit: build/packaging scripts, not product code. */
-const DEFAULT_ALLOWED_TOOLING_ROOTS = ['.scripts']
-
-/**
- * Root-level configuration files the principal may edit (globs; a path with a
- * separator never matches — only files directly at the workspace root). These
- * are deployment/tooling configuration, not product code.
- */
-const PRINCIPAL_CONFIG_FILES = [
-  'tsconfig.json', 'tsconfig.*.json', // TypeScript project configs
-  'package.json', 'package-lock.json', 'pnpm-lock.yaml', // package manifests
-  '.gitignore', '.gitattributes', '.railwayignore', // VCS / deploy ignore rules
-  'railway.toml', 'railway.json', // deploy configuration
-  '.npmrc', '.editorconfig', // tool configuration
-]
-
-/**
- * Root-level files a web project cannot live without, outside src/ and public/:
- * the Vite entry page and the build, style, lint and component-registry
- * configs the pipeline's skills require (`/shadcn-ui` writes components.json,
- * `/tailwind-patterns` the Tailwind config). Without them no agent could
- * scaffold the app — the builder was confined to src/ and public/, and the
- * principal's config list held only manifests and deploy files.
- */
-const PROJECT_SCAFFOLD_FILES = [
-  'index.html', // Vite's entry page, which must sit at the project root
-  'vite.config.*', 'next.config.*', // bundler / framework config
-  'tailwind.config.*', 'postcss.config.*', // styling pipeline
-  'eslint.config.*', // lint config
-  'components.json', // shadcn/ui component registry
-]
 
 /** Test-runner configs: qa owns the tests, so it owns how they run. */
 const TEST_RUNNER_FILES = ['vitest.config.*', 'playwright.config.*']
 
-/** Role-scoped write allowlists, relative to the workspace. */
-const BUILDER_ALLOW_ROOTS = ['src', 'public']
+/**
+ * Folders outside the product surface, relative to the workspace: the process
+ * artifacts, the qa-owned tests and the human-owned repository. Everything else
+ * inside the workspace is product code in whatever layout the chosen language
+ * and framework use — the builder's surface and the principal's fast-fix
+ * window (fix found in the browser → edit → re-test).
+ */
+const NON_PRODUCT_ROOTS = ['mds', 'prototype', 'testes', '.git']
 const QA_ALLOW_ROOTS = ['testes']
 
 /** A subagent briefing may point at artifacts, never paste them. */
@@ -154,8 +111,8 @@ function globMatch(pattern, name) {
 
 /**
  * True when `p` names a config file DIRECTLY at the workspace root matching one
- * of `patterns`. A nested path (any separator) never matches: only the project
- * root's own configuration is the principal's tooling surface.
+ * of `patterns`. A nested path (any separator) never matches: qa owns only the
+ * project root's own test-runner configs.
  */
 function isRootConfigFile(cwd, p, patterns) {
   const rel = relative(resolve(cwd), resolve(cwd, p))
@@ -219,26 +176,25 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
 
   // Role-scoped write surface first: the allowlist IS the policy.
   if (role === 'builder') {
-    if (!BUILDER_ALLOW_ROOTS.some((f) => inside(cwd, file, f)) && !isRootConfigFile(cwd, file, PROJECT_SCAFFOLD_FILES)) {
-      return `GUARD[builder]: bloqueado — escrita fora de ${BUILDER_ALLOW_ROOTS.join('/, ')}/ e dos arquivos de raiz do projeto (${PROJECT_SCAFFOLD_FILES.join(', ')}) (got ${file || '<empty>'}); permitido só código — o teste é do principal`
+    if (!inside(cwd, file, '.')) {
+      return `GUARD[builder]: bloqueado — escrita fora do workspace (got ${file || '<empty>'})`
+    }
+    const denied = NON_PRODUCT_ROOTS.find((f) => inside(cwd, file, f))
+    if (denied !== undefined) {
+      return `GUARD[builder]: bloqueado — ${denied}/ não é do builder (processo, testes do qa ou git do humano) (got ${file}); o builder escreve só código do projeto`
     }
   } else if (role === 'qa') {
     if (!inside(cwd, file, QA_ALLOW_ROOTS[0]) && !isRootConfigFile(cwd, file, TEST_RUNNER_FILES)) {
       return `GUARD[qa]: bloqueado — escrita fora de testes/ e das configs de teste (${TEST_RUNNER_FILES.join(', ')}) (got ${file || '<empty>'}); qa só escreve testes`
     }
   } else if (depth === 0) {
-    // The principal agent's law: process artifacts, the fast-fix code window,
-    // and the config/tooling surface. testes/ stays qa-only; git stays with the
-    // human.
+    // The principal agent's law: the process folders, plus the product surface
+    // as its fast-fix window. testes/ stays qa-only; .git/ stays with the human.
     const allowed =
       allowedRoots.some((folder) => inside(cwd, file, folder)) ||
-      PRINCIPAL_CODE_ROOTS.some((folder) => inside(cwd, file, folder)) ||
-      DEFAULT_ALLOWED_TOOLING_ROOTS.some((folder) => inside(cwd, file, folder)) ||
-      isRootConfigFile(cwd, file, PRINCIPAL_CONFIG_FILES) ||
-      isRootConfigFile(cwd, file, PROJECT_SCAFFOLD_FILES) ||
-      isRootConfigFile(cwd, file, TEST_RUNNER_FILES)
+      (inside(cwd, file, '.') && !NON_PRODUCT_ROOTS.some((folder) => inside(cwd, file, folder)))
     if (!allowed) {
-      return `Blocked: the principal agent writes only ${allowedRoots.join('/, ')}/, ${PRINCIPAL_CODE_ROOTS.join('/, ')}/, ${DEFAULT_ALLOWED_TOOLING_ROOTS.join('/, ')}/ and root config files (${[...PRINCIPAL_CONFIG_FILES, ...PROJECT_SCAFFOLD_FILES, ...TEST_RUNNER_FILES].join(', ')}) — testes/ is qa-only (got ${file || '<empty>'})`
+      return `Blocked: the principal agent writes ${allowedRoots.join('/, ')}/ and the product inside the workspace — testes/ is qa-only and .git/ is the human's (got ${file || '<empty>'})`
     }
   }
 

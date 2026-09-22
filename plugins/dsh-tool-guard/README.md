@@ -7,18 +7,14 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
 
 1. **Each role writes only its own surface.** A `write`/`edit` is denied
    unless its `file_path` is inside the caller's surface:
-   - **Principal agent** (delegation depth 0): `mds/`, `prototype/`, the
-     fast-fix window `src/` and `public/`, `.scripts/`, and root files — the
-     manifests and deploy configs (`package.json`, lockfiles, `tsconfig*.json`,
-     `railway.*`, ignore files), the project scaffold (`index.html`,
-     `vite.config.*`, `next.config.*`, `tailwind.config.*`,
-     `postcss.config.*`, `eslint.config.*`, `components.json`) and the test
-     runner configs (`vitest.config.*`, `playwright.config.*`).
-   - **builder**: `src/`, `public/` and the project scaffold files at the root.
-   - **qa**: `testes/` and the test-runner configs at the root.
-   Root files match only directly at the workspace root, never nested. Without
-   the scaffold files no agent could create a Vite app's `index.html` or
-   `vite.config.*`.
+   - **Principal agent** (delegation depth 0): `mds/`, `prototype/` and, as a
+     fast-fix window, the product surface below.
+   - **builder**: the product surface — anywhere inside the workspace except
+     `mds/`, `prototype/`, `testes/` and `.git/`. The project may use any
+     language and framework, so its code and manifests follow that stack's own
+     layout.
+   - **qa**: `testes/` and the test-runner configs (`vitest.config.*`,
+     `playwright.config.*`) directly at the workspace root, never nested.
 2. **Done is the human's move.** Any `write`/`edit` whose text contains a
    frontmatter `status: done` is denied for every agent. The human sets Done on
    the Kanban board, which writes the file host-side, not through a tool call.
@@ -34,4 +30,4 @@ Denials surface to the agent as a tool error carrying the reason.
 
 | Field | Type | Default | Effect |
 | --- | --- | --- | --- |
-| `allowedRoots` | `string[]` | `['mds', 'prototype']` | Folders, relative to the workspace, the principal agent may write inside. |
+| `allowedRoots` | `string[]` | `['mds', 'prototype']` | Process folders, relative to the workspace, the principal agent writes beyond the product surface. |

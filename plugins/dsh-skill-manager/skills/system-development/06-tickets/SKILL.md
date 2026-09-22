@@ -17,6 +17,7 @@ Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-vali
 - Location: `mds/epics/<epic>/06-tickets/NN-<slug>.md` (NN = execution order).
 - Frontmatter (the Kanban tab reads this): `ticket: <slug>`, `epic: <epic>`, `status: active`, `title: <imperative summary>`. Agents move a ticket `active → in_progress → code_test → human_test` (that is `/07-build`'s job). **Never write `status: done`** — Done is the human's move on the Kanban.
 - Coverage matrix first: every UX id, Must Do, contract and test requirement maps to ≥1 ticket. Nothing unmapped.
+- Containerization is one of the first tickets (`skill engineering-standards` rule 7): `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, and `docker-compose.yml`. Every later ticket that changes schema, seed or deploy carries the container check in its Done when.
 
 ## Ticket body contract
 

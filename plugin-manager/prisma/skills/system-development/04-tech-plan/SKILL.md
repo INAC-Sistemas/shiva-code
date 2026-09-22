@@ -18,7 +18,9 @@ Decide alone and just state: language, libraries, layout, naming, schema shape, 
 
 ## User interface
 
-A web UI is React + Tailwind with shadcn/ui components unless the existing code or a requester constraint rules it out — decide it alone and `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`vite`, `next`, …), base (`radix` by default) and preset (`nova` by default), or with why shadcn does not apply. The project is created at the workspace root, never in a subfolder (`skill shadcn-ui` step 1). The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
+The backend may be any language and framework; **the frontend is always React styled with Tailwind CSS, built from shadcn/ui** — a house rule, not an option to weigh. **When the requester names no framework, the system is Next.js** — one app for frontend and backend (Route Handlers under `app/api/`), created with the `next` template; another framework only when the requester or the existing code names it, recorded with their words. `skill shadcn-ui` for the options. Record one Decisions row with the shadcn `init` template (`next` by default, `vite`, `laravel`, …), base (`radix` by default) and preset (`nova` by default).
+
+Record the workspace layout as its own Decisions row: the project sits at the workspace root in its framework's layout, and the frontend sits at the root when the React app is the whole project or its template creates the backend too (`vite`, `next`, `react-router`, `laravel`…), or in `frontend/` beside a backend in another language. Name the backend's generator command. `skill shadcn-ui` step 1 creates each case. The traceability matrix names the shadcn component or block behind each UX id wherever one exists.
 
 Icons are a separate Decisions row: Lucide (`lucide-react`) by default, Tabler (`@tabler/icons-react`) only when Lucide lacks the glyph or a requester names it — `skill ui-icons` for the rules. A pack already in the project's `package.json` wins over both defaults.
 
@@ -35,6 +37,8 @@ Fonts and motion are a separate Decisions row that cites `03-design.md`: how the
 The workspace's connection tools are the real mechanism for these, and the plan names them instead of hand-rolling. Each is an agent tool (see `/11-connections`): `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database/SQL/auth), `github_cli` (repo/PR), plus `ssh_run`/`ssh_transfer` (external VPS).
 
 Check reality before writing the plan: call `status` on the provider the epic will use — it says whether the CLI is installed, the account is connected and the workspace is linked. `login` opens the browser for the human to authorize once. Name which provider the epic uses and the boundary it must not cross.
+
+Every system deploys as the Docker image of `skill engineering-standards` rule 7, so the hosting target must run that image: Railway builds the root `Dockerfile`, and a VPS runs it with `docker compose` over `ssh_run`. Vercel does not run the image and its migrations-on-start entrypoint; choose it only when the requester asks, recorded with their words and with how migrations and seed run there instead.
 
 ## Procedure
 

@@ -18,7 +18,7 @@ Never search for a glyph by guessing an export name. Read the pack's catalog: [l
 
 ## Install (React project)
 
-Only a builder subagent installs — `dsh-tool-guard` denies the principal's writes outside `mds/` and `prototype/`.
+The principal installs the pack in the frontend folder while creating the project (`/07-build`, Project root), because `dsh-tool-guard` denies `pnpm add` to builders. A builder that needs a package the project lacks reports it; the principal installs it.
 
 ```sh
 pnpm add lucide-react        # default

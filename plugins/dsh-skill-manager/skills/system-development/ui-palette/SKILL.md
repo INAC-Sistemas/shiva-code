@@ -117,9 +117,9 @@ Screens use only the role classes (`bg-primary`, `text-primary-foreground`, `bor
 
 ## 7. Apply in the React app
 
-A builder subagent does this, after `shadcn init` (`/shadcn-ui`), because `dsh-tool-guard` denies the principal's writes outside `mds/` and `prototype/`.
+A builder subagent does this, after the principal creates the frontend with `shadcn init` (`/shadcn-ui` step 1). The theme CSS is product code: the principal edits product code only to fast-fix what the live browser proof exposed, so applying the palette is the builder's ticket work.
 
-- Open the CSS file `init` generated (`src/index.css` for Vite, `app/globals.css` or `src/app/globals.css` for Next) and replace the values inside `:root` and `.dark` with the palette's light and dark hex. **Keep the file's value format**: Tailwind v4 projects accept hex as written; a Tailwind v3 project whose variables hold `H S% L%` channels (`hsl(var(--primary))`) gets each hex converted to that form.
+- Open the CSS file `init` generated inside the frontend folder (`src/index.css` for Vite, `app/globals.css` or `src/app/globals.css` for Next, `resources/css/app.css` for Laravel) and replace the values inside `:root` and `.dark` with the palette's light and dark hex. **Keep the file's value format**: Tailwind v4 projects accept hex as written; a Tailwind v3 project whose variables hold `H S% L%` channels (`hsl(var(--primary))`) gets each hex converted to that form.
 - `success`, `warning` and their foregrounds are not in shadcn's defaults: add them to `:root` and `.dark`, and on Tailwind v4 map them in the `@theme inline` block (`--color-success: var(--success);`), or on v3 in `tailwind.config` `colors`.
 - Components use the role utilities only (`bg-primary`, `text-muted-foreground`, `bg-success`). A hex, `rgb()`, `oklch()` literal or default Tailwind color in a component is RED.
 
