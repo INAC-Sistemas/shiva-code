@@ -5,7 +5,7 @@ The color palette picker of the prototype stage. It adds a **Paletas** sidebar t
 ## Flow
 
 1. At the start of `/03-prototype`, the model calls `palette_pick` with an optional `question` and up to 8 `suggestions` (`{ name, colors: ['#RRGGBB', …], note }`) drawn from the brief.
-2. The tool opens a request; the tab's client polls `pending` every second and **opens the Paletas tab by itself** on a new request.
+2. The tool opens a request; the tab's client polls `pending` every second and **opens the Paletas tab by itself** on a new request, expanding a collapsed sidebar (`openTab` with `expand: true`).
 3. The person browses and picks:
    - **preset palettes** filterable by style (Populares, Pastel, Escuras, Vibrantes, Neutras, Monocromáticas) and by color family (Vermelho … Cinza);
    - the model's **suggestions**, shown first;

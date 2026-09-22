@@ -1,16 +1,16 @@
 ---
 name: 06-tickets
-description: Break an audited GREEN tech plan into self-contained implementation tickets — markdown files under mds/epics/<epic>/06-tickets/ with status frontmatter, full context manifest, agent protocols (implementer + independent auditor) — verified by a subagent, then close the stage by deciding and recording the execution strategy in mds/epics/<epic>/06-plano-de-execucao.md (real file-sharing dependency graph, sequential vs parallel, loop type, agent roles, verification and failure rules), confirmed by the requester. Tickets appear on the Kanban tab.
-whenToUse: After /04-tech-plan is audited GREEN. Before /07-build. Requires /00-start-here and /04-tech-plan loaded earlier in this session.
+description: Break a settled tech plan into self-contained implementation tickets — markdown files under mds/epics/<epic>/06-tickets/ with status frontmatter, full context manifest and the implementer prompt — then close the stage by deciding and recording the execution strategy in mds/epics/<epic>/06-plano-de-execucao.md (real file-sharing dependency graph, sequential vs parallel, loop type, agent roles, verification and failure rules), confirmed by the requester. Tickets appear on the Kanban tab.
+whenToUse: After /04-tech-plan is written. Before /07-build. Requires /00-start-here and /04-tech-plan loaded earlier in this session.
 ---
 
 # Ticket Breakdown
 
-Turn a settled plan into tickets a stranger can execute without asking what was meant. Run only after the direction is decided and audited GREEN — breaking down an undecided plan produces tickets that dissolve on first contact with a real question.
+Turn a settled plan into tickets a stranger can execute without asking what was meant. Run only after the direction is decided — breaking down an undecided plan produces tickets that dissolve on first contact with a real question.
 
 ## Entry gate
 
-Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md` (validated), `prototype.md` (audited GREEN, UX frozen), `04-tech-plan.md` (audited GREEN). Read them; record their paths in every ticket. If any is missing or unreadable, stop and report — never guess.
+Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md` (validated), `prototype.md` (UX frozen), `04-tech-plan.md`. Read them; record their paths in every ticket. If any is missing or unreadable, stop and report — never guess.
 
 ## Ticket conventions
 
@@ -49,8 +49,6 @@ title: <imperative title>
 ## Agent protocol
 ### Implementer prompt
 Read this ticket and the context-manifest files. Implement only this scope. Do not redesign frozen UX or invent requirements. Run every check; report files, commands and results.
-### Auditor prompt
-Audit independently; never trust the implementer's summary. `read` this ticket, the manifest files and the diff. UX is frozen; prototype mocks/CDNs are allowed where declared. Reject toast-only coverage of critical flows, missing recovery, wrong files, unverifiable claims. GREEN only if every criterion passes; else list reproducible findings.
 ## Out of scope (adjacent behaviour that must not change)
 ## Depends on (<ticket files> or nothing)
 ```
@@ -58,16 +56,15 @@ Audit independently; never trust the implementer's summary. `read` this ticket, 
 ## Procedure
 
 1. `read` the plan and all upstream artifacts — never break down from conversation memory.
-2. Verify the entry gate (statuses/audits). A missing artifact is a blocker, not an invitation to guess.
+2. Verify the entry gate (statuses). A missing artifact is a blocker, not an invitation to guess.
 3. Build the coverage matrix; cut tickets along **vertical seams** (independently finishable, testable, product still works), dependencies ordered, contracts before consumers. Track the breakdown with `todo_write` when it spans several tickets.
 4. `write` every ticket with the full body contract above.
 5. Verify the tree: every ticket inside `06-tickets/`, frontmatter complete, deps point at existing files, matrix fully mapped.
-6. **Audit the set with one `subagent`**: give it the plan + every ticket path — "verify coverage against the plan, self-containedness of each ticket (an implementer needs no conversation memory), and that implementer/auditor prompts carry enough context; UX frozen, mocks/CDNs allowed. GREEN or findings." Iterate to GREEN.
-7. **Analyse the real dependency graph** (below) — declared dependencies are not enough; find the tickets that touch the same files or symbols.
-8. **Ask the requester** the three execution questions (loop, parallelism, approval cadence) — plain language, options as consequences.
-9. **Write `06-plano-de-execucao.md`** from the template below.
-10. Present it; set `status: validated` only after the requester confirms.
-11. Hand off: "tickets are on the Kanban and the execution plan is validated; execution is `/07-build`. Nothing has been coded."
+6. **Analyse the real dependency graph** (below) — declared dependencies are not enough; find the tickets that touch the same files or symbols.
+7. **Ask the requester** the three execution questions (loop, parallelism, approval cadence) — plain language, options as consequences.
+8. **Write `06-plano-de-execucao.md`** from the template below.
+9. Present it; set `status: validated` only after the requester confirms.
+10. Hand off: "tickets are on the Kanban and the execution plan is validated; execution is `/07-build`. Nothing has been coded."
 
 ## Execution strategy — closes the stage (mandatory)
 
@@ -82,7 +79,7 @@ The stage is **not** done when the tickets are written; it is done when the exec
 1. **How each attempt works** — how a ticket gets done, and re-done when it fails:
    - "Each attempt starts from zero, with an agent that remembers nothing from the previous try" (exploratory work; each try is unbiased; costs more, because context is rebuilt every time).
    - "The same agents carry the ticket from start to finish — building, testing and checking" (planned work; faster and cheaper; a wrong early assumption can stick).
-   - When the epic is already fully planned and audited, recommend the second.
+   - When the epic is already fully planned, recommend the second.
 2. **How much can run at once** — the parallelism:
    - "One at a time, in order" (simplest to follow; slowest).
    - "Only the independent fronts run together" (faster; depends on the analysis above being right).

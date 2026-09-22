@@ -336,6 +336,13 @@ export interface OpenTabSeed {
   url?: string
   /** JSON-serializable custom state carried on the minted tab (persisted across reloads; v0.12.0+). */
   meta?: unknown
+  /**
+   * Expand a collapsed panel for this open, as a content open does. For a
+   * type-only open whose caller wants the tab in sight — a plugin opening
+   * its own tab because something happened (an artifact created, a tool
+   * waiting on the person). Not stored on the tab.
+   */
+  expand?: boolean
 }
 
 /**
@@ -381,7 +388,8 @@ export interface BetterSidebarService {
    * automatically (the right panel by default, the bottom panel when the
    * active pane lives there; on narrow viewports the merged drawer opens).
    * Type-only opens (the + menu, agent-terminal auto-tabs) never expand —
-   * the panel behavior is their caller's business.
+   * the panel behavior is their caller's business — unless the seed sets
+   * `expand: true`.
    *
    * Note: `available` gates the + menu's disabled state only — it does NOT
    * refuse `openTab` (only the settings disable switch does).
@@ -695,7 +703,7 @@ export function createBetterSidebarService(store: SidebarStore): BetterSidebarSe
       if (
         !targetsInactiveSession
         && typeof window !== 'undefined'
-        && (seed.path !== undefined || seed.url !== undefined)
+        && (seed.path !== undefined || seed.url !== undefined || seed.expand === true)
       ) {
         if (isNarrowWidth(window.innerWidth)) {
           if (!landed.panelOpen) return togglePanel(landed)

@@ -1,7 +1,7 @@
 ---
 name: 04-tech-plan
-description: Settle the technical direction — architecture, mechanisms, boundaries, trade-offs — as mds/epics/<epic>/04-tech-plan.md with a traceability matrix into the frozen prototype contract, audited GREEN by a subagent. Brings only consequence-bearing decisions to the requester.
-whenToUse: After /03-prototype is fully GREEN (prototype.md + audits). Before /06-tickets. Requires /00-start-here and /03-prototype loaded earlier in this session.
+description: Settle the technical direction — architecture, mechanisms, boundaries, trade-offs — as mds/epics/<epic>/04-tech-plan.md with a traceability matrix into the frozen prototype contract. Brings only consequence-bearing decisions to the requester.
+whenToUse: After /03-prototype is fully GREEN and prototype.md is frozen. Before /06-tickets. Requires /00-start-here and /03-prototype loaded earlier in this session.
 ---
 
 # Tech Plan
@@ -10,7 +10,7 @@ Settle the decisions a change depends on before any code exists. Read `/00-start
 
 ## Entry contract
 
-Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, `03-palette.md`, `03-design.md`, plus audited-GREEN `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
+Requires, all with `status: validated`: `01-brief.md`, `02-flows.md`, `03-prototype-validation.md`, `03-palette.md`, `03-design.md`, plus the frozen `prototype.md` and `db-schema.json`. Read them by path before deciding — `read`, not memory. **The UX is frozen**: the prototype is a UI contract, not an architecture spec — hardcoded credentials, fake auth/ZIP/rollback, toasts and localStorage are demonstrations to translate into real mechanisms, never literal requirements. Do not redesign, rename, cut or invent screens; if implementation reveals a needed UX change, stop and return to `/03-prototype`.
 
 ## Which decisions reach the requester
 
@@ -47,7 +47,6 @@ Check reality before writing the plan: call `status` on the provider the epic wi
 7. **Traceability matrix**: every UX id → files/symbols, data, contracts, error states, tests. Every Must Do from the brief maps to ≥1 row.
 8. Pressure-test: scale, hostile input, concurrency, process death, failed migration, restore from backup.
 9. **Write** `mds/epics/<epic>/04-tech-plan.md` (shape below), optimized for `/06-tickets`: ordered implementation boundaries, concrete file/symbol names, dependencies, acceptance evidence.
-10. **Audit with a `subagent`**: give it the plan path + all upstream artifact paths + "UX is frozen; prototype is a mock; CDNs allowed; audit technical completeness and traceability, do not redesign UX. GREEN or findings." Iterate to GREEN.
 
 ## Artifact shape
 
@@ -79,4 +78,4 @@ status: draft
 
 ## Next
 
-When the plan is audited GREEN, load `/06-tickets` with the `skill` tool. If a decision is a costly fork first, load `/05-debate`, record the verdict here, then continue to `/06-tickets`. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.
+When the plan is written, load `/06-tickets` with the `skill` tool. If a decision is a costly fork first, load `/05-debate`, record the verdict here, then continue to `/06-tickets`. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

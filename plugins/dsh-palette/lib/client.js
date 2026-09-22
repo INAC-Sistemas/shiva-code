@@ -362,7 +362,7 @@ function apply(ctx) {
             if (alive && r?.ok) {
               const request = r.request ?? null
               if (request && request.id !== lastId) {
-                try { betterSidebar.openTab({ type: TAB_ID }, scope()) } catch { /* tab not registered yet */ }
+                try { betterSidebar.openTab({ type: TAB_ID, expand: true }, scope()) } catch { /* tab not registered yet */ }
               }
               lastId = request?.id ?? null
               setRequest(request)

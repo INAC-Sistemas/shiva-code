@@ -39,6 +39,7 @@ const WORKSPACE_RE = /^[0-9a-f]{16}$/;
 /** Ops que a aba sabe executar. Um `op` fora desta lista nunca chega ao browser. */
 const KNOWN_OPS = new Set([
   "navigate",
+  "reload",
   "screenshot",
   "click",
   "fill",

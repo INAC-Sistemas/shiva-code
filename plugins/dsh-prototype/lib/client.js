@@ -67,7 +67,7 @@ function desktopCapture() {
 async function ensureView(scope) {
   if (viewHandler) return
   try {
-    if (typeof sidebarService?.openTab === 'function') sidebarService.openTab({ type: TAB_ID }, scope)
+    if (typeof sidebarService?.openTab === 'function') sidebarService.openTab({ type: TAB_ID, expand: true }, scope)
     else sidebarService?.activateTab?.(TAB_ID, scope)
   } catch { /* unknown tab is a no-op */ }
   const deadline = Date.now() + 8000
@@ -156,6 +156,10 @@ function PrototypeView(props) {
   const [status, setStatus] = React.useState(null)
   const [entries, setEntries] = React.useState(null)
   const [currentPath, setCurrentPath] = React.useState(null)
+  // Bumped on every navigate and reload: it becomes the iframe's `?t=`, so
+  // opening the page already shown still loads it again and shows edits made
+  // on disk since (the files are served no-store; only the URL has to change).
+  const [loadNonce, setLoadNonce] = React.useState(0)
   const [consoleOpen, setConsoleOpen] = React.useState(false)
   const [consoleEntries, setConsoleEntries] = React.useState([])
   const [busy, setBusy] = React.useState(false)
@@ -216,6 +220,7 @@ function PrototypeView(props) {
 
   const navigateTo = (path) => {
     setCurrentPath(path)
+    setLoadNonce(Date.now())
   }
 
   // ── console relay ──
@@ -258,7 +263,13 @@ function PrototypeView(props) {
     const done = (payload) => { api('automation/result', { id, ...payload }, scope).catch(() => {}) }
     if (op === 'navigate') {
       setCurrentPath(String(cmd.path ?? 'index.html'))
+      setLoadNonce(Date.now())
       done({ ok: true, data: { navigated: cmd.path } })
+      return
+    }
+    if (op === 'reload') {
+      setLoadNonce(Date.now())
+      done({ ok: true, data: { reloaded: true } })
       return
     }
     if (op === 'screenshot') {
@@ -296,11 +307,7 @@ function PrototypeView(props) {
   // the same workspace.
   const fileBase = status?.token ? FILE_BASE + status.token + '/' : null
 
-  const reload = () => {
-    if (iframeRef.current && currentPath && fileBase) {
-      iframeRef.current.src = fileBase + currentPath + '?t=' + Date.now()
-    }
-  }
+  const reload = () => { setLoadNonce(Date.now()) }
 
   if (!status) {
     return h('div', { className: 'pt-root' }, h('div', { className: 'pt-hint' }, 'Loading…'))
@@ -330,7 +337,7 @@ function PrototypeView(props) {
         'Console ' + (consoleEntries.length ? '(' + consoleEntries.length + ')' : ''))),
     h('div', { className: 'pt-view' },
       currentPath && fileBase
-        ? h('iframe', { ref: iframeRef, src: fileBase + currentPath, title: 'prototype' })
+        ? h('iframe', { ref: iframeRef, src: fileBase + currentPath + (loadNonce ? '?t=' + loadNonce : ''), title: 'prototype' })
         : h('div', { className: 'pt-hint' },
           entries !== null && htmlFiles.length === 0
             ? h('div', null, 'No .html files yet.', h('br'), 'Ask the agent to create ', h('code', null, 'prototype/index.html'), ' or add one yourself.')

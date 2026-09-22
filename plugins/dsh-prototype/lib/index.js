@@ -466,7 +466,7 @@ function injectShim(html) {
  * to one shim command; `console`, `results`, `submit` and `wait` are exposed
  * raw because the tab and the agent share the same queue.
  */
-const INTERACTIVE_OPS = ['navigate', 'click', 'fill', 'read', 'eval', 'wait_for', 'wait_stable', 'screenshot']
+const INTERACTIVE_OPS = ['navigate', 'reload', 'click', 'fill', 'read', 'eval', 'wait_for', 'wait_stable', 'screenshot']
 const RAW_OPS = ['console', 'results', 'submit', 'wait']
 const AUTOMATION_OPS = [...INTERACTIVE_OPS, ...RAW_OPS]
 
@@ -515,8 +515,10 @@ function createAutomationTool(ctx, queue) {
   return defineTool({
     name: 'prototype_automation',
     description:
-      'Drive the live Prototype browser view of the workspace: navigate, click, fill, read, eval, wait_for, ' +
-      'wait_stable, screenshot, plus the raw console/results/submit/wait queue ops. Use wait_stable after navigate ' +
+      'Drive the live Prototype browser view of the workspace: navigate, reload, click, fill, read, eval, wait_for, ' +
+      'wait_stable, screenshot, plus the raw console/results/submit/wait queue ops. navigate always loads the page ' +
+      'fresh, even when it is already open, and reload loads the current one again — use either after editing a ' +
+      'prototype file. Use wait_stable after navigate, reload ' +
       'or an action and before a screenshot, so a page that is still mounting or animating is not captured ' +
       'half-drawn. Use it to self-test every prototype screen ' +
       'before handing it over and to reproduce what the requester reports. It opens the Prototype tab automatically ' +

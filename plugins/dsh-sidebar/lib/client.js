@@ -72,7 +72,8 @@ function apply(ctx) {
                   betterSidebar.closeTab(String(cmd.tab ?? ''), scope())
                   await api('result', { id: cmd.id, ok: true, data: { closed: cmd.tab } })
                 } else if (cmd.op === 'open') {
-                  const seed = { type: String(cmd.type ?? '') }
+                  // expand: the agent asked for this tab, so a collapsed panel opens.
+                  const seed = { type: String(cmd.type ?? ''), expand: true }
                   if (typeof cmd.url === 'string' && cmd.url) seed.url = cmd.url
                   betterSidebar.openTab(seed, scope())
                   await api('result', { id: cmd.id, ok: true, data: { opened: cmd.type } })
@@ -98,7 +99,7 @@ function apply(ctx) {
         let lastSeq = null
         const applyEvent = (event) => {
           const meta = event.reveal ? { reveal: { path: event.path, seq: event.seq } } : undefined
-          betterSidebar.openTab({ type: event.tab, ...(meta ? { meta } : {}) }, scope())
+          betterSidebar.openTab({ type: event.tab, expand: true, ...(meta ? { meta } : {}) }, scope())
           if (!meta) return
           // An already-open single tab keeps its seed, so patch every open tab
           // of that type with the reveal as well.

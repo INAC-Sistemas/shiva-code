@@ -1,6 +1,6 @@
 ---
 name: 03-prototype
-description: 'Build the initiative as a live HTML prototype (CDN-first: Tailwind, lucide, Motion, three.js, shadcn-style patterns; every screen animated; localStorage as the database; zero backend), validate every screen and flow with the requester in the Prototype tab using the browser-use API (navigate, click, fill, screenshot, console), and only after full GREEN produce prototype.md with every BDD scenario plus db-schema.json — each audited by a subagent. UX is frozen afterwards.'
+description: 'Build the initiative as a live HTML prototype (CDN-first: Tailwind, lucide, Motion, three.js, shadcn-style patterns; every screen animated; localStorage as the database; zero backend), validate every screen and flow with the requester in the Prototype tab using the browser-use API (navigate, click, fill, screenshot, console), and only after full GREEN produce prototype.md with every BDD scenario plus db-schema.json. UX is frozen afterwards.'
 whenToUse: After /02-core-flows is validated and before /04-tech-plan. Requires /00-start-here and /02-core-flows loaded earlier in this session.
 ---
 
@@ -18,7 +18,7 @@ Then `skill frontend-design` (it loads `ui-ux-pro-max` for the product type's st
 
 Build in **`<workspace>/prototype/`** (create it if missing) with the `write` tool. Non-negotiables:
 
-- **Always CDNs, never hand-rolled infrastructure**: Tailwind Play CDN for styling, themed only by `prototype/theme.js` from `03-palette.md` (role classes such as `bg-primary`, never a color literal or a default Tailwind color); lucide for icons; shadcn/ui-style component patterns implemented on top of Tailwind; three.js for 3D/parallax; recharts/Chart.js for charts. Whatever the screen needs, prefer a CDN library. CDNs are client-side assets, allowed and expected — never penalized by audits.
+- **Always CDNs, never hand-rolled infrastructure**: Tailwind Play CDN for styling, themed only by `prototype/theme.js` from `03-palette.md` (role classes such as `bg-primary`, never a color literal or a default Tailwind color); lucide for icons; shadcn/ui-style component patterns implemented on top of Tailwind; three.js for 3D/parallax; recharts/Chart.js for charts. Whatever the screen needs, prefer a CDN library. CDNs are client-side assets, allowed and expected — never penalized.
 - **Zero backend.** No Node/Python/Go process is created or required. All data is **mocked**: hardcoded lists, in-memory state, and **localStorage** as the database (keys prefixed `proto_<epic>_`).
 - All state faked: auth, payment, hash, ZIP, rollback — simulated. The only goal is UX/UI validation of the core flows. Nothing here is a production requirement.
 - **Navigation rule**: no URL/hash routing (`href="#/x"` blanks the iframe). Pure-JS router: `data-go="screen"` attributes + one delegated click listener toggling view sections. Never navigate the frame itself from page code.
@@ -34,7 +34,8 @@ Drive it with the `prototype_automation` tool — no curl, no manual HTTP. **You
 
 | `op` | Extra args | Effect |
 |---|---|---|
-| `navigate` | `path:'login.html'` | Open a page inside `prototype/` |
+| `navigate` | `path:'login.html'` | Open a page inside `prototype/` — always loads it fresh, even when it is already open |
+| `reload` | — | Load the current page again, after editing its file |
 | `click` | `selector:'#btn'` **or** `text:'Entrar'` | Click; `text` matches visible buttons/links |
 | `fill` | `selector:'#email', value:'a@b.c'` | Native events, framework-safe |
 | `read` | `selector:'.total'` or `attr:'href'` | Assertion data |
@@ -54,8 +55,7 @@ A screen is validated only when the requester explicitly approves it after navig
 When **everything** is GREEN:
 
 1. **Update the upstream artifacts**: `edit` `01-brief.md` and `02-flows.md` for anything validation changed (renames, cut features, new states, tone). Never let the prototype contradict the brief.
-2. **Audit that edit**: `subagent` with paths to both files + the validation ledger + instruction: "verify every validation-driven change is reflected and nothing else was altered; return GREEN or findings." Iterate to GREEN.
-3. **Write `mds/epics/<epic>/prototype.md`** — the frozen UX contract: for **every validated screen**, every scenario as BDD:
+2. **Write `mds/epics/<epic>/prototype.md`** — the frozen UX contract: for **every validated screen**, every scenario as BDD:
 
 ```markdown
 ---
@@ -79,9 +79,8 @@ design: mds/epics/<epic>/03-design.md (<aesthetic name>)
 ## localStorage keys used by the prototype
 ```
 
-4. **Write `mds/epics/<epic>/db-schema.json`** — the schema of the mock data the prototype actually used (entities, fields, types, relations, localStorage keys), so the next phase designs real persistence from evidence instead of guessing.
-5. **Audit prototype.md with a second subagent**: give it `prototype.md`, the prototype file paths, and the validation ledger — "verify every validated screen/state has BDD here, scenarios match what was approved, nothing invented. GREEN or findings."
-6. Both audits GREEN → set `03-prototype-validation.md` `status: validated` and announce the freeze: **from here, no screen, CTA, state, role or name changes without returning to this skill.**
+3. **Write `mds/epics/<epic>/db-schema.json`** — the schema of the mock data the prototype actually used (entities, fields, types, relations, localStorage keys), so the next phase designs real persistence from evidence instead of guessing.
+4. Set `03-prototype-validation.md` `status: validated` and announce the freeze: **from here, no screen, CTA, state, role or name changes without returning to this skill.**
 
 ## Failure handling
 
@@ -99,4 +98,4 @@ design: mds/epics/<epic>/03-design.md (<aesthetic name>)
 
 ## Next
 
-When the prototype and `prototype.md` are GREEN, load `/04-tech-plan` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.
+When the prototype is GREEN and `prototype.md` is written, load `/04-tech-plan` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

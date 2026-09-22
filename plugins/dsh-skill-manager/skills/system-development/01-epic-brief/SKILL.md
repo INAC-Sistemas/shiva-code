@@ -48,7 +48,7 @@ Before leaving C, count answers: fewer than twenty means you skipped some. Go ba
 
 **E — The unasked (week-two wants they did not say)** — propose each as a question with a recommendation, never as an assumption: history/log; reports and who reads them; undo vs confirm; notifications and channel; export/backup; concurrent users; phone/offline/language; sensitive data; 10× scale; six-months-next. **Record rejections too** — a deliberate "no" outranks an unasked question.
 
-## Coverage audit before writing
+## Coverage check before writing
 
 Count: A=10, B=9 blocks, C=20 across four modes, D=capabilities+scenarios complete, E=list presented and answered. A stage short of its count is a stage to go back and finish — not to summarise.
 
