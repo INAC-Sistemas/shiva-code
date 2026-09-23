@@ -1,6 +1,6 @@
 ---
 name: 08-review
-description: Final gate — run the full verification of everything delivered against the epic artifacts, produce the cold-machine human walkthrough, and write the honest delivery report (verified vs not verified) as mds/epics/<epic>/08-review.md.
+description: Final gate — verify everything delivered against the epic artifacts, ask the requester whether to run the test battery before delivering, produce the cold-machine human walkthrough, write the honest delivery report (verified vs not verified) as mds/epics/<epic>/08-review.md, and only after acceptance ask whether to deploy with Docker and create the deploy files.
 whenToUse: When every ticket from /07-build is human_test/done and delivery is next. Requires /00-start-here and /07-build loaded earlier in this session.
 ---
 
@@ -13,8 +13,9 @@ The requester trusts your "done" completely — that is why this skill exists. R
 1. **Read the epic artifacts**: `01-brief.md` (outcome + Must Do), `02-flows.md` (every flow's happy + unhappy paths), `prototype.md` (frozen UX contract), `04-tech-plan.md` (decisions + boundaries).
 2. **Verify outcome, not tickets**: each Must Do from the brief gets evidence — executed command, real output, or the exact reason it cannot be verified from here. A checked ticket whose evidence you cannot reproduce today counts as UNVERIFIED.
 3. **Traceability sweep**: every UX id in `prototype.md` → working feature. Every boundary in the plan ("we will not do X") → still true.
-4. **Full run from cold**: start the system from its container against an empty database — `docker compose down -v` then `docker compose up --build` — and confirm in the log that the migrations were applied, the seed ran and the server is listening; restart once more and confirm no migration is pending and the seed duplicated nothing. Execute the start commands yourself with `bash`/`pwsh`/`terminal_*`, confirm the exact "working" signals, then write the walkthrough a human can follow from a cold machine (see shape). For a deployed deliverable, verify with the connection tools (`railway_cli`/`vercel_cli`/`supabase_cli` `status`) and open the real URL with `browser {op:'navigate'}` + `browser {op:'screenshot'}` — the screenshot is the evidence, not the deploy exit code.
-5. **Write** `mds/epics/<epic>/08-review.md` (shape below) and present the delivery report in the requester's language: what is verified, what is not, what broke and was fixed, what they must test themselves.
+4. **Full run from cold**: from an empty database, run the app's own migrate and seed commands and start it with its framework's command (`pnpm build && pnpm start`, or whatever the stack uses); confirm the exact "working" signals yourself with `bash`/`pwsh`/`terminal_*`, then write the walkthrough a human can follow from a cold machine (see shape). No Docker here: those files do not exist yet (step 5).
+5. **Ask about the test battery, before delivering**: the epic's tests were written ticket by ticket and never run as a suite (`/07-build`). Ask once, in plain language — "quer que eu rode a bateria de testes antes de te entregar?" — with the consequence on each side: running it may surface defects to fix first and takes time, skipping it delivers now with the cases on disk for whenever they want. On a yes, run the whole suite, fix what it breaks through the builders, and report what passed and what did not. On a no, say plainly that the suite exists and was not run.
+6. **Write** `mds/epics/<epic>/08-review.md` (shape below) and present the delivery report in the requester's language: what is verified, what is not, what broke and was fixed, what they must test themselves.
 
 ## Artifact shape
 
@@ -39,14 +40,18 @@ status: delivered
 
 ## Deploy: only after they accept
 
-The whole epic is proven in its own container, locally. **Publishing is a separate conversation that starts only after the requester used the finished system and said it is what they wanted.** Only then — never in `/04-tech-plan`, never mid-build — ask, in one `ask_user_question` call: where it should run (Railway, their own VPS, elsewhere), who owns the account, and what the domain should be. Then follow `/11-connections`: `status`, `login` in the browser, the provisioning order, the explicit `--service`, and the proof that the right service answers on the right URL with a real-browser screenshot.
+The whole epic is proven running locally. **Publishing is a separate conversation that starts only after the requester used the finished system and said it is what they wanted** — never in `/04-tech-plan`, never mid-build. Only then:
+
+1. **Ask whether to deploy with Docker**: "quer publicar esse sistema com Docker?" — yes means the containers are built and published; no means the delivery ends here, running locally, with nothing extra written.
+2. **On a yes, the publication ticket runs**: it creates every deploy file at once — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying the migrations and running the seed on start, `docker-compose.yml` (`skill engineering-standards` rule 7) — and proves them: from an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, the app answers, and a second start applies no migration and duplicates no seed row. Until this yes, none of these files exists in the workspace.
+3. **Then ask where it runs**, in one `ask_user_question` call: the target (Railway, their own VPS, elsewhere), who owns the account, and the domain. Follow `/11-connections`: `status`, `login` in the browser, the provisioning order, the explicit `--service`, and the proof that the right service answers on the right URL with a real-browser screenshot.
 
 Accepted but not published is a complete delivery: say plainly that the system is ready and works, and that publishing is one step whenever they want it.
 
 ## Rules
 
 - Walkthrough steps you have not executed yourself are guesses — run each one first, now, not "earlier".
-- Never ask about hosting, provider, domain, account or credentials before acceptance. A system that is not accepted is never published, so that question would have been spent on a decision nobody needed.
+- Never write a deploy file, and never ask about hosting, provider, domain, account or credentials, before acceptance. A system that is not accepted is never published, so that question would have been spent on a decision nobody needed.
 - Never write "it is running at X"; write how to start it and what "working" looks like.
 - Honest partial delivery ("I could not verify C because …") keeps their trust; one false "done" spends it all.
 - Anything broken found here: say it first, plainly, with the fix or the proposal — never let them discover it.

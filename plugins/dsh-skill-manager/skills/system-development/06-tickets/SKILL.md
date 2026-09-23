@@ -17,8 +17,7 @@ Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-vali
 - Location: `mds/epics/<epic>/06-tickets/NN-<slug>.md` (NN = execution order).
 - Frontmatter (the Kanban tab reads this): `ticket: <slug>`, `epic: <epic>`, `status: active`, `title: <imperative summary>`. Agents move a ticket `active → in_progress → code_test → human_test` (that is `/07-build`'s job). **Never write `status: done`** — Done is the human's move on the Kanban.
 - Coverage matrix first: every UX id, Must Do, contract and test requirement maps to ≥1 ticket. Nothing unmapped.
-- A publication ticket, when the epic has one, is the **last** one and stays `active` until the requester accepts the system in `/08-review`; its provider is not decided now. Containerization is not publication: the image and the local `docker compose` are built early, on purpose.
-- Containerization is one of the first tickets (`skill engineering-standards` rule 7): `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, and `docker-compose.yml`. Every later ticket that changes schema, seed or deploy carries the container check in its Done when.
+- **The publication ticket is the last one and stays `active` until the requester accepts the system and asks for Docker** (`/08-review`). It is the only ticket that writes deploy files — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, `docker-compose.yml` (`skill engineering-standards` rule 7) — and no earlier ticket may create or check any of them. Its provider is not decided now.
 
 ## Ticket body contract
 
@@ -43,9 +42,10 @@ title: <imperative title>
 - Request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and component split — with the stack's actual names (`skill engineering-standards`)
 - Compatibility constraints
 ## Steps (concrete implementation + evidence steps)
+## Tests to write (cases for the Done when; written under `testes/`, run only if the requester asks for the battery in /08-review)
 ## Done when
 - [ ] <observable condition>
-- [ ] <exact command → expected output>
+- [ ] <the flow step the principal walks in the running app → what is seen>
 - [ ] Regression: <prior flow still works>
 - [ ] The engineering standards this ticket actually touches, named one by one with its symbols (`skill engineering-standards`, "In /06-tickets") — never the whole list copied
 ## Agent protocol

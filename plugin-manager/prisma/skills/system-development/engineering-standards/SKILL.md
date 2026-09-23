@@ -1,12 +1,12 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, Docker deployment whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
 whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each ticket's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI ticket.
 ---
 
 # Engineering standards
 
-These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system deploys with Docker (rule 7).
+These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment whose files are written only after acceptance (rule 7).
 
 ## The rules
 
@@ -128,9 +128,9 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 **Do not go asynchronous by default.** Do not move an operation to asynchronous execution solely for architectural purposes. Synchronous execution is preferred when the operation is short-lived and the caller requires its result immediately.
 
-### 7. Containerized deployment
+### 7. Containerized deployment (only after the system is accepted)
 
-Every system is built to deploy as Docker containers, whatever the stack and hosting target.
+Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target — but **no deploy file is written until the requester has used the finished system, accepted it, and answered yes to the Docker question in `/08-review`**. During `/04-tech-plan` this rule is a requirement on the future target; during `/06-tickets` and `/07-build` nothing here is built, and the system runs locally from its framework's own command. On a yes, one publication ticket creates everything below at once — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh`, `docker-compose.yml` — and proves it. On a no, the delivery is complete without them.
 
 **The image.**
 - `Dockerfile` (multi-stage: dependencies, build, runtime) and `.dockerignore` at the workspace root. The runtime stage carries only what serving, migrating and seeding need; build tools stay in the earlier stages.
@@ -150,7 +150,7 @@ A failed migration or seed stops the container instead of serving on an old sche
 
 **Local run.** `docker-compose.yml` at the root starts the application with the same image and entrypoint as deploy, plus the services it needs (queue, the workers of rule 6, and a database server when development does not use SQLite); a service database is waited for with `depends_on` and `condition: service_healthy`.
 
-**Evidence.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing.
+**Evidence, once the files exist.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing. This is the publication ticket's own "Done when" — never a check on a ticket built before the acceptance.
 
 ### 8. Development database
 
@@ -215,9 +215,9 @@ Each ticket's **Implementation contract** names its request validator, use case,
 - [ ] Endpoint documented in the API specification with its input, output, errors, authentication and every HTTP status it answers, matching its behavior.
 - [ ] Background work (when the ticket has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
 - [ ] UI built from the design system's tokens and components (Tailwind utilities and theme variables only); any chart uses the project's standard library (Recharts).
-- [ ] Schema, seed or deploy changes (when the ticket has any): `docker compose up --build` from an empty database applies the migrations, runs the seed and serves; a second start applies nothing and the seed duplicates no row.
+- [ ] Schema or seed changes (when the ticket has any): from an empty database, the app's own migrate and seed commands bring it up and the flow works; running them again applies nothing and duplicates no row.
 
-The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — is one of the first tickets, so every later ticket is verified in the container.
+The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication ticket, written only after the requester accepts the system and asks for Docker (`/08-review`).
 
 ## In /07-build
 
@@ -240,6 +240,7 @@ Builders of backend, API or UI tickets load this skill with the others the ticke
 - a background task without timeout, attempts or failure handling; one that is not idempotent although it can run twice; one carrying whole models or secrets in its payload; one dispatched inside an open transaction; a scheduled task that can overlap itself;
 - a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason;
 - a development setup that requires a database server although the plan records SQLite, or a hardcoded database URL instead of one read from the environment;
-- a project without a multi-stage `Dockerfile`, `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
+- any deploy file (`Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml`, provider config) created before the requester accepted the system and asked for Docker;
+- in the publication ticket: a `Dockerfile` that is not multi-stage, a missing `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
 
 Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend> --exclude-dir=node_modules --exclude-dir=.next` finds nothing.
