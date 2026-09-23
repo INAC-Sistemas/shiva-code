@@ -120,6 +120,17 @@ test('builder never writes the process surfaces, tests, git or outside the works
   }
 })
 
+test('the evaluator writes nothing at all, and delegates nothing', () => {
+  const evaluator = { depth: 1, role: 'evaluator' }
+  for (const file of ['src/app.js', 'testes/x.test.js', 'mds/epics/e/01-brief.md', 'package.json', 'app/page.tsx']) {
+    assert.match(write(file, 'x', evaluator), /GUARD\[evaluator\]/, `evaluator must not write ${file}`)
+  }
+  assert.match(
+    guard(exec('subagent', { prompt: 'x' }, evaluator)),
+    /subagente não delega/,
+  )
+})
+
 test('qa surface is unchanged (regression)', () => {
   const qa = { depth: 1, role: 'qa' }
   assert.equal(write('testes/x.test.js', 'x', qa), ALLOW)

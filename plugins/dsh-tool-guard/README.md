@@ -15,6 +15,8 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
      layout.
    - **qa**: `testes/` and the test-runner configs (`vitest.config.*`,
      `playwright.config.*`) directly at the workspace root, never nested.
+   - **evaluator**: nothing. It judges the diff against the artifacts, and its
+     verdict is the text it returns.
 2. **Done is the human's move.** Any `write`/`edit` whose text contains a
    frontmatter `status: done` is denied for every agent. The human sets Done on
    the Kanban board, which writes the file host-side, not through a tool call.

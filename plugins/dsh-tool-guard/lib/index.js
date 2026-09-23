@@ -12,8 +12,9 @@
 //      anywhere in the workspace except the process surfaces (`mds/`,
 //      `prototype/`, `testes/`, `.git/`) — the project may use any language and
 //      framework layout — and run build/typecheck; `qa` (post-human regression)
-//      may write only testes/ and run suites. Neither may spawn subagents;
-//      neither may git commit/push;
+//      may write only testes/ and run suites; `evaluator` (judges the diff
+//      against the artifacts) writes nothing at all. None may spawn subagents;
+//      none may git commit/push;
 //   3. mechanical hooks on every write/edit: encoding integrity (no U+FFFD may
 //      be introduced), the frozen prototype contract, UX-* traceability, and
 //      the single Kanban transition rule (`active` only becomes `in_progress`);
@@ -23,7 +24,8 @@
 //   6. `status: done` is denied to every agent: Done is the human's move at the
 //      end of the flow.
 //
-// Role binding: the `subagent` tool accepts `role: "builder" | "qa"`; the tool
+// Role binding: the `subagent` tool takes `role` as free text (its schema names
+// `builder` and `qa`, and `evaluator` passes through the same way); the tool
 // forwards it as the child's `guardRole` agent option, which this guard reads
 // synchronously. No role → inherited behavior, unchanged.
 
@@ -187,6 +189,11 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
     if (!inside(cwd, file, QA_ALLOW_ROOTS[0]) && !isRootConfigFile(cwd, file, TEST_RUNNER_FILES)) {
       return `GUARD[qa]: bloqueado — escrita fora de testes/ e das configs de teste (${TEST_RUNNER_FILES.join(', ')}) (got ${file || '<empty>'}); qa só escreve testes`
     }
+  } else if (role === 'evaluator') {
+    // The evaluator judges; it never touches what it judges. Its verdict is
+    // the returned text, so every write surface is closed — including the
+    // tests, which belong to qa.
+    return `GUARD[evaluator]: bloqueado — o avaliador não escreve nada (got ${file || '<empty>'}); o veredito é o texto que ele devolve`
   } else if (depth === 0) {
     // The principal agent's law: the process folders, plus the product surface
     // as its fast-fix window. testes/ stays qa-only; .git/ stays with the human.
@@ -257,7 +264,7 @@ function check(exec, allowedRoots) {
   if (role === 'builder' && (exec.name === 'browser' || exec.name === 'prototype_automation')) {
     return 'GUARD[builder]: bloqueado — tool de browser/prototype não é do builder; permitido só código — o teste é do principal'
   }
-  if ((role === 'builder' || role === 'qa') && exec.name === 'subagent') {
+  if ((role === 'builder' || role === 'qa' || role === 'evaluator') && exec.name === 'subagent') {
     return `GUARD[${role}]: bloqueado — subagente não delega (spawn é do principal)`
   }
 

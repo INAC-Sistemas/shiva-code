@@ -126,12 +126,12 @@ status: draft
 <the option chosen, in their words, and what it implies: how an attempt starts, what
 carries over between attempts, and when it restarts from zero>
 
-## Agent roles per phase
-| Role | Builds | Tests | Evaluates | Must NOT |
-|---|---|---|---|---|
-| builder | … | — | — | touch `status:`, redesign UX |
-| qa-tester | — | … | — | edit product code |
-| evaluator | — | — | … | edit anything |
+## Agent roles per phase (the `role` each spawn passes to the guard)
+| Role | `role:` | Builds | Writes tests | Evaluates | Must NOT |
+|---|---|---|---|---|---|
+| builder | `builder` | … | — | — | touch `status:`, redesign UX |
+| qa-tester | `qa` | — | … | — | edit product code, run the battery |
+| evaluator | `evaluator` | — | — | … | write anything at all |
 
 ## Verification rule per ticket
 <what must be proven with real output before a ticket counts as ready: the ticket's
