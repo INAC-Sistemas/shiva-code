@@ -49,6 +49,9 @@ function fakeHost() {
     listConfigurableProviders: () => [
       { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
       { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'] },
+      // A route only configuration declared: a self-hosted server the adapter
+      // ships nothing about. The Models page offers it, so this step must too.
+      { provider: 'ollama', displayName: 'Ollama', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'ollama'], declared: true },
     ],
     discoverModels: async (ns, request) => {
       if (ns !== 'llm-pi-ai') throw new Error('no discovery')
@@ -142,11 +145,12 @@ describe('state', () => {
 })
 
 describe('chat', () => {
-  it('lists only the providers an adapter declares, with their key state', async () => {
+  it('lists every route the runtime can serve, curated first, with their key state', async () => {
     const { body } = await call('/setup/api/chat/providers')
     expect(body.providers).toEqual([
       { provider: 'deepseek-official', displayName: 'DeepSeek', kind: 'Fabricante', configured: true },
       { provider: 'openai', displayName: 'OpenAI', kind: 'Fabricante', configured: false },
+      { provider: 'ollama', displayName: 'Ollama', kind: 'Configurado aqui', configured: false },
     ])
   })
 

@@ -36,6 +36,50 @@ export const CHAT_PROVIDERS: readonly ChatProviderEntry[] = [
   { provider: 'together', displayName: 'Together AI', kind: 'Inferência' },
 ]
 
+/** One route the LLM runtime reports as configurable. */
+export interface ConfigurableRoute {
+  provider: string
+  displayName: string
+  /** Absent when the adapter draws no distinction; true for a route only configuration declared. */
+  declared?: boolean
+}
+
+/** Shown under the name of a route the curated list does not describe. */
+const DECLARED_KIND = 'Configurado aqui'
+const OTHER_KIND = 'Disponível'
+
+/**
+ * Every provider the wizard offers: the curated ones first, then every other
+ * route this installation can serve.
+ *
+ * The curated entries carry names and groupings a person recognizes, and their
+ * order is the order they are offered in. Everything else the LLM runtime
+ * reports as configurable follows, by name — including a route configuration
+ * declared by hand, such as a self-hosted Ollama. Leaving those out made the
+ * Models page and this step disagree: a route someone configured there could
+ * not be chosen here.
+ * @param curated - the wizard's own catalog, in display order.
+ * @param routes - what the runtime reports as configurable.
+ * @returns the providers to offer, curated first.
+ */
+export function offeredChatProviders(
+  curated: readonly ChatProviderEntry[],
+  routes: readonly ConfigurableRoute[],
+): ChatProviderEntry[] {
+  const byRoute = new Map(routes.map(route => [route.provider, route]))
+  const offered = curated.filter(entry => byRoute.has(entry.provider))
+  const known = new Set(offered.map(entry => entry.provider))
+  const rest = routes
+    .filter(route => !known.has(route.provider))
+    .map(route => ({
+      provider: route.provider,
+      displayName: route.displayName === '' ? route.provider : route.displayName,
+      kind: route.declared === true ? DECLARED_KIND : OTHER_KIND,
+    }))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName))
+  return [...offered, ...rest]
+}
+
 /**
  * Narrow the provider list by what the person typed.
  *

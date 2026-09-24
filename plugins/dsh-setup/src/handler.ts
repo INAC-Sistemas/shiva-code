@@ -20,7 +20,7 @@ import {
   isHttpUrl, probeChat, probeCompletion, probeEmbedding, probeOpenRouterKey,
 } from './probes.ts'
 import type { FetchLike } from './probes.ts'
-import { CHAT_PROVIDERS, deriveKeyRef } from './providers.ts'
+import { CHAT_PROVIDERS, offeredChatProviders, deriveKeyRef } from './providers.ts'
 import type { ConfigurableProvider, CredentialsFace, LlmFace, SetupServices } from './services.ts'
 import {
   CHAT_CONNECT_ROUTE, CHAT_MODELS_ROUTE, CHAT_PROVIDERS_ROUTE, COMPLETE_ROUTE,
@@ -234,7 +234,10 @@ export function createSetupHandler(
       return fail(503, 'O serviço de modelos ainda está carregando. Tente de novo em instantes.')
     }
     const providers: ChatProviderOption[] = []
-    for (const entry of CHAT_PROVIDERS) {
+    // Everything the runtime can serve, not just the curated dozen: a route
+    // configured on the Models page — a gateway, a self-hosted Ollama — must be
+    // choosable here too.
+    for (const entry of offeredChatProviders(CHAT_PROVIDERS, llm.listConfigurableProviders())) {
       const route = chatRoute(services, llm, entry.provider)
       if (route === undefined) continue
       providers.push({ ...entry, configured: await configured(credentials, route.ref) })
