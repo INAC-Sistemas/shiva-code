@@ -102,6 +102,24 @@ describe('DeepSeek plugin package inventory', () => {
       .rejects.toThrow(/must declare non-empty name and version/)
   })
 
+  it('reads a BOM-prefixed manifest, which one dependency is enough to fail every request with', async () => {
+    const { ctx, root } = await harness()
+    const dir = join(root, 'bom')
+    await mkdir(dir, { recursive: true })
+    // Windows tooling writes manifests with a byte order mark; Node's own
+    // module loader ignores it, and plain JSON.parse does not.
+    await writeFile(
+      join(dir, 'package.json'),
+      `\uFEFF${JSON.stringify({ type: 'module', name: 'bom-package', version: '2.0.0' })}\n`,
+    )
+    await writeFile(join(dir, 'plugin.mjs'), 'export default () => {}\n')
+    await ctx.loader.create({ name: './bom/plugin.mjs' })
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
+      .resolves.toMatchObject({
+        fields: { dsh_plugin_packages: { packages: [{ name: 'bom-package', version: '2.0.0' }] } },
+      })
+  })
+
   it('omits a loose ESM module whose nearest manifest only marks the module type', async () => {
     const { ctx, root } = await harness()
     const marker = await packagePlugin(root, 'marker-only', {})

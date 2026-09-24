@@ -57,9 +57,21 @@ function barePackageName(specifier: string): string | undefined {
   return first.startsWith('@') ? `${first}/${second}` : first
 }
 
+/**
+ * Parse a manifest the way Node's own module loader does: a leading UTF-8 byte
+ * order mark is ignored. Windows tooling writes manifests with one, plain
+ * `JSON.parse` rejects it, and this runs over EVERY active plugin on EVERY
+ * request — so one BOM-prefixed dependency would fail every model call.
+ * @param path - absolute path of the manifest.
+ * @returns the parsed manifest.
+ */
+function readManifest(path: string): PackageManifest {
+  return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, '')) as PackageManifest
+}
+
 /** Read one manifest identity, optionally treating an absent name as a loose-module marker. */
 function identityFromManifest(path: string, allowAnonymous: boolean): DeepSeekPluginPackageIdentity | undefined {
-  const manifest = JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
+  const manifest = readManifest(path)
   if (allowAnonymous && manifest.name === undefined) return undefined
   if (typeof manifest.name !== 'string' || manifest.name.length === 0
     || typeof manifest.version !== 'string' || manifest.version.length === 0) {

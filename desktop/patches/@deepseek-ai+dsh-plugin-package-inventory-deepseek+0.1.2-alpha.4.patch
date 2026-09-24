@@ -1,0 +1,26 @@
+diff --git a/node_modules/@deepseek-ai/dsh-plugin-package-inventory-deepseek/lib/index.js b/node_modules/@deepseek-ai/dsh-plugin-package-inventory-deepseek/lib/index.js
+--- a/node_modules/@deepseek-ai/dsh-plugin-package-inventory-deepseek/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-plugin-package-inventory-deepseek/lib/index.js
+@@ -27,9 +27,21 @@
+ 	const [first = "", second = ""] = specifier.split("/");
+ 	return first.startsWith("@") ? `${first}/${second}` : first;
+ }
++/**
++* Parse a manifest the way Node's own module loader does: a leading UTF-8 byte
++* order mark is ignored. Windows tooling writes manifests with one, plain
++* JSON.parse rejects it, and this runs over EVERY active plugin on EVERY
++* request — so one BOM-prefixed dependency fails every model call with
++* REQUEST_EXTENSION.
++* @param path - absolute path of the manifest.
++* @returns the parsed manifest.
++*/
++function readManifest(path) {
++	return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
++}
+ /** Read one manifest identity, optionally treating an absent name as a loose-module marker. */
+ function identityFromManifest(path, allowAnonymous) {
+-	const manifest = JSON.parse(readFileSync(path, "utf8"));
++	const manifest = readManifest(path);
+ 	if (allowAnonymous && manifest.name === void 0) return void 0;
+ 	if (typeof manifest.name !== "string" || manifest.name.length === 0 || typeof manifest.version !== "string" || manifest.version.length === 0) throw new Error(`plugin-package-inventory-deepseek: ${path} must declare non-empty name and version`);
+ 	return {
