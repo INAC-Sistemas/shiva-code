@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planSetup, SETUP_VERSION } from '../src/plan.ts'
+import { memoryInstalling, planSetup, SETUP_VERSION } from '../src/plan.ts'
 import type { SetupFacts } from '../src/plan.ts'
 
 const done: SetupFacts = {
@@ -50,5 +50,19 @@ describe('planSetup', () => {
 
   it('does not hold the app for an image generator that is not loaded', () => {
     expect(planSetup({ ...done, image: { available: false, configured: false } }).open).toBe(false)
+  })
+})
+
+describe('the memory step and the OpenViking installer', () => {
+  it('waits while the install is still running, and stops waiting once it lands', () => {
+    // The install starts by itself at plugin boot, so a fresh machine reaches
+    // this step mid-install.
+    expect(memoryInstalling({ installed: false, phase: 'idle' })).toBe(true)
+    expect(memoryInstalling({ installed: false, phase: 'installing' })).toBe(true)
+    expect(memoryInstalling({ installed: true, phase: 'done' })).toBe(false)
+  })
+
+  it('stops waiting on a failed install, so the step never traps the person', () => {
+    expect(memoryInstalling({ installed: false, phase: 'error' })).toBe(false)
   })
 })

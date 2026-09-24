@@ -27,10 +27,13 @@ import type { SummaryRow } from './steps/SummaryStep.tsx'
 import {
   BACKDROP, CARD, EYEBROW, PROGRESS, SEGMENT, SEGMENT_DONE, SUBTITLE, TITLE,
 } from './styles.ts'
-import { planSetup } from '../plan.ts'
+import { memoryInstalling, planSetup } from '../plan.ts'
 import type { StepId } from '../plan.ts'
 import { STATE_ROUTE } from '../wire.ts'
 import type { MemoryChoice, SetupState } from '../wire.ts'
+
+/** How often the memory step re-reads the installer's progress. */
+const MEMORY_POLL_MS = 1500
 
 /** Props of {@link SetupGate}. */
 export interface SetupGateProps {
@@ -142,6 +145,23 @@ export function SetupGate({ session }: SetupGateProps): ReactNode {
   const back = useCallback(() => { setIndex(current => Math.max(0, current - 1)) }, [])
 
   const step = steps[index]
+  // The OpenViking install starts by itself when the plugin boots, so on a
+  // fresh machine it is still running while the wizard walks chat and image.
+  // The memory step is the one that needs it finished, so only that step
+  // follows the installer — and only while it is still working.
+  const installing = step === 'memory' && facts?.memory != null && memoryInstalling(facts.memory)
+  useEffect(() => {
+    if (!installing) return
+    const controller = new AbortController()
+    const timer = setInterval(() => {
+      void pluginStatus<MemoryStatus>(MEMORY_STATUS, controller.signal).then((memory) => {
+        if (memory === null || controller.signal.aborted) return
+        setFacts(current => current === undefined ? current : { ...current, memory })
+      })
+    }, MEMORY_POLL_MS)
+    return () => { controller.abort(); clearInterval(timer) }
+  }, [installing])
+
   if (!signedIn || facts === undefined || step === undefined) return null
 
   const rows: SummaryRow[] = [

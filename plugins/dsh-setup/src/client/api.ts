@@ -26,7 +26,12 @@ export interface MemoryStatus {
   ok: true
   configured: boolean
   installed: boolean
+  /** `idle` before the installer runs, then `installing`, `done` or `error`. */
   phase: string
+  /** The installer's current stage (`interpreter`, `venv`, `wheel`…), for the waiting screen. */
+  step?: string
+  /** The installer's rolling log tail, newest last. */
+  log?: string[]
   openrouterKey: boolean
 }
 

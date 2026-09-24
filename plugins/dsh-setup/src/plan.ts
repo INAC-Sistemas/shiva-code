@@ -17,6 +17,22 @@ import type { SetupMarker } from './wire.ts'
  */
 export const SETUP_VERSION = '2026-09-17.1'
 
+/**
+ * Whether the memory step must wait instead of offering its form.
+ *
+ * `dsh-openviking` starts installing by itself when it boots — a Python in
+ * range, a venv, the pinned wheel — so on a fresh machine the wizard reaches
+ * this step while that is still running. Configuring against a server that
+ * does not exist yet reads as "it saved and nothing happened", so the step
+ * waits. A failed install stops the wait: nothing it could show would change,
+ * and the form's own note says the server comes up once it is installed.
+ * @param status - the plugin's status as its route reports it.
+ * @returns true while the step should show the installer's progress.
+ */
+export function memoryInstalling(status: { installed: boolean, phase: string }): boolean {
+  return !status.installed && status.phase !== 'error'
+}
+
 /** One screen of the wizard, in display order. */
 export type StepId = 'chat' | 'image' | 'memory' | 'summary'
 

@@ -14,6 +14,7 @@ import type { MemoryModels, MemoryStatus } from '../api.ts'
 import {
   CHECK_ROW, ERROR, FIELD, FOOTER, INPUT, LABEL, LINK, NOTE, PRIMARY, SECONDARY, SPACER,
 } from '../styles.ts'
+import { memoryInstalling } from '../../plan.ts'
 import { MEMORY_PRESETS } from '../../providers.ts'
 import { MEMORY_TEST_ROUTE } from '../../wire.ts'
 import type { MemoryChoice, MemoryTestResult } from '../../wire.ts'
@@ -103,12 +104,44 @@ export function MemoryStep({ status, openrouterKey, onDone, onBack }: MemoryStep
 
   const disabled = busy !== undefined
 
+  // The install starts by itself when the plugin boots and takes minutes on a
+  // fresh machine: a Python in range, a venv, the pinned wheel. Configuring
+  // against a server that does not exist yet reads as "it saved and nothing
+  // happened", so the step waits here and shows what the installer is doing.
+  // A failed install does not trap anyone: the step falls through to the form,
+  // whose own note says the server comes up once it is installed.
+  if (memoryInstalling(status)) {
+    const tail = (status.log ?? []).slice(-6)
+    return (
+      <>
+        <p style={NOTE}>
+          Opcional. O OpenViking dá ao agente uma memória de longo prazo. Ele está sendo instalado
+          agora (Python e dependências) e a configuração abre assim que terminar — isso leva alguns
+          minutos na primeira vez.
+        </p>
+        <div style={FIELD}>
+          <span style={LABEL}>{status.step === undefined || status.step === '' ? 'Preparando…' : status.step}</span>
+          {tail.length === 0
+            ? <span style={NOTE}>Aguardando o instalador responder…</span>
+            : tail.map((line, position) => <span key={`${String(position)}:${line}`} style={NOTE}>{line}</span>)}
+        </div>
+        <div style={FOOTER}>
+          <button type="button" style={SECONDARY} onClick={onBack}>Voltar</button>
+          <span style={SPACER} />
+          <button type="button" style={LINK} onClick={() => { onDone('skipped', 'Pulado') }}>
+            Pular
+          </button>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <p style={NOTE}>
         Opcional. O OpenViking dá ao agente uma memória de longo prazo e precisa de um modelo de
         embedding; um modelo de visão (VLM) é opcional.
-        {status.installed ? '' : ' O servidor ainda está sendo instalado em segundo plano: a configuração fica salva e ele sobe quando terminar.'}
+        {status.installed ? '' : ' A instalação falhou: a configuração fica salva e o servidor sobe quando ele for instalado.'}
       </p>
 
       <div style={FIELD}>
