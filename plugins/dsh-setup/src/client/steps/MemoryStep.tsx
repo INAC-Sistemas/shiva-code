@@ -14,6 +14,7 @@ import type { MemoryModels, MemoryStatus } from '../api.ts'
 import {
   CHECK_ROW, ERROR, FIELD, FOOTER, INPUT, LABEL, LINK, NOTE, PRIMARY, SECONDARY, SPACER,
 } from '../styles.ts'
+import { ModelField } from '../ModelField.tsx'
 import { memoryInstalling } from '../../plan.ts'
 import { MEMORY_PRESETS } from '../../providers.ts'
 import { MEMORY_TEST_ROUTE } from '../../wire.ts'
@@ -51,7 +52,7 @@ export function MemoryStep({ status, openrouterKey, onDone, onBack }: MemoryStep
   const [suggestions, setSuggestions] = useState<{ embedding: string[], vision: string[] }>({ embedding: [], vision: [] })
   const [busy, setBusy] = useState<string | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
-  const ids = { preset: useId(), base: useId(), key: useId(), embedding: useId(), vlm: useId(), embeddingList: useId(), vlmList: useId() }
+  const ids = { preset: useId(), base: useId(), key: useId(), embedding: useId(), vlm: useId() }
 
   useEffect(() => {
     if (presetId !== 'openrouter' || !openrouterKey) {
@@ -193,22 +194,15 @@ export function MemoryStep({ status, openrouterKey, onDone, onBack }: MemoryStep
         </div>
       ) : null}
 
-      <div style={FIELD}>
-        <label style={LABEL} htmlFor={ids.embedding}>Modelo de embedding</label>
-        <input
-          id={ids.embedding}
-          style={INPUT}
-          list={ids.embeddingList}
-          spellCheck={false}
-          value={embedding}
-          disabled={disabled}
-          placeholder="ex.: openai/text-embedding-3-small"
-          onChange={(event) => { setEmbedding(event.target.value) }}
-        />
-        <datalist id={ids.embeddingList}>
-          {suggestions.embedding.map(id => <option key={id} value={id} />)}
-        </datalist>
-      </div>
+      <ModelField
+        id={ids.embedding}
+        label="Modelo de embedding"
+        value={embedding}
+        options={suggestions.embedding.map(id => ({ id }))}
+        disabled={disabled}
+        placeholder="ex.: openai/text-embedding-3-small"
+        onChange={setEmbedding}
+      />
 
       <label style={CHECK_ROW}>
         <input type="checkbox" checked={useVlm} disabled={disabled} onChange={(event) => { setUseVlm(event.target.checked) }} />
@@ -216,22 +210,15 @@ export function MemoryStep({ status, openrouterKey, onDone, onBack }: MemoryStep
       </label>
 
       {useVlm ? (
-        <div style={FIELD}>
-          <label style={LABEL} htmlFor={ids.vlm}>Modelo de visão</label>
-          <input
-            id={ids.vlm}
-            style={INPUT}
-            list={ids.vlmList}
-            spellCheck={false}
-            value={vlm}
-            disabled={disabled}
-            placeholder="ex.: google/gemini-2.0-flash-001"
-            onChange={(event) => { setVlm(event.target.value) }}
-          />
-          <datalist id={ids.vlmList}>
-            {suggestions.vision.map(id => <option key={id} value={id} />)}
-          </datalist>
-        </div>
+        <ModelField
+          id={ids.vlm}
+          label="Modelo de visão"
+          value={vlm}
+          options={suggestions.vision.map(id => ({ id }))}
+          disabled={disabled}
+          placeholder="ex.: google/gemini-2.0-flash-001"
+          onChange={setVlm}
+        />
       ) : null}
 
       {error === undefined ? null : <p style={ERROR}>{error}</p>}

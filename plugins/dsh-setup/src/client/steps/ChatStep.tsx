@@ -18,6 +18,7 @@ import {
   CHOICE, CHOICE_HINT, CHOICE_ROW, CHOICE_ROW_SELECTED, CHOICE_SELECTED, ERROR, FIELD, FOOTER,
   GRID_SCROLL, INPUT, LABEL, LINK, NOTE, PRIMARY, SECONDARY, SPACER,
 } from '../styles.ts'
+import { ModelField } from '../ModelField.tsx'
 import { matchChatProviders } from '../../providers.ts'
 import {
   CHAT_CONNECT_ROUTE, CHAT_CUSTOM_CONNECT_ROUTE, CHAT_CUSTOM_MODELS_ROUTE, CHAT_MODELS_ROUTE,
@@ -65,7 +66,6 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
   const searchId = useId()
   const keyId = useId()
   const modelId = useId()
-  const listId = useId()
   const nameId = useId()
   const baseId = useId()
 
@@ -279,22 +279,15 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
             />
           </div>
 
-          <div style={FIELD}>
-            <label style={LABEL} htmlFor={modelId}>Modelo</label>
-            <input
-              id={modelId}
-              style={INPUT}
-              list={listId}
-              spellCheck={false}
-              value={model}
-              disabled={busy}
-              placeholder={models.length === 0 ? 'Digite o id do modelo ou busque no endereço' : 'Escolha ou digite o id do modelo'}
-              onChange={(event) => { setModel(event.target.value) }}
-            />
-            <datalist id={listId}>
-              {models.map(entry => <option key={entry.id} value={entry.id}>{entry.name ?? entry.id}</option>)}
-            </datalist>
-          </div>
+          <ModelField
+            id={modelId}
+            label="Modelo"
+            value={model}
+            options={models}
+            disabled={busy}
+            placeholder={models.length === 0 ? 'Digite o id do modelo ou busque no endereço' : 'Escolha ou digite o id do modelo'}
+            onChange={setModel}
+          />
 
           <div>
             <button
@@ -329,22 +322,15 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
             />
           </div>
 
-          <div style={FIELD}>
-            <label style={LABEL} htmlFor={modelId}>Modelo</label>
-            <input
-              id={modelId}
-              style={INPUT}
-              list={listId}
-              spellCheck={false}
-              value={model}
-              disabled={busy}
-              placeholder={models.length === 0 ? 'Digite o id do modelo' : 'Escolha ou digite o id do modelo'}
-              onChange={(event) => { setModel(event.target.value) }}
-            />
-            <datalist id={listId}>
-              {models.map(entry => <option key={entry.id} value={entry.id}>{entry.name ?? entry.id}</option>)}
-            </datalist>
-          </div>
+          <ModelField
+            id={modelId}
+            label="Modelo"
+            value={model}
+            options={models}
+            disabled={busy}
+            placeholder={models.length === 0 ? 'Digite o id do modelo' : 'Escolha ou digite o id do modelo'}
+            onChange={setModel}
+          />
         </>
       )}
 

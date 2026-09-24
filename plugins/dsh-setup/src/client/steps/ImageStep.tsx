@@ -14,6 +14,7 @@ import {
   CHOICE, CHOICE_HINT, CHOICE_SELECTED, ERROR, FIELD, FOOTER, GRID, INPUT, LABEL, LINK, NOTE,
   PRIMARY, SECONDARY, SPACER,
 } from '../styles.ts'
+import { ModelField } from '../ModelField.tsx'
 import { IMAGE_PROVIDERS } from '../../providers.ts'
 import { IMAGE_CONNECT_ROUTE } from '../../wire.ts'
 import type { ImageProvider, OkResult, SetupState } from '../../wire.ts'
@@ -57,7 +58,6 @@ export function ImageStep({ assets, keys, onDone, onBack }: ImageStepProps): Rea
   const [error, setError] = useState<string | undefined>(undefined)
   const keyId = useId()
   const modelId = useId()
-  const listId = useId()
 
   useEffect(() => {
     const controller = new AbortController()
@@ -132,22 +132,15 @@ export function ImageStep({ assets, keys, onDone, onBack }: ImageStepProps): Rea
         />
       </div>
 
-      <div style={FIELD}>
-        <label style={LABEL} htmlFor={modelId}>Modelo de imagem</label>
-        <input
-          id={modelId}
-          style={INPUT}
-          list={listId}
-          spellCheck={false}
-          value={model}
-          disabled={busy}
-          placeholder="Escolha ou digite o id do modelo"
-          onChange={(event) => { setModel(event.target.value) }}
-        />
-        <datalist id={listId}>
-          {models.map(id => <option key={id} value={id} />)}
-        </datalist>
-      </div>
+      <ModelField
+        id={modelId}
+        label="Modelo de imagem"
+        value={model}
+        options={models.map(id => ({ id }))}
+        disabled={busy}
+        placeholder="Escolha ou digite o id do modelo"
+        onChange={setModel}
+      />
 
       {error === undefined ? null : <p style={ERROR}>{error}</p>}
 

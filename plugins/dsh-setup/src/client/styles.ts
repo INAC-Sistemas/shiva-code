@@ -183,6 +183,67 @@ export const INPUT: CSSProperties = {
   lineHeight: '20px',
 }
 
+/** Anchors a {@link SUGGESTIONS} list to the field it belongs to. */
+export const ANCHOR: CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  minWidth: 0,
+}
+
+/** Opens the suggestion list from inside the input's right edge. */
+export const CARET: CSSProperties = {
+  position: 'absolute',
+  top: 1,
+  right: 1,
+  bottom: 1,
+  width: 32,
+  border: 'none',
+  borderRadius: '0 10px 10px 0',
+  background: 'none',
+  color: 'var(--dsw-alias-label-tertiary)',
+  fontFamily: 'inherit',
+  fontSize: 11,
+  cursor: 'pointer',
+}
+
+/**
+ * The suggestion list, capped so a provider serving hundreds of models scrolls
+ * instead of covering the window. A native `datalist` cannot do this: its popup
+ * grows to fit and the host clips whatever falls outside, leaving entries no
+ * scrollbar reaches.
+ */
+export const SUGGESTIONS: CSSProperties = {
+  position: 'absolute',
+  top: 'calc(100% + 4px)',
+  left: 0,
+  right: 0,
+  zIndex: 2,
+  margin: 0,
+  padding: 4,
+  maxHeight: 220,
+  overflowY: 'auto',
+  listStyle: 'none',
+  borderRadius: 12,
+  border: '1px solid var(--dsw-alias-border-l2)',
+  background: 'var(--dsw-alias-bg-layer-3)',
+  boxShadow: 'var(--dsw-shadow-lv2)',
+}
+
+export const SUGGESTION: CSSProperties = {
+  padding: '6px 10px',
+  borderRadius: 8,
+  color: 'var(--dsw-alias-label-primary)',
+  fontSize: 13,
+  lineHeight: '20px',
+  cursor: 'pointer',
+  overflowWrap: 'anywhere',
+}
+
+export const SUGGESTION_ACTIVE: CSSProperties = {
+  ...SUGGESTION,
+  background: 'var(--dsw-alias-bg-layer-4, var(--dsw-alias-bg-layer-2))',
+}
+
 export const CHECK_ROW: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
