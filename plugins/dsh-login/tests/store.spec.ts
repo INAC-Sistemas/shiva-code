@@ -48,7 +48,7 @@ describe('SessionStore', () => {
     const store = new SessionStore(storage)
     const notified = watch(store)
     store.grant({ token: 'abc', user: { id: 7 }, expiresInMs: null })
-    expect(store.getSnapshot()).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null })
+    expect(store.getSnapshot()).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null, grantedAt: expect.any(Number) })
     expect(notified()).toBe(1)
     expect(new SessionStore(storage).getSnapshot()?.token).toBe('abc')
   })

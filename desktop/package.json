@@ -271,7 +271,7 @@
     "@deepseek-ai/dsh-workflow-worker-thread": "file:packages/harness-0.1.2-alpha.4/npm-dsh/deepseek-ai-dsh-workflow-worker-thread-0.1.2-alpha.4.tgz",
     "@deepseek-ai/dsh-workspace": "file:packages/harness-0.1.2-alpha.4/npm-dsh/deepseek-ai-dsh-workspace-0.1.2-alpha.4.tgz",
     "@deepseek-ai/schemastery": "file:packages/harness-0.1.2-alpha.4/npm-vendor/deepseek-ai-schemastery-3.18.2.tgz",
-    "dsh-better-sidebar": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-better-sidebar-0.15.2.tgz",
+    "dsh-better-sidebar": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-better-sidebar-0.15.5.tgz",
     "dsh-clock": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-clock-0.1.0.tgz",
     "dsh-desktop-client-ui": "file:packages/dsh-desktop-client-ui",
     "dsh-desktop-hmr-fallback": "file:packages/dsh-desktop-hmr-fallback",
@@ -280,11 +280,13 @@
     "dsh-docs-panel": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-docs-panel-0.1.0.tgz",
     "dsh-flowglass": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-flowglass-0.4.4.tgz",
     "dsh-i18n": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-i18n-0.1.0.tgz",
+    "dsh-kanban": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-kanban-0.1.1.tgz",
     "dsh-login": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-login-0.1.0.tgz",
-    "dsh-mds": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-mds-0.1.0.tgz",
+    "dsh-mds": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-mds-0.1.1.tgz",
     "dsh-openviking": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-openviking-0.1.1.tgz",
     "dsh-profiles": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-profiles-0.2.0.tgz",
-    "dsh-prototype": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-prototype-0.1.0.tgz",
+    "dsh-prototype": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-prototype-0.1.10.tgz",
+    "dsh-setup": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-setup-0.1.0.tgz",
     "dsh-shiva-theme": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-shiva-theme-0.1.0.tgz",
     "dsh-sidebar-qa": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-sidebar-qa-0.4.0.tgz",
     "dsh-skill-library": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-skill-library-0.1.0.tgz",
@@ -302,10 +304,15 @@
     "dsh-assets": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-assets-0.1.0.tgz",
     "dsh-paramiko": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-paramiko-0.1.0.tgz",
     "dsh-web-search": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-web-search-0.1.0.tgz",
-    "dsh-github": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-github-0.1.7.tgz",
-    "dsh-supabase": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-supabase-0.1.7.tgz",
-    "dsh-railway": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-railway-0.1.7.tgz",
-    "dsh-vercel": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-vercel-0.1.7.tgz",
+    "dsh-browser": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-browser-0.2.2.tgz",
+    "dsh-sidebar": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-sidebar-0.1.0.tgz",
+    "dsh-palette": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-palette-0.1.0.tgz",
+    "dsh-github": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-github-0.1.8.tgz",
+    "dsh-supabase": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-supabase-0.1.8.tgz",
+    "dsh-railway": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-railway-0.1.8.tgz",
+    "dsh-vercel": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-vercel-0.1.8.tgz",
+    "dsh-tool-guard": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-tool-guard-0.2.2.tgz",
+    "dsh-mcp": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/dsh-mcp-0.1.0.tgz",
     "9router-app": "file:packages/harness-0.1.2-alpha.4/npm-shiva-plugins/9router-app-0.5.69.tgz"
   },
   "devDependencies": {
@@ -363,6 +370,10 @@
       {
         "from": "build/dsh-desktop.patch.yml",
         "to": "dsh-desktop.patch.yml"
+      },
+      {
+        "from": "build/agent-presets",
+        "to": "agent-presets"
       },
       {
         "from": "build/splash.html",

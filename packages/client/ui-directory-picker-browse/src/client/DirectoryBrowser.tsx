@@ -16,9 +16,16 @@
  * selects the created folder. Open adopts the selected folder, falling back
  * to the listed level. Pure consumer of the injected browse calls — the
  * owning flow decides what "Open" means and owns the workspace-creation
- * error surface. Hidden entries are host-flagged and hidden by default; the
+ * error surface. Under the header a search field narrows the panes on screen
+ * by substring, case-insensitively — a client-side filter over what is
+ * already listed, never a recursive host scan, so a folder deeper down is
+ * reached by walking to its level first; a query nobody matches says so
+ * instead of leaving a pane unexplained, Escape clears it before it may close
+ * the dialog, and the field goes inert while the path editor owns the
+ * filtering. Hidden entries are host-flagged and hidden by default; the
  * footer's fixed-label "Show hidden files" toggle (aria-pressed, check when
- * on) reveals them (client-side only). The path editor announces itself with
+ * on) reveals them (client-side only), and a dot-led query reveals the hidden
+ * entries it names exactly as a dot-led path prefix does. The path editor announces itself with
  * a pencil glyph and a bar-wide hover-lit outline, opens seeded with a
  * trailing separator, and keeps the panes under the draft: the final segment
  * prefix-filters the LAST pane while that pane's level is the one the draft's
@@ -38,7 +45,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutline16, IconChevronRightOutline14, IconEditOutline16, IconFolderClose16, IconFolderOpen16,
-  IconPlusOutline16, Modal,
+  IconPlusOutline16, IconSearchOutline16, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
@@ -203,6 +210,7 @@ function visibleEntries(
   selectedPath: string | null,
   showHidden: boolean,
   filterPrefix: string | null,
+  search: string,
 ): readonly DirectoryEntry[] {
   const needle = filterPrefix === null ? '' : filterPrefix.toLowerCase()
   // A dot-led prefix names hidden entries explicitly, so matching ones
@@ -210,24 +218,32 @@ function visibleEntries(
   const displayable = (entry: DirectoryEntry): boolean => showHidden || !entry.hidden || needle.startsWith('.')
   const matches = (entry: DirectoryEntry): boolean => displayable(entry) && entry.name.toLowerCase().startsWith(needle)
   const narrowing = needle !== '' && entries.some(matches)
+  const found = (entry: DirectoryEntry): boolean => search === '' || entry.name.toLowerCase().includes(search)
+  // A dot-led query names hidden entries the same way a dot-led prefix does —
+  // but only the ones it actually matches, and only while it is being typed:
+  // unlike the prefix filter, a query that matches nothing narrows to nothing
+  // rather than releasing, because the operator asked for a name, not a level.
+  const revealedBySearch = (entry: DirectoryEntry): boolean => search.startsWith('.') && found(entry)
   return entries.filter((entry) => {
     if (entry.path === selectedPath) return true
+    if (!found(entry)) return false
     if (narrowing) return matches(entry)
-    return showHidden || !entry.hidden
+    return showHidden || !entry.hidden || revealedBySearch(entry)
   })
 }
 
 /** One column of folder rows (the Miller view renders one or two of these). */
-function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPrefix, pathEditing }: {
+function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPrefix, search, pathEditing }: {
   entries: readonly DirectoryEntry[]
   selectedPath: string | null
   busy: boolean
   onPick: (entry: DirectoryEntry) => void
   showHidden: boolean
   filterPrefix: string | null
+  search: string
   pathEditing: boolean
 }) {
-  const visible = visibleEntries(entries, selectedPath, showHidden, filterPrefix)
+  const visible = visibleEntries(entries, selectedPath, showHidden, filterPrefix, search)
   return (
     <div className={css.column} role="list">
       {visible.map((entry) => {
@@ -290,6 +306,10 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   const [pathDraft, setPathDraft] = useState<string | null>(null)
   // Show-hidden toggle state (pure client-side filter, reset on each open).
   const [showHidden, setShowHidden] = useState(false)
+  // Name search over the listed panes: a substring filter on the levels
+  // already on screen, never a recursive host scan. Client-side and reset on
+  // each open, like the hidden toggle.
+  const [search, setSearch] = useState('')
   const [folderDraft, setFolderDraft] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -580,6 +600,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
       setChild(null)
       setCreatingFolder(false)
       setShowHidden(false)
+      setSearch('')
       navigate()
       return
     }
@@ -593,6 +614,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     setPathDraft(null)
     setFolderDraft(null)
     setCreateError(null)
+    setSearch('')
     // A close mid-flight (failed Enter, then Cancel) may leave refocus
     // flags armed; retire them so a later render cannot consume them.
     refocusPick.current = false
@@ -695,6 +717,14 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   const typedPrefix = crumbSource === null || pathDraft === null
     ? null
     : readDraft(crumbSource, pathDraft, scanned.current).tail
+  // The query as the panes apply it: trimmed (a stray space would empty every
+  // pane) and case-folded once, here, for both columns and the no-match note.
+  const searchNeedle = search.trim().toLowerCase()
+  // Says "nothing here is called that" instead of leaving an empty pane
+  // unexplained — the selection is exempt from the filter, so a pane holding
+  // only it still counts as no match.
+  const searchMisses = searchNeedle !== '' && ![parent, child].some(listing => listing !== null
+    && listing.entries.some(entry => entry.path !== selected?.path && entry.name.toLowerCase().includes(searchNeedle)))
   const crumbs = crumbSource === null ? [] : displayCrumbs(crumbSource, t('browser.home'))
   const crumbTail = crumbs.at(-1)?.path
   useEffect(() => {
@@ -922,6 +952,32 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
                 />
               )}
           </div>
+          {/* Name search over the panes on screen. It never scans the host:
+            * what is listed is what it filters, so a folder deeper down is
+            * found by walking to its level first. Disabled while the path
+            * editor owns the filtering, so the two never narrow at once. */}
+          <label className={css.search}>
+            <IconSearchOutline16 size={14} aria-hidden="true" />
+            <input
+              type="search"
+              className={css.searchInput}
+              value={search}
+              placeholder={t('browser.search')}
+              aria-label={t('browser.search')}
+              disabled={parentInert || draftPending}
+              onChange={(event) => { setSearch(event.target.value) }}
+              {...compositionGuard}
+              onKeyDown={(event) => {
+                // Escape clears the query before it may close the dialog: a
+                // filtered list is state the operator can see, so the first
+                // Escape retires it and a second one closes as usual.
+                if (event.key === 'Escape' && !composingRef.current && search !== '') {
+                  event.stopPropagation()
+                  setSearch('')
+                }
+              }}
+            />
+          </label>
         </div>
         <div className={css.content}>
           <div className={css.millerRow} ref={millerRowRef}>
@@ -933,6 +989,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
                 onPick={select}
                 showHidden={showHidden}
                 filterPrefix={child === null ? typedPrefix : null}
+                search={searchNeedle}
                 pathEditing={draftPending}
               />
             )}
@@ -945,6 +1002,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
                 onPick={advance}
                 showHidden={showHidden}
                 filterPrefix={typedPrefix}
+                search={searchNeedle}
                 pathEditing={draftPending}
               />
             )}
@@ -957,6 +1015,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
           * on screen, so an in-flight scan leaves it alone — hiding it while
           * the stale view still shows the cut level would shift the columns
           * on every navigation away from it. */}
+          {searchMisses && <div className={css.status} role="status">{t('browser.noMatches')}</div>}
           {(parent?.truncated === true || child?.truncated === true)
           && <div className={css.status} role="status">{t('browser.truncated')}</div>}
           {error !== null && <div className={css.error} role="alert">{error}</div>}

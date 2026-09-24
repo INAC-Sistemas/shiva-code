@@ -1,10 +1,11 @@
 /**
  * The sandbox POLICY home (`ctx.sandboxPolicy`): the single owner of the
  * deployment's sandbox fallbacks plus per-session resolution: the file-effect
- * {@link SandboxMode}, the `workspace-write` root, and the override kit (the
- * `sandbox/mode` event, its fold, and its write path; the fold is the
- * `sandboxMode` session-projection unit registered here, while the event and
- * write path come from `./session-mode.ts`).
+ * {@link SandboxMode}, the `workspace-write` root, the process-wide `enabled`
+ * kill switch, and the override kit (the `sandbox/mode` event, its fold, and
+ * its write path; the fold is the `sandboxMode` session-projection unit
+ * registered here, while the event and write path come from
+ * `./session-mode.ts`).
  * Before each agent request, the owner also contributes the resolved policy to
  * the cache-safe runtime-context snapshot. The agent loop logs that snapshot as
  * model history, so replay reconstructs the same mode and root the enforcing
@@ -31,6 +32,18 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
+
+/** Settings namespace for the process-wide file-sandbox kill switch. */
+export const SANDBOX_SETTINGS_NAMESPACE = 'sandbox'
+
+/** User setting that forces every session, including open ones, to Full access. */
+export interface SandboxSettings {
+  /**
+   * Whether the file sandbox confines. `false` forces `danger-full-access` for
+   * every resolve, including open sessions, without rewriting their logs.
+   */
+  enabled: boolean
+}
 
 /** Resolve filesystem identity before lexical normalization can erase symlink-sensitive components. */
 function resolveWorkspaceRoot(path: string): string {
@@ -75,13 +88,22 @@ export interface Config {
    * `process.cwd()`). Normal agent calls use their session cwd instead.
    */
   workspaceRoot?: string
+  /**
+   * Whether the file sandbox confines (default: `true`). `false` forces
+   * `danger-full-access` on every resolve, including open sessions, until it
+   * is turned back on. The Settings overlay writes the same field.
+   */
+  enabled?: boolean
 }
 
 /** Inputs that select the sandbox policy for one capability call. */
 export interface SandboxPolicyRequest {
   /** Calling session; its immutable cwd becomes the workspace boundary. */
   session?: Session
-  /** Explicit approved mode override, which outranks session policy. */
+  /**
+   * Explicit approved mode override, which outranks session policy while the
+   * file sandbox is enabled and is ignored when it is globally off.
+   */
   mode?: SandboxMode
 }
 
@@ -113,6 +135,7 @@ export class SandboxPolicyService extends Service {
     // No schema default: process.cwd() is resolved in the constructor so the
     // stored root is always absolute regardless of how it was supplied.
     workspaceRoot: z.string(),
+    enabled: z.boolean().default(true),
   })
 
   static inject = ['sessionProjections']
@@ -121,13 +144,30 @@ export class SandboxPolicyService extends Service {
   readonly defaultMode: SandboxMode
   /** The absolute `workspace-write` fallback root for calls without a session cwd. */
   readonly workspaceRoot: string
+  private settings: () => SandboxSettings
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sandboxPolicy')
-    // schemastery (static Config) already filled `mode`; the cast records that
-    // runtime fact. `workspaceRoot` has NO schema default, so its fallback to
-    // the process cwd is real branching, resolved absolute either way.
+    // schemastery (static Config) already filled `mode` and `enabled`; the
+    // casts record those runtime facts. `workspaceRoot` has NO schema default,
+    // so its fallback to the process cwd is real branching, resolved absolute
+    // either way.
     this.defaultMode = config.mode as SandboxMode
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
+    const baseSettings: SandboxSettings = { enabled: config.enabled as boolean }
+    this.settings = () => baseSettings
+    const settingsSchema: z<SandboxSettings> = z.object({
+      enabled: z.boolean().default(true),
+    })
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, SANDBOX_SETTINGS_NAMESPACE, settingsSchema, baseSettings, {
+        setSource: (current) => {
+          this.settings = current
+        },
+        // resolve() reads the source thunk per call; open sessions pick up a
+        // change on the next capability without rewriting their logs.
+        onChange: () => {},
+      })
+    })
 
     ctx.sessionProjections.register({
       key: 'sandboxMode',
@@ -152,18 +192,29 @@ export class SandboxPolicyService extends Service {
   }
 
   /**
-   * Resolve the complete policy for one capability call. An approved explicit
-   * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session cwd is its workspace-write boundary; the
-   * configured root is the fallback for agentless calls and sessions without a
-   * cwd.
+   * Whether the file sandbox currently confines.
+   * @returns `false` when {@link resolve} forces `danger-full-access` for every session.
+   */
+  get enabled(): boolean {
+    return this.settings().enabled
+  }
+
+  /**
+   * Resolve the complete policy for one capability call. A global `enabled:
+   * false` setting outranks an approved explicit mode, which outranks the
+   * session's last `sandbox/mode` event, which outranks the deployment default.
+   * A session cwd is its workspace-write boundary; the configured root is the
+   * fallback for agentless calls and sessions without a cwd.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode and absolute workspace root.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
+    const mode = this.enabled
+      ? request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode
+      : 'danger-full-access'
     return {
-      mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
+      mode,
       workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
       ...session === undefined ? {} : { sessionId: session.id },
     }

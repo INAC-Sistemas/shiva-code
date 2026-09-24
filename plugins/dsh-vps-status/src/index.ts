@@ -145,6 +145,32 @@ const NO_SESSION_TEXT: Record<'no-store' | 'absent' | 'expired' | 'malformed', s
 }
 
 /**
+ * What the model is told when the plugin manager refuses this tool because the
+ * user's selected profile does not include the plugin.
+ */
+export const NOT_IN_PROFILE_TEXT = 'The status endpoint denied access (403) because the user\'s selected profile '
+  + 'does not include the VPS status plugin. Tell the user, in their language, that their current profile does '
+  + 'not cover this tool, and that they can switch to a profile that includes it (the profile row at the foot of '
+  + 'the sidebar) or ask the profile\'s owner to add it. Do not retry.'
+
+/**
+ * The `code` of a refusal body.
+ * @param response - a 403 answer; a refusal is a short JSON error.
+ * @returns the code, or undefined when the body carries none.
+ */
+async function refusalCode(response: Response): Promise<string | undefined> {
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    // Not JSON: an upstream proxy's own 403 page, which is a session refusal.
+    return undefined
+  }
+  const code = typeof body === 'object' && body !== null ? (body as { code?: unknown }).code : undefined
+  return typeof code === 'string' ? code : undefined
+}
+
+/**
  * Register the tool.
  *
  * Failure text is written for its actual reader — the model — so a terminal
@@ -220,6 +246,9 @@ export function apply(ctx: Context, config: Config): void {
           `Could not reach the status endpoint (${(error as Error).message}). `
           + 'Tell the user the server is unreachable and do not retry.',
         )
+      }
+      if (response.status === 403 && await refusalCode(response) === 'plugin-not-in-profile') {
+        throw new Error(NOT_IN_PROFILE_TEXT)
       }
       if (response.status === 401 || response.status === 403) {
         // The session is dead at the endpoint, but a tool call is the wrong

@@ -52,3 +52,5 @@ mds/
 # In-tree dsh plugins ship their runtime as checked-in lib/ (no build step)
 !plugins/**/lib/
 !plugins/**/lib/**
+
+apikeys.txt

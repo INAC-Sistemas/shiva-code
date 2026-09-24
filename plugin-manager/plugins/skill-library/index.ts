@@ -6,14 +6,18 @@
 //
 // Não ramifica em PAPEL: um admin e um guest com o mesmo perfil leem a mesma
 // coisa. Ramifica em PERFIL — a leitura é a interseção entre as linhas
-// publicadas e as selecionadas no perfil ativo de quem chama. Um perfil só
+// publicadas e as marcadas no perfil selecionado de quem chama. Um perfil só
 // estreita: nunca alcança uma linha despublicada, o que é o que torna seguro
 // deixar cada usuário editar os próprios perfis.
 
 import "server-only";
 import { prisma } from "@/lib/db";
 import { SKILL_NAME_PATTERN } from "@/lib/skills";
-import { type ProfileScope, readActiveProfileId } from "@plugins/profile";
+import {
+  type ProfileScope,
+  readSelectedProfileId,
+  selectableWhere,
+} from "@plugins/profile";
 
 /**
  * Uma skill no catálogo: tudo que o modelo precisa para decidir carregá-la,
@@ -84,37 +88,39 @@ function toSummary(row: {
 }
 
 /**
- * Cláusula que recorta a biblioteca ao perfil ativo.
+ * Cláusula que recorta a biblioteca ao perfil selecionado.
  *
- * `userId` entra mesmo com `profileId` já único: custa nada (mesmo caminho de
- * índice) e fecha o caso de um id que tenha sido apagado e recriado sob outro
- * dono. É a mesma regra do `prototype` — o dono vem sempre do token.
+ * {@link selectableWhere} entra mesmo com o id já conferido por
+ * {@link readSelectedProfileId}: custa nada e fecha a corrida de um perfil
+ * desativado ou tornado privado entre as duas consultas.
  */
-function scopedWhere(scope: ProfileScope, activeProfileId: string) {
+function scopedWhere(scope: ProfileScope, selectedProfileId: string) {
   return {
     published: true,
     profiles: {
-      some: { profile: { id: activeProfileId, userId: scope.userId } },
+      some: {
+        profile: { id: selectedProfileId, ...selectableWhere(scope.userId) },
+      },
     },
   };
 }
 
 /**
- * O catálogo do perfil ativo, ordenado por nome.
+ * O catálogo do perfil selecionado, ordenado por nome.
  *
  * Sem corpo, de propósito: o cliente relê o catálogo a cada refresh de
  * descoberta, e mandar as instruções inteiras nessa chamada colocaria a
  * biblioteca completa na requisição mais frequente. O corpo sai só pelo `get`,
  * que é uma escolha explícita do modelo.
  *
- * Sem perfil ativo devolve um catálogo vazio sem tocar o banco. Fechar em vazio
+ * Sem perfil selecionado devolve um catálogo vazio sem tocar o banco. Fechar em vazio
  * é o que torna o recorte obrigatório: se "sem perfil" lesse tudo, uma casca
  * bastaria não escolher perfil para receber a biblioteca inteira. O cliente já
  * trata catálogo vazio como estado de primeira classe, então isto degrada para
  * "nenhuma skill", não para erro.
  * @param scope - quem está lendo, vindo do token.
  * @returns os sumários, a revisão da fatia, e o perfil que a recortou — `null`
- * distingue "sem perfil ativo" de "perfil com seleção vazia", que a soma das
+ * distingue "sem perfil selecionado" de "perfil com seleção vazia", que a soma das
  * revisões sozinha não separa.
  */
 export async function listSkills(scope: ProfileScope): Promise<{
@@ -122,14 +128,14 @@ export async function listSkills(scope: ProfileScope): Promise<{
   skills: SkillLibrarySummary[];
   profileId: string | null;
 }> {
-  const activeProfileId = await readActiveProfileId(scope);
+  const selectedProfileId = await readSelectedProfileId(scope);
 
-  if (activeProfileId === null) {
+  if (selectedProfileId === null) {
     return { revision: 0, skills: [], profileId: null };
   }
 
   const rows = await prisma.librarySkill.findMany({
-    where: scopedWhere(scope, activeProfileId),
+    where: scopedWhere(scope, selectedProfileId),
     orderBy: { name: "asc" },
     select: {
       name: true,
@@ -152,29 +158,37 @@ export async function listSkills(scope: ProfileScope): Promise<{
   // não-vazia nunca soma zero.
   const revision = rows.reduce((total, row) => total + row.revision, 0);
 
-  return { revision, skills: rows.map(toSummary), profileId: activeProfileId };
+  return { revision, skills: rows.map(toSummary), profileId: selectedProfileId };
 }
 
+/** O resultado de {@link readSkill}. */
+export type SkillRead =
+  | { kind: "found"; skill: SkillLibraryEntry }
+  /** Publicada, mas fora do perfil selecionado — ou nenhum perfil selecionado. */
+  | { kind: "not-in-profile" }
+  /** Inexistente ou despublicada. */
+  | { kind: "not-found" };
+
 /**
- * Uma skill do perfil ativo, com o corpo.
+ * Uma skill do perfil selecionado, com o corpo.
  *
- * Despublicada, fora do perfil ativo ou inexistente respondem igual: quem
- * consome não precisa distinguir os três, e distinguir vazaria tanto a existência
- * de trabalho ainda não liberado quanto o conteúdo da biblioteca fora do recorte.
+ * Publicada e fora do recorte responde `not-in-profile`, que a rota traduz em
+ * 403: o agente precisa dizer ao usuário que o perfil não contempla a skill, e
+ * não que ela não existe. Revelar o nome não vaza nada — a biblioteca publicada
+ * é a mesma para todos, e o painel já a lista a qualquer usuário. Despublicada e
+ * inexistente continuam iguais (`not-found`): distinguir as duas vazaria a
+ * existência de trabalho ainda não liberado.
  * @param scope - quem está lendo, vindo do token.
  * @param name - nome já validado por {@link assertSkillName}.
- * @returns a skill, ou `null` quando não alcançável por este perfil.
+ * @returns a skill, ou por que ela não é alcançável por este perfil.
  */
 export async function readSkill(
   scope: ProfileScope,
   name: string,
-): Promise<SkillLibraryEntry | null> {
-  const activeProfileId = await readActiveProfileId(scope);
-
-  if (activeProfileId === null) return null;
-
-  const row = await prisma.librarySkill.findFirst({
-    where: { name, ...scopedWhere(scope, activeProfileId) },
+): Promise<SkillRead> {
+  const selectedProfileId = await readSelectedProfileId(scope);
+  const row = selectedProfileId === null ? null : await prisma.librarySkill.findFirst({
+    where: { name, ...scopedWhere(scope, selectedProfileId) },
     select: {
       name: true,
       description: true,
@@ -186,5 +200,13 @@ export async function readSkill(
     },
   });
 
-  return row === null ? null : { ...toSummary(row), content: row.content };
+  if (row !== null) {
+    return { kind: "found", skill: { ...toSummary(row), content: row.content } };
+  }
+
+  const published = await prisma.librarySkill.count({
+    where: { name, published: true },
+  });
+
+  return published > 0 ? { kind: "not-in-profile" } : { kind: "not-found" };
 }

@@ -1,15 +1,17 @@
 // O recorte de skills e plugins que a casca do `dsh` materializa.
 //
-// Todo acesso é filtrado por `userId`, como nos modelos `Prototype*`: a casca é
-// código não confiável, então nenhuma consulta aqui aceita o dono vindo do corpo
-// da requisição — ele vem sempre do token.
+// Quem chama vem sempre do token, nunca do corpo: a casca é código não
+// confiável. Editar é só do dono; SELECIONAR segue {@link selectableWhere} —
+// perfis próprios e públicos de outros donos, desde que ativos.
 //
-// O perfil ativo mora em `User.activeProfileId`, não numa claim do token. É o
+// O perfil em uso mora em `User.selectedProfileId`, não numa claim do token. É o
 // que faz trocar de perfil não emitir nem revogar credencial: os tokens já
 // distribuídos resolvem o perfil novo na requisição seguinte.
 
 import "server-only";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
+import type { ProfileStatus, ProfileVisibility } from "@/generated/prisma/enums";
 import {
   KNOWN_PLUGINS,
   KNOWN_PLUGIN_IDS,
@@ -28,7 +30,29 @@ export type ProfileSummary = {
   pluginCount: number;
   skillCount: number;
   revision: number;
+  visibility: ProfileVisibility;
+  status: ProfileStatus;
+  /** Verdadeiro quando quem chama é o dono; perfis públicos de outros vêm `false`. */
+  isOwn: boolean;
+  /** Nome do dono: dois donos podem ter perfis públicos com o mesmo nome. */
+  ownerName: string;
 };
+
+/**
+ * Os perfis que um usuário pode selecionar: ativos, e próprios ou públicos.
+ *
+ * É a regra única de seleção — a listagem, a escrita da seleção e a biblioteca
+ * de skills filtram por ela, então um perfil desativado ou tornado privado
+ * deixa de valer nos três lugares ao mesmo tempo.
+ * @param userId - quem seleciona, vindo do token.
+ * @returns o filtro Prisma de `Profile`.
+ */
+export function selectableWhere(userId: string): Prisma.ProfileWhereInput {
+  return {
+    status: "ACTIVE",
+    OR: [{ userId }, { visibility: "PUBLIC" }],
+  };
+}
 
 /**
  * O que a casca precisa para materializar um perfil: identificadores, e só.
@@ -72,6 +96,8 @@ export type ProfileDraft = {
   description: string | null;
   plugins: string[];
   skillIds: string[];
+  visibility: ProfileVisibility;
+  status: ProfileStatus;
 };
 
 /** Um plugin oferecido na criação: o id que compõe, mais como apresentá-lo. */
@@ -118,71 +144,132 @@ export function assertProfileId(value: unknown): string {
   return value;
 }
 
-/**
- * Os perfis do usuário e qual está ativo.
- *
- * Sem ramo de admin, ao contrário de `/api/users`: um perfil é escopo de
- * execução, não listagem. Um admin supervisiona pelo painel; deixá-lo listar os
- * perfis alheios aqui seria deixá-lo ENTRAR neles pela casca.
- * @param scope - o dono, vindo do token.
- * @returns os perfis ordenados por nome e o id do ativo, ou `null`.
- */
-export async function listProfiles(scope: ProfileScope): Promise<{
-  profiles: ProfileSummary[];
-  activeId: string | null;
-}> {
-  const [rows, user] = await Promise.all([
-    prisma.profile.findMany({
-      where: { userId: scope.userId },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        plugins: true,
-        revision: true,
-        _count: { select: { skills: true } },
-      },
-    }),
-    prisma.user.findUnique({
-      where: { id: scope.userId },
-      select: { activeProfileId: true },
-    }),
-  ]);
+/** Colunas que {@link toSummary} projeta. */
+const SUMMARY_SELECT = {
+  id: true,
+  userId: true,
+  name: true,
+  description: true,
+  plugins: true,
+  revision: true,
+  visibility: true,
+  status: true,
+  user: { select: { name: true } },
+  _count: { select: { skills: true } },
+} as const;
 
+type SummaryRow = {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  plugins: string[];
+  revision: number;
+  visibility: ProfileVisibility;
+  status: ProfileStatus;
+  user: { name: string };
+  _count: { skills: number };
+};
+
+function toSummary(row: SummaryRow, scope: ProfileScope): ProfileSummary {
   return {
-    profiles: rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      pluginCount: row.plugins.filter((id) => KNOWN_PLUGIN_IDS.has(id)).length,
-      skillCount: row._count.skills,
-      revision: row.revision,
-    })),
-    activeId: user?.activeProfileId ?? null,
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    pluginCount: row.plugins.filter((id) => KNOWN_PLUGIN_IDS.has(id)).length,
+    skillCount: row._count.skills,
+    revision: row.revision,
+    visibility: row.visibility,
+    status: row.status,
+    isOwn: row.userId === scope.userId,
+    ownerName: row.user.name,
   };
 }
 
 /**
- * O id do perfil ativo do usuário, ou `null`.
+ * Os perfis que o usuário pode selecionar, e qual está selecionado.
  *
- * É a resolução que a biblioteca de skills também faz, exportada aqui para os
- * dois lugares lerem a mesma regra.
- * @param scope - o dono, vindo do token.
- * @returns o id do perfil ativo, ou `null` quando nenhum está escolhido.
+ * Sem ramo de admin, ao contrário de `/api/users`: um perfil é escopo de
+ * execução, não listagem. Um admin supervisiona pelo painel; deixá-lo listar os
+ * perfis privados alheios aqui seria deixá-lo ENTRAR neles pela casca.
+ * @param scope - quem chama, vindo do token.
+ * @returns os perfis (próprios primeiro, depois por nome) e o id do
+ *   selecionado, ou `null` quando nenhum selecionável está escolhido.
  */
-export async function readActiveProfileId(
+export async function listProfiles(scope: ProfileScope): Promise<{
+  profiles: ProfileSummary[];
+  selectedId: string | null;
+}> {
+  const [rows, selectedId] = await Promise.all([
+    prisma.profile.findMany({
+      where: selectableWhere(scope.userId),
+      orderBy: { name: "asc" },
+      select: SUMMARY_SELECT,
+    }),
+    readSelectedProfileId(scope),
+  ]);
+
+  const profiles = rows.map((row) => toSummary(row, scope));
+
+  return {
+    // Estável: dentro de cada grupo a ordem por nome do banco se mantém.
+    profiles: profiles.sort((a, b) => Number(b.isOwn) - Number(a.isOwn)),
+    selectedId,
+  };
+}
+
+/**
+ * O id do perfil selecionado pelo usuário, ou `null`.
+ *
+ * Só devolve o id enquanto o perfil continua selecionável: desativado, tornado
+ * privado por outro dono, ou apagado resolvem `null`, e a casca reabre o
+ * seletor. É a resolução que a biblioteca de skills também faz, exportada aqui
+ * para os dois lugares lerem a mesma regra.
+ * @param scope - quem chama, vindo do token.
+ * @returns o id do perfil selecionado, ou `null`.
+ */
+export async function readSelectedProfileId(
   scope: ProfileScope,
 ): Promise<string | null> {
   const user = await prisma.user.findUnique({
     where: { id: scope.userId },
-    select: { activeProfileId: true },
+    select: { selectedProfileId: true },
+  });
+  const selectedId = user?.selectedProfileId ?? null;
+
+  if (selectedId === null) return null;
+
+  const selectable = await prisma.profile.count({
+    where: { id: selectedId, ...selectableWhere(scope.userId) },
   });
 
-  return user?.activeProfileId ?? null;
+  return selectable > 0 ? selectedId : null;
 }
 
-/** Monta o spec de um perfil já resolvido como pertencente ao usuário. */
+/**
+ * Os plugins do perfil selecionado pelo usuário, ou `null` sem seleção.
+ *
+ * Interseção com `KNOWN_PLUGIN_IDS`, como o spec: um nome que a release não
+ * conhece não habilita rota nenhuma.
+ * @param scope - quem chama, vindo do token.
+ * @returns os ids dos plugins, ou `null` quando nenhum perfil selecionável está escolhido.
+ */
+export async function readSelectedPlugins(
+  scope: ProfileScope,
+): Promise<string[] | null> {
+  const selectedId = await readSelectedProfileId(scope);
+
+  if (selectedId === null) return null;
+
+  const row = await prisma.profile.findUnique({
+    where: { id: selectedId },
+    select: { plugins: true },
+  });
+
+  return row === null ? null : row.plugins.filter((id) => KNOWN_PLUGIN_IDS.has(id));
+}
+
+/** Monta o spec de um perfil já resolvido como selecionável pelo usuário. */
 async function specFor(profileId: string): Promise<ProfileSpec | null> {
   const row = await prisma.profile.findUnique({
     where: { id: profileId },
@@ -213,51 +300,52 @@ async function specFor(profileId: string): Promise<ProfileSpec | null> {
 }
 
 /**
- * O spec do perfil ativo do usuário.
+ * O spec do perfil selecionado pelo usuário.
  *
- * `null` cobre dois estados de uma vez — nunca escolheu, e o ativo foi apagado —
- * porque a casca resolve os dois com a mesma ação: reabrir o seletor.
- * @param scope - o dono, vindo do token.
- * @returns o spec, ou `null` quando não há perfil ativo.
+ * `null` cobre de uma vez nunca ter escolhido e o escolhido ter deixado de ser
+ * selecionável, porque a casca resolve os dois com a mesma ação: reabrir o
+ * seletor.
+ * @param scope - quem chama, vindo do token.
+ * @returns o spec, ou `null` quando não há perfil selecionado.
  */
-export async function readActiveSpec(
+export async function readSelectedSpec(
   scope: ProfileScope,
 ): Promise<ProfileSpec | null> {
-  const activeId = await readActiveProfileId(scope);
+  const selectedId = await readSelectedProfileId(scope);
 
-  return activeId === null ? null : specFor(activeId);
+  return selectedId === null ? null : specFor(selectedId);
 }
 
 /**
- * Torna um perfil o ativo do usuário.
+ * Seleciona um perfil para o usuário.
  *
- * O perfil precisa ser dele: a checagem de posse acontece antes da escrita, e um
- * perfil de outro dono responde como inexistente — não confirmar a existência é
- * a mesma regra dos screenshots do `prototype`.
- * @param scope - o dono, vindo do token.
+ * O perfil precisa ser selecionável por ele ({@link selectableWhere}); um
+ * privado de outro dono, ou um inativo, responde como inexistente — não
+ * confirmar a existência é a mesma regra dos screenshots do `prototype`.
+ * @param scope - quem chama, vindo do token.
  * @param profileId - id já validado por {@link assertProfileId}.
  * @returns o spec do perfil que passou a valer.
- * @throws ProfileRequestError 404 quando o perfil não existe ou é de outro dono.
+ * @throws ProfileRequestError 404 quando o perfil não existe ou não é selecionável.
  */
-export async function setActiveProfile(
+export async function setSelectedProfile(
   scope: ProfileScope,
   profileId: string,
 ): Promise<ProfileSpec> {
-  const owned = await prisma.profile.findFirst({
-    where: { id: profileId, userId: scope.userId },
+  const selectable = await prisma.profile.findFirst({
+    where: { id: profileId, ...selectableWhere(scope.userId) },
     select: { id: true },
   });
 
-  if (owned === null) {
+  if (selectable === null) {
     throw new ProfileRequestError("Perfil não encontrado.", 404);
   }
 
   await prisma.user.update({
     where: { id: scope.userId },
-    data: { activeProfileId: owned.id },
+    data: { selectedProfileId: selectable.id },
   });
 
-  const spec = await specFor(owned.id);
+  const spec = await specFor(selectable.id);
 
   if (spec === null) {
     // Só alcançável se o perfil for apagado entre a checagem e a leitura.
@@ -342,6 +430,9 @@ export function assertProfileDraft(value: unknown): ProfileDraft {
     description: description === "" ? null : description,
     plugins: stringList(body.plugins).sort(),
     skillIds: stringList(body.skillIds),
+    // Valor fora do enum cai no padrão, como os demais campos com tipo errado.
+    visibility: body.visibility === "PUBLIC" ? "PUBLIC" : "PRIVATE",
+    status: body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
   };
 
   const [failed] = Object.entries(profileDraftErrors(draft));
@@ -393,7 +484,7 @@ export async function createProfile(
     }
   }
 
-  let created: { id: string; revision: number };
+  let created: SummaryRow;
 
   try {
     created = await prisma.profile.create({
@@ -402,9 +493,11 @@ export async function createProfile(
         name: draft.name,
         description: draft.description,
         plugins: draft.plugins,
+        visibility: draft.visibility,
+        status: draft.status,
         skills: { create: draft.skillIds.map((skillId) => ({ skillId })) },
       },
-      select: { id: true, revision: true },
+      select: SUMMARY_SELECT,
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -418,22 +511,8 @@ export async function createProfile(
     throw error;
   }
 
-  // O primeiro perfil de um usuário vira o ativo sozinho: sem perfil ativo a
-  // biblioteca vem vazia, e obrigar um segundo clique para sair desse estado
-  // seria uma armadilha, não uma escolha.
-  await prisma.user.updateMany({
-    where: { id: scope.userId, activeProfileId: null },
-    data: { activeProfileId: created.id },
-  });
-
-  return {
-    id: created.id,
-    name: draft.name,
-    description: draft.description,
-    pluginCount: draft.plugins.length,
-    skillCount: draft.skillIds.length,
-    revision: created.revision,
-  };
+  // Criar não seleciona: a casca pergunta qual perfil usar a cada login.
+  return toSummary(created, scope);
 }
 
 /**

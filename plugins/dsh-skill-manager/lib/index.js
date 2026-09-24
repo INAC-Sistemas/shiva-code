@@ -143,15 +143,26 @@ function parseSkill(text) {
   return out
 }
 
-async function scanRoot(root) {
+/**
+ * Lists the skills under one root. A directory with `SKILL.md` is a bundle; a
+ * directory without one is a category folder (e.g. `system-development/`) and
+ * is scanned one level deeper.
+ */
+async function scanRoot(root, dir = root.path, depth = 0) {
   const skills = []
   let entries = []
-  try { entries = await readdir(root.path, { withFileTypes: true }) } catch { return skills }
+  try { entries = await readdir(dir, { withFileTypes: true }) } catch { return skills }
   for (const ent of entries) {
     if (!ent.name || ent.name.startsWith('.')) continue
     let fp
-    if (ent.isDirectory()) fp = join(root.path, ent.name, 'SKILL.md')
-    else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) fp = join(root.path, ent.name)
+    if (ent.isDirectory()) {
+      fp = join(dir, ent.name, 'SKILL.md')
+      if (!existsSync(fp)) {
+        if (depth === 0) skills.push(...await scanRoot(root, join(dir, ent.name), 1))
+        continue
+      }
+    }
+    else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) fp = join(dir, ent.name)
     else continue
     if (!existsSync(fp)) continue
     let parsed

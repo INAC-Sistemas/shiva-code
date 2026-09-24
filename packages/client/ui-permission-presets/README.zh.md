@@ -11,6 +11,8 @@ kind: "package-reference"
 
 使用本包可在 Web GUI 中为未来会话选择权限预设，或切换当前会话的权限预设。通用设置行只更改之后创建会话所用的默认值；`/permission` 选择器只更改当前会话，并标记其当前预设。内置预设使用本地化标签；显式宿主标签保持原样，未知的 kebab-case 名称显示为 Title Case。完全权限始终需要显式确认风险。两个界面都只在宿主推送更改后的权限状态后确认变更。
 
+「通用」设置里的 File sandbox 行通过同一份 Settings 文档写入进程级 `sandbox.enabled` 标志。关掉它会让每个会话（包括已打开的）都强制 Full access，且不改写这些会话的权限日志；再打开则恢复各会话最后记录的模式。host 未提供 `sandbox` 命名空间时，该行自行隐藏。
+
 ## 目录
 
 - [使用本包](#use-this-package)

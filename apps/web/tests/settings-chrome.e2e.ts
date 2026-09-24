@@ -4,7 +4,8 @@
 // -> theme/change -> ui-layout's presenter -> body attribute -> alias token +
 // browser theme-color metadata)
 // the Language row and busy-state Enter preference (both Host-backed), plus
-// Permission as the persisted default for subsequently created sessions.
+// Permission as the persisted default for subsequently created sessions,
+// and File sandbox as the process-wide kill switch that includes open sessions.
 // Zero model calls: everything is pure client + persistence state on a blank
 // frame, so there is no fixture and a stray stream would fail loud on the
 // open llm seam.
@@ -15,6 +16,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
@@ -217,6 +219,37 @@ describe('web e2e: settings modal and General preferences', () => {
       ['sandbox/mode', { mode: 'danger-full-access' }],
       ['approval/policy', { policy: 'never' }],
     ])
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('turns the file sandbox off globally including open sessions', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-sandbox'))
+    const existing = scaffold.ctx.sessions.create(SessionId('settings-sandbox-before'))
+    setSandboxMode(existing, 'workspace-write')
+    expect(scaffold.ctx.sandboxPolicy.resolve({ session: existing }).mode).toBe('workspace-write')
+
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.waitFor({ timeout: 10_000 })
+    const toggle = dialog.getByRole('switch', { name: '文件沙箱' })
+    await toggle.waitFor({ timeout: 10_000 })
+    await expect.poll(() => toggle.isEnabled(), { timeout: 5_000 }).toBe(true)
+    expect(await toggle.isChecked()).toBe(true)
+    await toggle.click()
+    await expect.poll(() => toggle.isChecked(), { timeout: 5_000 }).toBe(false)
+    await expect.poll(() => dialog.getByText('沙箱已全局关闭', { exact: false }).count(), { timeout: 5_000 }).toBe(1)
+
+    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    expect(document).toContain('sandbox:')
+    expect(document).toContain('enabled: false')
+    expect(scaffold.ctx.sandboxPolicy.resolve({ session: existing }).mode).toBe('danger-full-access')
+    expect(existing.events.find(event => event.type === 'sandbox/mode')?.data)
+      .toEqual({ mode: 'workspace-write' })
+
+    await toggle.click()
+    await expect.poll(() => toggle.isChecked(), { timeout: 5_000 }).toBe(true)
+    expect(scaffold.ctx.sandboxPolicy.resolve({ session: existing }).mode).toBe('workspace-write')
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

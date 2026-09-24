@@ -61,3 +61,24 @@ export const accessEn = {
   'confirm.cancel': 'Cancel',
   'confirm.enable': 'Enable Full access',
 } satisfies Record<PermissionAccessKey, string>
+
+/** Simplified Chinese dictionary for the General File sandbox row. */
+export const sandboxZh = {
+  'title': '文件沙箱',
+  'description.on': '会话按各自的权限模式限制文件访问',
+  'description.off': '沙箱已全局关闭：每个会话（包括已打开的）都具有 Full access',
+  'on': '开',
+  'off': '关',
+} satisfies Record<string, string>
+
+/** The settings.sandbox namespace key union. */
+export type SandboxSettingsKey = keyof typeof sandboxZh
+
+/** English dictionary for the General File sandbox row. */
+export const sandboxEn = {
+  'title': 'File sandbox',
+  'description.on': 'Sessions follow their permission mode for file access',
+  'description.off': 'Sandbox off globally: every session, open ones included, has Full access',
+  'on': 'On',
+  'off': 'Off',
+} satisfies Record<SandboxSettingsKey, string>

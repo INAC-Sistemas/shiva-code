@@ -25,7 +25,21 @@ describe('readSession', () => {
   it('reads back what writeSession stored', () => {
     const storage = storageOf()
     writeSession(storage, { token: 'abc', user: { id: 7 }, expiresInMs: null }, 1_000)
-    expect(readSession(storage, 2_000)).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null })
+    expect(readSession(storage, 2_000)).toEqual({ token: 'abc', user: { id: 7 }, expiresAt: null, grantedAt: 1_000 })
+  })
+
+  it('records when the session was granted, so a restored one is told apart from a new sign-in', () => {
+    const storage = storageOf()
+    writeSession(storage, { token: 'abc', user: null, expiresInMs: null }, 1_000)
+    expect(readSession(storage, 5_000)?.grantedAt).toBe(1_000)
+    writeSession(storage, { token: 'def', user: null, expiresInMs: null }, 9_000)
+    expect(readSession(storage, 10_000)?.grantedAt).toBe(9_000)
+  })
+
+  it('reads a row written before grantedAt existed as granted at 0', () => {
+    const storage = storageOf()
+    storage.setItem(STORAGE_KEY, JSON.stringify({ token: 'abc', user: null, expiresAt: null }))
+    expect(readSession(storage, 1_000)?.grantedAt).toBe(0)
   })
 
   it('turns a lifetime into an instant on the browser clock', () => {

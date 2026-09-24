@@ -64,14 +64,17 @@ interface SandboxExecutionPolicy {
 }
 ```
 
-`ctx.sandboxPolicy.resolve()` accepts the active session and, for an approved retry, an explicit mode. The service owns precedence and root fallback so bash and fs do not repeat it.
+`ctx.sandboxPolicy.resolve()` accepts the active session and, for an approved retry, an explicit mode. A process-wide `enabled: false` setting outranks that explicit mode so every session, open ones included, resolves as `danger-full-access` without rewriting session logs. The service owns precedence and root fallback so bash and fs do not repeat it.
 
 ```ts type-equiv
 /** Inputs that select the sandbox policy for one capability call. */
 interface SandboxPolicyRequest {
   /** Calling session; its immutable cwd becomes the workspace boundary. */
   session?: Session
-  /** Explicit approved mode override, which outranks session policy. */
+  /**
+   * Explicit approved mode override, which outranks session policy while the
+   * file sandbox is enabled and is ignored when it is globally off.
+   */
   mode?: SandboxMode
 }
 ```
@@ -196,11 +199,11 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
 
 ```ts cordis-catalog
 /**
- * Resolve the complete policy for one capability call. An approved explicit
- * mode outranks the session's last `sandbox/mode` event, which outranks the
- * deployment default. A session cwd is its workspace-write boundary; the
- * configured root is the fallback for agentless calls and sessions without a
- * cwd.
+ * Resolve the complete policy for one capability call. A global `enabled:
+ * false` setting outranks an approved explicit mode, which outranks the
+ * session's last `sandbox/mode` event, which outranks the deployment default.
+ * A session cwd is its workspace-write boundary; the configured root is the
+ * fallback for agentless calls and sessions without a cwd.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
  */

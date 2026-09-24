@@ -4,7 +4,7 @@ DeepSeek Harness is an all-plugin Cordis agent harness. Read [docs/architecture.
 
 ## Plugin library objective
 
-Plugin logic runs on the VPS in [plugin-manager/](plugin-manager/README.md), the plugin library; the client runs only the plugin shell, and `shiva` loads a plugin after the user's API token authenticates.
+Plugin logic runs on the VPS in [plugin-manager/](plugin-manager/README.md), the plugin library; the client runs only the plugin shell, and `shiva` loads a plugin after the user's API token authenticates. New product skills go in the plugin-manager seed and are served only through the active profile ([rule](plugin-manager/AGENTS.md#biblioteca-de-skills)).
 
 ## Pre-stable APIs and released Session data
 

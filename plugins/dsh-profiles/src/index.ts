@@ -11,7 +11,7 @@
  * `dsh-vps-status` do.
  *
  * Scope, stated plainly: which plugins load is a COMPOSITION boundary, not a
- * security one. The enforced half is the server's — a skill outside the active
+ * security one. The enforced half is the server's — a skill outside the selected
  * profile is never served to this user's token. This plugin makes the picker's
  * promise true in the transcript; it does not defend the machine against the
  * person using it.
@@ -64,9 +64,9 @@ export interface Config {
    * collection, so there is no second URL to keep in step with this one.
    */
   profilesEndpoint?: string
-  /** Full URL that makes one profile active, requested verbatim. */
-  activeEndpoint?: string
-  /** Full URL answering the active profile's spec, requested verbatim. */
+  /** Full URL that selects one profile for the signed-in user, requested verbatim. */
+  selectedEndpoint?: string
+  /** Full URL answering the selected profile's spec, requested verbatim. */
   specEndpoint?: string
   /** Full URL answering what a new profile can be built from, requested verbatim. */
   catalogEndpoint?: string
@@ -78,7 +78,7 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   profilesEndpoint: z.string().default(''),
-  activeEndpoint: z.string().default(''),
+  selectedEndpoint: z.string().default(''),
   specEndpoint: z.string().default(''),
   catalogEndpoint: z.string().default(''),
   timeoutMs: z.number().default(5_000),
@@ -189,11 +189,18 @@ function toSummary(value: unknown): ProfileSummary | undefined {
     pluginCount: typeof row.pluginCount === 'number' ? row.pluginCount : 0,
     skillCount: typeof row.skillCount === 'number' ? row.skillCount : 0,
     revision: typeof row.revision === 'number' ? row.revision : 0,
+    visibility: row.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE',
+    isOwn: row.isOwn === true,
+    ownerName: typeof row.ownerName === 'string' ? row.ownerName : '',
   }
 }
 
-/** Project a selection answer into the record this machine keeps. */
-function toActive(value: unknown): ActiveProfile | undefined {
+/**
+ * Project a selection answer into the record this machine keeps.
+ * @param value - the plugin manager's spec answer.
+ * @param loginGrantedAt - the login session the selection was made under.
+ */
+function toActive(value: unknown, loginGrantedAt: number): ActiveProfile | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const spec = value as Record<string, unknown>
   const profile = spec.profile
@@ -205,6 +212,7 @@ function toActive(value: unknown): ActiveProfile | undefined {
     name: row.name,
     plugins: knownPlugins(Array.isArray(spec.plugins) ? spec.plugins.filter((p): p is string => typeof p === 'string') : []),
     revision: typeof row.revision === 'number' ? row.revision : 0,
+    loginGrantedAt,
   }
 }
 
@@ -221,7 +229,7 @@ function stateHandler(ctx: Context, profilesEndpoint: URL, timeoutMs: number, ds
       return writeJson(response, 200, { signedIn: false } satisfies ProfileState)
     }
 
-    const body = upstream.body as { profiles?: unknown, activeId?: unknown }
+    const body = upstream.body as { profiles?: unknown, selectedId?: unknown }
     const profiles = (Array.isArray(body.profiles) ? body.profiles : [])
       .map(toSummary)
       .filter((row): row is ProfileSummary => row !== undefined)
@@ -229,14 +237,14 @@ function stateHandler(ctx: Context, profilesEndpoint: URL, timeoutMs: number, ds
     writeJson(response, 200, {
       signedIn: true,
       profiles,
-      serverActiveId: typeof body.activeId === 'string' ? body.activeId : null,
+      serverSelectedId: typeof body.selectedId === 'string' ? body.selectedId : null,
       active: await readActiveProfile(dshHome),
     } satisfies ProfileState)
   }
 }
 
-/** `POST /profiles/api/select` — make one profile active and record the result. */
-function selectHandler(ctx: Context, activeEndpoint: URL, timeoutMs: number, dshHome: string) {
+/** `POST /profiles/api/select` — select one profile and record the result. */
+function selectHandler(ctx: Context, selectedEndpoint: URL, timeoutMs: number, dshHome: string) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     if (request.method !== 'POST') {
       return writeJson(response, 405, { ok: false, message: 'use POST' } satisfies SelectResult)
@@ -246,22 +254,26 @@ function selectHandler(ctx: Context, activeEndpoint: URL, timeoutMs: number, dsh
     }
 
     const body = await readJsonBody(request)
-    const profileId = typeof body === 'object' && body !== null
-      ? (body as { profileId?: unknown }).profileId
-      : undefined
+    const fields = typeof body === 'object' && body !== null
+      ? body as { profileId?: unknown, loginGrantedAt?: unknown }
+      : {}
+    const { profileId, loginGrantedAt } = fields
     if (typeof profileId !== 'string' || profileId === '') {
       return writeJson(response, 400, { ok: false, message: 'profileId is required' } satisfies SelectResult)
     }
+    if (typeof loginGrantedAt !== 'number' || !Number.isFinite(loginGrantedAt)) {
+      return writeJson(response, 400, { ok: false, message: 'loginGrantedAt is required' } satisfies SelectResult)
+    }
 
     // The id is forwarded, not trusted: the plugin manager checks it against the
-    // token's own user before it becomes the active profile, and answers 404 for
-    // a profile that is not theirs.
-    const upstream = await callUpstream(ctx, activeEndpoint, timeoutMs, { method: 'POST', body: { profileId } })
+    // token's own user before selecting it, and answers 404 for a profile that
+    // user may not select (another owner's private one, or an inactive one).
+    const upstream = await callUpstream(ctx, selectedEndpoint, timeoutMs, { method: 'POST', body: { profileId } })
     if (!upstream.ok) {
       return writeJson(response, upstream.status, { ok: false, message: upstream.message } satisfies SelectResult)
     }
 
-    const active = toActive(upstream.body)
+    const active = toActive(upstream.body, loginGrantedAt)
     if (active === undefined) {
       return writeJson(response, 502, {
         ok: false,
@@ -377,7 +389,7 @@ function createHandler(ctx: Context, profilesEndpoint: URL, timeoutMs: number) {
 export function apply(ctx: Context, config: Config): void {
   const resolved = config as Required<Config>
   const profilesEndpoint = resolveEndpoint('profilesEndpoint', resolved.profilesEndpoint)
-  const activeEndpoint = resolveEndpoint('activeEndpoint', resolved.activeEndpoint)
+  const selectedEndpoint = resolveEndpoint('selectedEndpoint', resolved.selectedEndpoint)
   const catalogEndpoint = resolveEndpoint('catalogEndpoint', resolved.catalogEndpoint)
   // Validated at load even though only the client reads it: a broken spec URL
   // must fail with an operator watching, not the first time someone signs in.
@@ -403,7 +415,7 @@ export function apply(ctx: Context, config: Config): void {
     () => ctx.webServer.register({
       kind: 'exact',
       path: SELECT_ROUTE,
-      handler: selectHandler(ctx, activeEndpoint, timeoutMs, dshHome),
+      handler: selectHandler(ctx, selectedEndpoint, timeoutMs, dshHome),
     }),
     `dsh-profiles: ${SELECT_ROUTE} route`,
   )

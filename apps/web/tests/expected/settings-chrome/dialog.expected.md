@@ -21,6 +21,9 @@
   - button "工作区内修改":
     - text: 工作区内修改
     - img
+  - text: 文件沙箱 会话按各自的权限模式限制文件访问
+  - text: 开
+  - switch "文件沙箱" [checked]
   - text: 语言
   - button "中文":
     - text: 中文

@@ -56,6 +56,14 @@ describe('when the endpoint rejects the session', () => {
     expect(store.records.get(loginRecordKey())).toBeDefined()
   })
 
+  it('tells the model the selected profile does not cover the tool on a 403 plugin-not-in-profile', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      JSON.stringify({ error: 'x', code: 'plugin-not-in-profile', plugin: 'dsh-vps-status' }),
+      { status: 403, headers: { 'content-type': 'application/json' } },
+    ))
+    await expect(run(mount({}))).rejects.toThrow(/selected profile does not include the VPS status plugin/)
+  })
+
   it('still reports an ordinary failure as one', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }))
     await expect(run(mount({}))).rejects.toThrow(/answered 500/)

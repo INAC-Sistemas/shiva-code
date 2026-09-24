@@ -46,6 +46,7 @@ kind: "package-reference"
 |---|---|---|
 | `mode` | `read-only` | 会话起始的部署默认模式，加载时验证 |
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用或没有 cwd 的会话在 `workspace-write` 下可写入的回退根目录；普通 agent 调用改用会话的不可变 cwd |
+| `enabled` | `true` | 文件沙箱是否生效；`false` 会让每次 `resolve()` 都强制 `danger-full-access`，包括已打开的会话，且不改写它们记录的模式 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -55,7 +56,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-无效的配置模式会在插件加载时被拒绝，因此拼写错误会导致显式报错，而不是静默改变策略。没有 cwd 的会话与无 agent 调用回退到配置的工作区根目录；带已批准显式模式的调用只在该次调用中使用该模式。
+全局 `enabled: false` 的优先级高于其他任何输入，包括显式批准的模式，因此关闭沙箱只需一个开关，而不必逐个会话处理。无效的配置模式会在插件加载时被拒绝，因此拼写错误会导致显式报错，而不是静默改变策略。没有 cwd 的会话与无 agent 调用回退到配置的工作区根目录；带已批准显式模式的调用只在该次调用中使用该模式。
 
 -----
 

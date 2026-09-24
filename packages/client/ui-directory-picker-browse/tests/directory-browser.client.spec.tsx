@@ -1746,6 +1746,58 @@ describe('DirectoryBrowser', () => {
     await waitFor(() => { expect(row.scrollLeft).toBe(640) })
   })
 
+  it('narrows the panes by substring, keeps the selection, and clears on close', async () => {
+    const b = mount()
+    await waitFor(() => { expect(screen.getByRole('listitem')).toBeTruthy() })
+    fireEvent.click(rowButton(screen.getByRole('listitem')))
+    await waitFor(() => { expect(columns()).toHaveLength(2) })
+    const search = screen.getByRole('searchbox', { name: 'browser.search' })
+    // Case-insensitive and anywhere in the name, not just its start.
+    fireEvent.change(search, { target: { value: 'ARN' } })
+    expect(within(columns()[1]!).getByRole('listitem').textContent).toBe('harness')
+    // The selection anchors the two-pane view, so a filter never orphans it.
+    expect(within(columns()[0]!).getByRole('listitem').textContent).toBe('Documents')
+    fireEvent.change(search, { target: { value: 'ocum' } })
+    expect(within(columns()[0]!).getByRole('listitem').textContent).toBe('Documents')
+    expect(within(columns()[1]!).queryByRole('listitem')).toBeNull()
+    // Close clears the query with the rest of the client-side filters.
+    b.view.rerender(<DirectoryBrowser {...b.props} open={false} />)
+    b.view.rerender(<DirectoryBrowser {...b.props} open />)
+    await waitFor(() => { expect(screen.getByRole('listitem')).toBeTruthy() })
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'browser.search' }).value).toBe('')
+  })
+
+  it('says so when nothing matches, and Escape clears the query before it may close the dialog', async () => {
+    const b = mount()
+    await waitFor(() => { expect(screen.getByRole('listitem')).toBeTruthy() })
+    const search = screen.getByRole('searchbox', { name: 'browser.search' })
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    expect(screen.queryByRole('listitem')).toBeNull()
+    expect(screen.getByText('browser.noMatches')).toBeTruthy()
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'browser.search' }).value).toBe('')
+    expect(screen.queryByText('browser.noMatches')).toBeNull()
+    expect(screen.getByRole('listitem').textContent).toBe('Documents')
+    expect(b.onClose).not.toHaveBeenCalled()
+    // With nothing to clear, Escape belongs to the dialog again.
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(b.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('a dot-led query reveals the hidden entries it names, and the path editor takes the field inert', async () => {
+    mount()
+    await waitFor(() => { expect(screen.getByRole('listitem')).toBeTruthy() })
+    const search = screen.getByRole('searchbox', { name: 'browser.search' })
+    fireEvent.change(search, { target: { value: '.conf' } })
+    expect(screen.getByRole('listitem').textContent).toBe('.config')
+    fireEvent.change(search, { target: { value: '' } })
+    // While the path editor filters by prefix, the search field stays put but
+    // inert: the two must never narrow the panes at once.
+    fireEvent.click(screen.getByRole('button', { name: 'browser.editPath' }))
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: 'browser.editPath' })).toBeTruthy() })
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'browser.search' }).disabled).toBe(true)
+  })
+
   it('starts back at home on reopen', async () => {
     const b = mount()
     await waitFor(() => { expect(screen.getByRole('listitem')).toBeTruthy() })

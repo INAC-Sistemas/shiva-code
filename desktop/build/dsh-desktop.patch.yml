@@ -24,6 +24,18 @@
 # dsh-market normally offers to restart its own Node process after mutations.
 # The desktop shell has the real lifecycle authority, so keep that behavior off
 # whenever the optional plugin is present in the composed profile.
+# The preset roster. The packaged harness ships no `profile` preset, so the
+# desktop supplies it from build/agent-presets (resources/agent-presets when
+# packaged), passed in as $DSH_DESKTOP_PRESET_ROOT by harness-runtime.ts. It is
+# the default for new sessions because it is the only preset carrying the
+# selected profile's agent-plane plugins (the VPS skill library and
+# vps_status); without a profile it behaves exactly like `standard`. This row
+# replaces the web-app bundle's whole config, so `default` is restated here.
+- id: agent-presets
+  config:
+    default: profile
+    roots: !!js "[{ path: process.env.DSH_DESKTOP_PRESET_ROOT, trust: 'system' }]"
+
 - id: dsh-market
   inject: [desktopProfiles]
   config:
@@ -76,7 +88,9 @@
 #
 # Not gated, deliberately: dsh-better-sidebar (the chassis every other tab plugs
 # into), dsh-i18n, dsh-shiva-theme, dsh-clock, dsh-user-menu, login and
-# profiles — without the last two there is no way back to a picker.
+# profiles — without the last two there is no way back to a picker. Also
+# always loaded: dsh-kanban, dsh-tool-guard, dsh-browser, dsh-sidebar and
+# dsh-mcp, which the profile catalog does not list.
 #
 # dsh-openviking (the
 # "Memory" sidebar tab) auto-installs a Python venv and spawns a Python
@@ -125,6 +139,19 @@
       name: dsh-mds
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
 
+    # Kanban board over mds/epics/*/06-tickets/*.md: reads the ticket status
+    # frontmatter and moves cards active -> in_progress -> code_test ->
+    # human_test -> done. No VPS dependency, like dsh-mds itself.
+    - id: kanban
+      name: dsh-kanban
+
+    # Process laws at the tool seam: the principal agent writes only mds/ and
+    # prototype/ (code is a subagent's job), and no agent may set status: done.
+    # `tool-guard` is never gated: it restricts what agents may do, so a profile
+    # that left it out would lift those restrictions instead of removing a tool.
+    - id: tool-guard
+      name: dsh-tool-guard
+
     - id: assets
       name: dsh-assets
     - id: 9router
@@ -134,6 +161,39 @@
     # seam, so the agents' native web_search works with no API key.
     - id: web-search
       name: dsh-web-search
+
+    # Agent control of the better-sidebar browser tab: open, navigate,
+    # screenshot, open external URLs (the `browser` tool).
+    - id: browser-agent
+      name: dsh-browser
+
+    # Agent control of the sidebar tabs: list/focus/close/open (the `sidebar` tool),
+    # and the one place that opens a tab because an agent CREATED a file. Each
+    # rule is a workspace-relative glob and the tab type it opens; `reveal`
+    # hands the file to the tab (`tab.meta.reveal`). Overwrites and edits open
+    # nothing. A rule naming a tab whose plugin is not loaded is a no-op.
+    - id: sidebar-agent
+      name: dsh-sidebar
+      config:
+        autoOpen:
+          - tab: 'dsh-mds:artifacts'
+            path: 'mds/**'
+            reveal: true
+          - tab: 'dsh-prototype:view'
+            path: 'prototype/**'
+
+    # Color palette picker for /03-prototype: the "Paletas" tab and the
+    # palette_pick tool, which opens the tab by itself and returns the
+    # requester's choice to the model. Never gated: the palette step belongs to
+    # the pipeline, and the tool is inert until the model calls it.
+    - id: palette
+      name: dsh-palette
+
+    # User-registered MCP servers ("MCP" tab): the list persists in
+    # $DSH_HOME/mcp/servers.json and each enabled server is mounted live through
+    # dsh-mcp-client. Never gated: the registry is per machine, not per profile.
+    - id: mcp
+      name: dsh-mcp
 
     # SSH to external VPS servers: one-click paramiko install into a dedicated
     # venv plus the agents' ssh_run/ssh_transfer tools.
@@ -157,9 +217,18 @@
       name: dsh-profiles
       config:
         profilesEndpoint: !!js "new URL('/api/profiles', process.env.VPS_URL).href"
-        activeEndpoint: !!js "new URL('/api/profiles/active', process.env.VPS_URL).href"
+        selectedEndpoint: !!js "new URL('/api/profiles/selected', process.env.VPS_URL).href"
         specEndpoint: !!js "new URL('/api/plugins/profile', process.env.VPS_URL).href"
         catalogEndpoint: !!js "new URL('/api/profiles/catalog', process.env.VPS_URL).href"
+
+    # First-run setup wizard: covers the app, below the login and profile
+    # gates, until the chat model, the image generator and (when the profile
+    # loads dsh-openviking) the OpenViking memory are configured. Never gated:
+    # the configuration belongs to this machine, not to a profile. It replaces
+    # the upstream `deepseek-official` onboarding step, which the
+    # dsh-client-ui-settings-models patch no longer registers.
+    - id: setup
+      name: dsh-setup
 
     - id: skill-manager
       name: dsh-skill-manager

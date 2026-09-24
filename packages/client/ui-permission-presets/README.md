@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 Use this package to choose Web GUI permission presets for future sessions or switch the current session. The General settings row changes only the default for sessions created later, while the `/permission` picker changes only the current session and marks its active preset. Built-in presets use localized labels; explicit host labels remain unchanged, and unknown kebab-case names appear in title case. Full access always requires explicit risk acknowledgement. Both surfaces confirm changes only after the host pushes the resulting permission state.
 
+The General-settings File sandbox row writes a process-wide `sandbox.enabled` flag through the same Settings document. Turning it off forces Full access for every session, open ones included, without rewriting those sessions' permission logs; turning it back on restores each session's last logged mode. The row hides itself when the host does not serve the `sandbox` namespace.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

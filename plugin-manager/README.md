@@ -13,7 +13,8 @@ Aplicação: http://localhost:3000/login
 
 O entrypoint do container ([docker/dev-entrypoint.sh](docker/dev-entrypoint.sh)) roda
 `prisma generate`, `prisma migrate deploy` e `prisma db seed` antes de subir o Next.
-O seed é idempotente (`upsert`), então pode rodar a cada start.
+O seed de usuários é idempotente (`upsert`); o de skills **recria** o corpo a
+partir de `prisma/skills/` a cada start.
 
 ## Credenciais do seed
 
@@ -65,7 +66,7 @@ instalação: não há dono por linha, e o que separa os papéis é a escrita.
 
 - **ADMIN** cria, edita, publica, despublica e remove.
 - **GUEST** vê a lista — e, com um token de API válido, consome as publicadas
-  **que estiverem selecionadas no perfil ativo dele** (ver [Perfis](#perfis)).
+  **que estiverem marcadas no perfil selecionado por ele** (ver [Perfis](#perfis)).
 
 Publicar não entrega a skill a ninguém: entrega ao conjunto de onde os perfis
 escolhem. Quem decide o que chega a um agente é o perfil.
@@ -80,21 +81,33 @@ para tirar de circulação sem perder o texto.
 ## Perfis
 
 Um perfil é o recorte que um agente enxerga: quais skills da biblioteca e quais
-plugins do cliente valem enquanto ele roda. Cada usuário tem quantos quiser, e um
-deles é o **ativo**.
+plugins do cliente valem enquanto ele roda. Cada usuário cria quantos quiser, e
+cada perfil tem:
 
-O ativo mora em `User.activeProfileId`, **não numa claim do token**. Trocar de
-perfil é uma escrita numa coluna: nenhum token é emitido nem revogado, e a
+- **Visibilidade** — **privado** (só o dono usa) ou **público** (qualquer
+  usuário pode selecioná-lo; só o dono edita e remove).
+- **Estado** — **ativo** (aparece no seletor do Shiva Code) ou **inativo**. Vários
+  perfis podem estar ativos ao mesmo tempo.
+
+Um usuário pode **selecionar** os próprios perfis ativos e os públicos ativos de
+outros donos. A regra está num lugar só, `selectableWhere` em
+[plugins/profile](plugins/profile/index.ts), usada pela listagem, pela escrita da
+seleção e pela biblioteca de skills.
+
+A seleção mora em `User.selectedProfileId`, **não numa claim do token**. Trocar
+de perfil é uma escrita numa coluna: nenhum token é emitido nem revogado, e a
 requisição seguinte — de qualquer dispositivo — já resolve o perfil novo. A
-consequência aceita é que o perfil ativo é por **usuário**, não por dispositivo:
-duas máquinas na mesma conta compartilham a escolha.
+consequência aceita é que a seleção é por **usuário**, não por dispositivo. O
+Shiva Code pede a escolha a cada login (sozinho quando há uma opção só). Uma
+seleção que deixou de ser selecionável — perfil desativado, tornado privado pelo
+dono ou removido — é lida como nenhuma, e a casca reabre o seletor.
 
 Cada um administra os próprios perfis, guest inclusive. Isso é seguro porque um
-perfil **só estreita**: `readActiveSpec` filtra a seleção por `published`, o
-mesmo predicado da biblioteca, então nenhum perfil alcança uma linha que a
-biblioteca publicada já não concedesse.
+perfil **só estreita**: `readSelectedSpec` filtra a seleção por `published`, o
+mesmo predicado da biblioteca, então nenhum perfil — próprio ou público de outro
+— alcança uma linha que a biblioteca publicada já não concedesse.
 
-Sem perfil ativo o catálogo vem **vazio**, não completo. Se "sem perfil" lesse
+Sem perfil selecionado o catálogo vem **vazio**, não completo. Se "sem perfil" lesse
 tudo, bastaria uma casca nunca escolher um perfil para o recorte virar
 decorativo. `GET /api/plugins/skill-library/skills` responde
 `x-skill-library-profile: none` nesse estado, para o cliente saber abrir o
@@ -117,8 +130,12 @@ numa release seguinte deixa de ser servido sem migração de dados.
 ### Fronteira real
 
 A filtragem de skills é enforcement de verdade: o corpo vem do servidor, então
-uma skill fora do perfil não existe para aquele token. Já quais **plugins** o
-cliente carrega é uma fronteira de composição — a casca roda na máquina do
+uma skill fora do perfil não existe para aquele token. O mesmo vale para as
+rotas de plugin: cada uma exige o plugin da casca que a consome no perfil
+selecionado (`authenticatePluginRequest` em
+[src/lib/plugin-auth.ts](src/lib/plugin-auth.ts)) e responde `403`
+`{ code: "plugin-not-in-profile", plugin }` fora dele. Já quais plugins o
+cliente **carrega** é uma fronteira de composição — a casca roda na máquina do
 usuário, que pode editar a própria composição. A VPS é a fonte da verdade do
 recorte; ela não defende a máquina contra o dono dela.
 
@@ -135,14 +152,23 @@ modelo escreve em `skill({ name })`, e um nome fora dessa regra é inendereçáv
 
 ### Seed e fonte da verdade
 
-`prisma/skills/<nome>/SKILL.md` guarda o conteúdo inicial, semeado por
-`npm run db:seed`. O seed **cria e nunca atualiza**: ele roda a cada start do
-container, e atualizar reverteria em silêncio toda edição feita no painel.
+Toda skill de produto mora em
+`plugins/dsh-skill-manager/skills/<categoria>/<nome>/SKILL.md` e é espelhada em
+`prisma/skills/<categoria>/<nome>/` por `node scripts/sync-skills.mjs`. Hoje a
+única categoria é `system-development/`; o seed ignora uma pasta que repita o
+`name` de outra categoria.
+Uma skill que não passar por esse seed não entra na biblioteca da VPS no
+próximo deploy, e portanto não pode ser servida ao perfil selecionado do usuário
+logado. A regra completa está em [AGENTS.md](AGENTS.md#biblioteca-de-skills).
 
-Depois da primeira execução **o Postgres é a fonte da verdade** — editar o
-markdown do repositório não muda o que está no ar. Para sobrescrever o que está
-gravado a partir dos arquivos, `npx tsx prisma/seed.ts --force-skills`, que é um
-gesto explícito justamente porque descarta o que foi editado.
+`npm run db:seed` (e o entrypoint de cada container) **recria** as linhas a
+partir desses arquivos: atualiza corpo, descrição e interruptores, republica, e
+incrementa `revision` só quando o arquivo mudou. O id da linha permanece, então
+as seleções de perfil sobrevivem. Uma skill nova entra no perfil **Padrão** de
+quem já o tem; os demais perfis continuam sendo um recorte manual.
+
+Skills cadastradas só no painel, sem pasta em `prisma/skills/`, ficam intocadas.
+Em produção o seed **não** cria as contas de demonstração — só recria skills.
 
 ## API
 
@@ -167,11 +193,11 @@ curl http://localhost:3000/api/users -H "Authorization: Bearer $TOKEN"
 | GET    | `/api/auth/me`    | Bearer | Confere se o token ainda é válido                 |
 | POST   | `/api/auth/logout` | Bearer | Revoga o token usado na requisição               |
 | GET    | `/api/users`      | Bearer | Lista usuários (admin: todos, guest: só a si)     |
-| GET    | `/api/profiles`   | Bearer | Os perfis do usuário e qual está ativo            |
+| GET    | `/api/profiles`   | Bearer | Os perfis selecionáveis e qual está selecionado   |
 | POST   | `/api/profiles`   | Bearer | Cria um perfil para o dono do token               |
 | GET    | `/api/profiles/catalog` | Bearer | Plugins e skills que a criação oferece      |
-| POST   | `/api/profiles/active` | Bearer | Recebe `{profileId}` e troca o perfil ativo  |
-| GET    | `/api/plugins/profile` | Bearer | O recorte do perfil ativo, para a casca      |
+| POST   | `/api/profiles/selected` | Bearer | Recebe `{profileId}` e troca o perfil selecionado |
+| GET    | `/api/plugins/profile` | Bearer | O recorte do perfil selecionado, para a casca |
 | GET    | `/api/plugins/host-info` | Bearer | Disco e memória do host             |
 | POST   | `/api/plugins/prototype/automation/<op>` | Bearer | Fila de automação do protótipo   |
 | GET    | `/api/plugins/prototype/shots/<id>` | Bearer | Um screenshot gravado             |
@@ -232,6 +258,19 @@ Serviços em [plugins/](plugins/), importáveis pelo alias `@plugins/*`. Cada um
 um módulo puro; a rota HTTP fica em `src/app/api/plugins/<nome>/route.ts` e só
 faz a autenticação e o wiring.
 
+Toda rota de plugin autentica com `authenticatePluginRequest(request, <id>)`,
+que além do token exige o plugin da casca no perfil selecionado. Fora do perfil,
+ou sem perfil selecionado, responde `403` `{ error, code:
+"plugin-not-in-profile", plugin }`, e a casca repassa ao modelo que o perfil não
+contempla aquela ferramenta. A exceção é `/api/plugins/profile`: é por ela que a
+casca descobre qual perfil aplicar.
+
+| Rota | Plugin exigido no perfil |
+| --- | --- |
+| `/api/plugins/host-info` | `dsh-vps-status` |
+| `/api/plugins/skill-library/*` | `dsh-skill-library` |
+| `/api/plugins/prototype/*` | `dsh-prototype` |
+
 ### host-info
 
 `GET /api/plugins/host-info` (Bearer) → disco e memória do host, em bytes:
@@ -260,11 +299,12 @@ Só leitura: quem cadastra é o painel, por server action com sessão de cookie.
 | Rota | Resposta |
 | --- | --- |
 | `GET /api/plugins/skill-library/skills` | `{ revision, skills: [...] }` — catálogo **sem corpo** |
-| `GET /api/plugins/skill-library/skills/<nome>` | a skill com `content`, sem frontmatter |
+| `GET /api/plugins/skill-library/skills/<nome>` | a skill com `content`, sem frontmatter; `403` `{ error, code: "skill-not-in-profile" }` quando está publicada mas fora do perfil selecionado |
 
 Nenhuma das duas ramifica em papel: toda sessão autenticada lê a mesma
-biblioteca, e é isso que faz uma skill publicada no painel valer para todos. Um
-`403` aqui seria uma regra nova, não um refinamento.
+biblioteca, e é isso que faz uma skill publicada no painel valer para todos. O
+`403` ramifica em **perfil**: a casca repassa o `code` ao modelo, que responde ao
+usuário que o perfil selecionado não contempla aquela ferramenta.
 
 O corpo sai só pela segunda rota. A primeira é relida a cada refresh de
 descoberta do cliente, e mandar as instruções inteiras nela colocaria a
@@ -273,7 +313,8 @@ naturalmente o ponto onde o token é exigido.
 
 Nome fora do kebab-case responde `400`; desconhecido **ou despublicado**
 responde `404`, sem distinguir os dois, para não vazar trabalho que ainda não
-foi liberado.
+foi liberado. Revelar que uma skill publicada existe fora do perfil não vaza
+nada: a biblioteca publicada é a mesma para todos.
 
 ### prototype
 
@@ -327,7 +368,7 @@ docker compose down -v            # parar e apagar o volume do Postgres
 docker compose up -d --build      # rebuild (após mudar package.json)
 
 npm run db:migrate                # nova migration (roda do host, porta 5432 exposta)
-npm run db:seed                   # rodar o seed manualmente
+npm run db:seed                   # recriar skills; usuários só fora de produção
 npm run db:studio                 # Prisma Studio
 ```
 

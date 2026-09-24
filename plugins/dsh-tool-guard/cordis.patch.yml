@@ -1,0 +1,3 @@
+- insert:
+    - id: tool-guard
+      name: dsh-tool-guard

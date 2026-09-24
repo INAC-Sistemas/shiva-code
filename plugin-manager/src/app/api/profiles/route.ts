@@ -10,15 +10,17 @@ import {
 /**
  * GET /api/profiles
  * Header: Authorization: Bearer <token>
- * 200:    { profiles: [{id,name,description,pluginCount,skillCount,revision}], activeId }
+ * 200:    { profiles: [{id,name,description,pluginCount,skillCount,revision,
+ *                      visibility,status,isOwn,ownerName}], selectedId }
  *
- * O que o seletor de perfil da casca lista. Fica fora de `/api/plugins/` porque
- * responde "para quais perfis este token pode trocar" — dado de conta, usável
- * antes de existir qualquer escopo de plugin, como `/api/users`.
+ * O que o seletor de perfil da casca lista: os perfis ativos do usuário e os
+ * públicos ativos de outros donos. Fica fora de `/api/plugins/` porque responde
+ * "para quais perfis este token pode trocar" — dado de conta, usável antes de
+ * existir qualquer escopo de plugin, como `/api/users`.
  *
  * Divergência deliberada de `/api/users`: NÃO há ramo de admin. Um perfil é
- * escopo de execução, não listagem; deixar um admin listar os perfis alheios
- * aqui seria deixá-lo entrar neles pela casca. A supervisão é o painel.
+ * escopo de execução, não listagem; deixar um admin listar os perfis privados
+ * alheios aqui seria deixá-lo entrar neles pela casca. A supervisão é o painel.
  */
 export async function GET(request: Request) {
   const auth = await authenticateRequest(request);
@@ -26,12 +28,12 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   try {
-    const { profiles, activeId } = await listProfiles({
+    const { profiles, selectedId } = await listProfiles({
       userId: auth.session.userId,
     });
 
     return NextResponse.json(
-      { profiles, activeId },
+      { profiles, selectedId },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
@@ -47,8 +49,9 @@ export async function GET(request: Request) {
 /**
  * POST /api/profiles
  * Header: Authorization: Bearer <token>
- * Body:   { name, description?, plugins: string[], skillIds: string[] }
- * 201:    { profile: {id,name,description,pluginCount,skillCount,revision} }
+ * Body:   { name, description?, plugins: string[], skillIds: string[],
+ *           visibility?: "PRIVATE"|"PUBLIC", status?: "ACTIVE"|"INACTIVE" }
+ * 201:    { profile: <mesma linha do GET> }
  * 400:    corpo não-JSON, campo inválido, skill inexistente, ou nome repetido
  *
  * Criar pela casca, e não só pelo painel, é o que faz o seletor de perfil ser

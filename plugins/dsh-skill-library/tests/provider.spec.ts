@@ -150,6 +150,15 @@ describe('list', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skill catalog unavailable'))
   })
 
+  it('answers an authoritative empty catalog when the profile excludes the library', async () => {
+    const { provider, warn } = makeProvider({
+      fetch: vi.fn(async () => json({ error: 'x', code: 'plugin-not-in-profile' }, 403)),
+    })
+
+    await expect(provider.list({})).resolves.toEqual([])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
   it('answers an incomplete observation on a server error', async () => {
     const { provider } = makeProvider({ fetch: vi.fn(async () => json({}, 500)) })
 
@@ -245,6 +254,29 @@ describe('get', () => {
     expect(store.deleteRecord).not.toHaveBeenCalled()
   })
 
+  it('tells the model the selected profile does not include the skill on a 403 skill-not-in-profile', async () => {
+    const { provider } = makeProvider({
+      fetch: vi.fn(async () => json({ error: 'x', code: 'skill-not-in-profile' }, 403)),
+    })
+
+    await expect(provider.get(candidate(), {}))
+      .rejects.toThrow(/selected profile does not include it, so access was denied \(403\)/)
+  })
+
+  it('tells the model the profile excludes the library on a 403 plugin-not-in-profile', async () => {
+    const { provider } = makeProvider({
+      fetch: vi.fn(async () => json({ error: 'x', code: 'plugin-not-in-profile' }, 403)),
+    })
+
+    await expect(provider.get(candidate(), {})).rejects.toThrow(/does not include the skill library plugin/)
+  })
+
+  it('still reports a 403 without that code as a rejected session', async () => {
+    const { provider } = makeProvider({ fetch: vi.fn(async () => json({ error: 'x' }, 403)) })
+
+    await expect(provider.get(candidate(), {})).rejects.toThrow(/rejected the signed-in session \(403\)/)
+  })
+
   it('reports an unreachable library with text that tells the model not to retry', async () => {
     const { provider } = makeProvider({
       fetch: vi.fn(async () => { throw new Error('ECONNREFUSED') }),
@@ -295,5 +327,31 @@ describe('get', () => {
     })
 
     await expect(provider.get(candidate(), { signal: controller.signal })).rejects.toThrow()
+  })
+})
+
+describe('refusedByProfile', () => {
+  it('is true only when the library answers 403 skill-not-in-profile', async () => {
+    const answers: Array<[Response, boolean]> = [
+      [json({ error: 'x', code: 'skill-not-in-profile' }, 403), true],
+      [json({ error: 'x' }, 403), false],
+      [json({ error: 'x' }, 404), false],
+      [json({ error: 'x' }, 500), false],
+    ]
+    for (const [response, expected] of answers) {
+      const fetch = vi.fn<typeof globalThis.fetch>(async () => response)
+      const { provider } = makeProvider({ fetch })
+      await expect(provider.refusedByProfile('11-connections', undefined)).resolves.toBe(expected)
+      expect(String(fetch.mock.calls[0]?.[0])).toBe('https://vps/api/plugins/skill-library/skills/11-connections')
+    }
+  })
+
+  it('asks nothing while nobody is signed in', async () => {
+    const { provider, fetch } = makeProvider({
+      authorize: async () => ({ ok: false, reason: 'absent', message: 'x' }) as unknown as LoginAuthorization,
+    })
+
+    await expect(provider.refusedByProfile('11-connections', undefined)).resolves.toBe(false)
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

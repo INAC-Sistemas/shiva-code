@@ -9,8 +9,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { PROVIDER } from './provider.js'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 
-export const inject = ['webServer']
+export const inject = ['webServer', 'tools', 'sessions']
 
 const DIR = join(homedir(), '.dsh', PROVIDER.id)
 const TOKEN_FILE = join(DIR, 'token')
@@ -21,6 +22,8 @@ let loginInfo = null
 let loginExit = null
 let loginTail = ''
 let tokenCache = null
+// Set by the agent's `focus` op; the client polls `focus_poll` and opens the tab.
+let focusPending = false
 
 const log = (m) => console.log(`[dsh-${PROVIDER.id}] ${m}`)
 const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '')
@@ -219,6 +222,156 @@ async function startLogin(cwd) {
   })
 }
 
+/**
+ * The workspace for one request. The session's own cwd is authoritative: the
+ * client-supplied `cwd` can be the harness launch root (a desktop-only
+ * directory) while the conversation lives in a workspace.
+ */
+async function workspaceOf(ctx, payload) {
+  const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : ''
+  if (sessionId) {
+    const live = ctx.get('sessions')?.get(sessionId)?.header?.cwd
+    if (typeof live === 'string' && live) return live
+    const persistence = ctx.get('sessionPersistence')
+    if (persistence !== undefined) {
+      let stored
+      try { stored = (await persistence.inspect(sessionId)).meta.cwd }
+      catch { /* unknown session */ }
+      if (typeof stored === 'string' && stored) return stored
+    }
+  }
+  const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+  if (cwd) return cwd
+  return process.cwd()
+}
+
+/** Open a URL in the machine's default browser. */
+function openExternal(url) {
+  return new Promise((resolveP) => {
+    const ok = () => resolveP(true)
+    const fail = () => resolveP(false)
+    try {
+      if (WIN) spawn('rundll32', ['url.dll,FileProtocolHandler', url], { windowsHide: true }).on('error', fail).on('close', ok)
+      else if (process.platform === 'darwin') spawn('open', [url]).on('error', fail).on('close', ok)
+      else spawn('xdg-open', [url]).on('error', fail).on('close', ok)
+    } catch { resolveP(false) }
+  })
+}
+
+/** Ops the agent tool exposes; each maps to a button/flow of the sidebar tab. */
+const PROVIDER_OPS = ['status', 'install', 'login', 'login_input', 'logout', 'action', 'open', 'focus', 'job']
+
+/**
+ * Run one provider op for the agent tool. Mirrors the sidebar tab's buttons:
+ * status (install/login state, workspace link, actions, job), install, login
+ * (browser flow or token), login_input, logout, action (deploy/redeploy/open),
+ * open (a URL in the browser), focus (bring the tab to the front), job.
+ */
+async function runProviderOp(args, cwd) {
+  const op = String(args.op)
+  switch (op) {
+    case 'status':
+      return await fullStatus(cwd)
+    case 'install': {
+      if (job.phase === 'installing') return { ok: true, phase: 'installing', note: 'instalação já em andamento' }
+      job.phase = 'installing'; job.log = []
+      void (async () => {
+        try {
+          let ok = false
+          for (const inst of PROVIDER.installs) {
+            jobLog('install', `tentando ${inst.label}…`)
+            const r = await run(inst.cmd, inst.args, { timeout: 900000 })
+            if (r.code === 0) { jobLog('install', `${inst.label}: ok`); ok = true; break }
+            jobLog('install', `${inst.label} falhou (exit ${r.code}): ${r.out.slice(-300)}`)
+          }
+          job.phase = ok ? 'done' : 'error'
+          if (ok) jobLog('done', 'CLI instalada')
+        } catch (e) { job.phase = 'error'; jobLog('error', String((e && e.message) || e)) }
+      })()
+      return { ok: true, phase: 'installing' }
+    }
+    case 'login': {
+      if (typeof args.token === 'string' && args.token.trim()) {
+        await saveToken(args.token.trim())
+        jobLog('login', 'token salvo')
+        return { ok: true, token: true }
+      }
+      if (loginChild) { try { loginChild.kill() } catch { /* já saiu */ } loginChild = null }
+      loginInfo = null; loginExit = null; loginTail = ''
+      const r = await startLogin(cwd)
+      jobLog('login', r.ok ? `login: ${r.url ?? 'aguardando navegador'}` : `falha: ${r.error}`)
+      if (r.ok && r.url) await openExternal(r.url)
+      return r
+    }
+    case 'login_input': {
+      if (!loginChild) throw new Error('nenhum login ativo')
+      const text = typeof args.text === 'string' ? args.text : '\r'
+      loginChild.write(text.endsWith('\r') || text.endsWith('\n') ? text : text + '\r')
+      return { ok: true }
+    }
+    case 'logout': {
+      if (loginChild) { try { loginChild.kill() } catch { /* já saiu */ } loginChild = null }
+      loginInfo = null; loginExit = null; loginTail = ''
+      await clearToken()
+      if (PROVIDER.logout) { const r = await run(PROVIDER.cli, PROVIDER.logout.args, { timeout: 20000 }); jobLog('logout', r.out.slice(-200)) }
+      return { ok: true }
+    }
+    case 'action': {
+      const def = PROVIDER.actions ? PROVIDER.actions[String(args.action ?? '')] : null
+      if (!def) throw new Error(`ação desconhecida "${args.action}"`)
+      const r = await def(run, cwd, {})
+      if (r?.open) await openExternal(r.open)
+      return { ok: r?.ok !== false, output: r?.output ?? '', open: r?.open ?? null }
+    }
+    case 'open': {
+      const ws = await workspaceInfo(cwd)
+      const url = (typeof args.url === 'string' && args.url) || loginInfo?.url || ws.url
+      if (!url) throw new Error('nenhuma URL para abrir (faça login ou vincule um projeto)')
+      await openExternal(url)
+      return { ok: true, open: url }
+    }
+    case 'focus':
+      focusPending = true
+      return { ok: true, focus: true }
+    case 'job':
+      return { ok: true, job: { phase: job.phase, kind: job.kind, log: job.log.slice(-20) } }
+    default:
+      throw new Error(`op desconhecida "${op}"`)
+  }
+}
+
+/** Build the agent tool that drives this provider's sidebar tab. */
+function createProviderTool(ctx) {
+  return defineTool({
+    name: `${PROVIDER.id}_cli`,
+    description:
+      `Control the ${PROVIDER.title} connection of this workspace (CLI "${PROVIDER.cli}"): the same buttons the sidebar tab offers. ` +
+      'ops: status (CLI install + login state, workspace link, status items, available actions, job) · install (install the CLI) · ' +
+      'login (start the browser login and open it; pass token to use an access token instead) · login_input (answer a login prompt) · ' +
+      'logout · action (run an action id from status, e.g. deploy/redeploy/open) · open (open a URL — login or dashboard) · ' +
+      `focus (bring the ${PROVIDER.title} tab to the front) · job (install progress). Call op=status first; its actions list is authoritative.`,
+    parameters: {
+      op: { type: 'string', required: true, enum: PROVIDER_OPS, description: 'Operation to run.' },
+      token: { type: 'string', description: 'Access token (op=login), used instead of the browser flow.' },
+      text: { type: 'string', description: 'Text to send to the login prompt (op=login_input); default is Enter.' },
+      action: { type: 'string', description: 'Provider action id from status (op=action), e.g. "up", "redeploy", "open".' },
+      url: { type: 'string', description: 'URL to open (op=open); defaults to the login URL or the workspace dashboard.' },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (args, value) => [{ type: 'text', text: `${PROVIDER.id} ${args.op}: ${JSON.stringify(value)}` }],
+    },
+    async execute(args, exec) {
+      const workspace = await workspaceOf(ctx, {
+        cwd: exec?.agent?.session?.header?.cwd,
+        sessionId: exec?.agent?.session?.header?.id,
+      })
+      return runProviderOp(args, workspace)
+    },
+    presentCall: (args) => ({ card: 'generic', title: `${PROVIDER.title}: ${args.op}`, kind: 'other', rawInput: args }),
+  })
+}
+
 function json(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
   res.end(JSON.stringify(obj))
@@ -254,7 +407,7 @@ export function apply(ctx) {
     if (!sameOrigin(req)) return json(res, 403, { ok: false, error: 'cross-origin request rejected' })
     let payload = {}
     try { payload = await readBody(req) } catch (e) { return json(res, 400, { ok: false, error: e.message }) }
-    const cwd = typeof payload.cwd === 'string' && payload.cwd.length > 0 ? payload.cwd : process.cwd()
+    const cwd = await workspaceOf(ctx, payload)
     try {
       switch (method) {
         case 'status':
@@ -310,6 +463,14 @@ export function apply(ctx) {
         }
         case 'job':
           return json(res, 200, { ok: true, job: { phase: job.phase, kind: job.kind, log: job.log.slice(-20) } })
+        case 'focus':
+          focusPending = true
+          return json(res, 200, { ok: true })
+        case 'focus_poll': {
+          const focus = focusPending
+          focusPending = false
+          return json(res, 200, { ok: true, focus })
+        }
         default:
           return json(res, 404, { ok: false, error: `unknown method "${method}"` })
       }
@@ -319,6 +480,14 @@ export function apply(ctx) {
   }
 
   ctx.effect(() => webServer.register({ kind: 'prefix', path: `/${PROVIDER.id}/api`, handler }), `dsh-${PROVIDER.id}: api`)
+
+  const tools = ctx.get('tools')
+  if (tools && typeof tools.register === 'function') {
+    const tool = createProviderTool(ctx)
+    ctx.effect(() => tools.register(tool), `dsh-${PROVIDER.id}: tool ${tool.name}`)
+    log(`agent tool: ${tool.name}`)
+  }
+
   void loadToken()
   log('loaded')
 }

@@ -1,7 +1,12 @@
 import { Blocks, Sparkles, UserCog } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
-import { deleteProfile, selectProfile } from "@/app/actions/profiles";
+import {
+  deleteProfile,
+  selectProfile,
+  setProfileStatus,
+} from "@/app/actions/profiles";
+import { readSelectedProfileId } from "@plugins/profile";
 import {
   EditProfileForm,
   NewProfileForm,
@@ -13,6 +18,25 @@ import { NumberTicker } from "@/components/magicui/number-ticker";
 const pluginLabels = new Map(
   KNOWN_PLUGINS.map((plugin) => [plugin.id as string, plugin.label as string]),
 );
+
+const badgeBase = "rounded-md px-1.5 py-0.5 text-[11px] font-medium";
+const badgeGreen = `${badgeBase} bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300`;
+const badgeIndigo = `${badgeBase} bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300`;
+const badgeZinc = `${badgeBase} bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400`;
+const actionClass =
+  "rounded-lg px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50";
+
+/** O botão "Usar": seleciona o perfil para as próximas sessões do Shiva Code. */
+function UseButton({ id }: { id: string }) {
+  return (
+    <form action={selectProfile}>
+      <input type="hidden" name="id" value={id} />
+      <button type="submit" className={actionClass}>
+        Usar
+      </button>
+    </form>
+  );
+}
 
 function StatCard({
   label,
@@ -49,7 +73,7 @@ export default async function ProfilesPage() {
   // estreita o que a biblioteca publicada já concede, então self-service não
   // concede nada — e sob a regra de fechar-em-vazio, quem não pudesse criar um
   // ficaria sem biblioteca. O admin ganha só uma visão de supervisão, no fim.
-  const [profiles, skills, user, everyone] = await Promise.all([
+  const [profiles, publicProfiles, skills, selectedId, everyone] = await Promise.all([
     prisma.profile.findMany({
       where: { userId: session.userId },
       orderBy: { name: "asc" },
@@ -59,7 +83,26 @@ export default async function ProfilesPage() {
         description: true,
         plugins: true,
         revision: true,
+        visibility: true,
+        status: true,
         skills: { select: { skillId: true, skill: { select: { name: true } } } },
+      },
+    }),
+    // Os públicos ativos de outros donos: o que este usuário pode USAR sem
+    // poder editar.
+    prisma.profile.findMany({
+      where: {
+        visibility: "PUBLIC",
+        status: "ACTIVE",
+        userId: { not: session.userId },
+      },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        user: { select: { name: true } },
+        _count: { select: { skills: true } },
       },
     }),
     prisma.librarySkill.findMany({
@@ -67,10 +110,9 @@ export default async function ProfilesPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, description: true },
     }),
-    prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { activeProfileId: true },
-    }),
+    // A mesma resolução da API: um selecionado que deixou de ser selecionável
+    // conta como nenhum.
+    readSelectedProfileId({ userId: session.userId }),
     isAdmin
       ? prisma.profile.findMany({
           orderBy: [{ user: { name: "asc" } }, { name: "asc" }],
@@ -84,7 +126,6 @@ export default async function ProfilesPage() {
       : Promise.resolve([]),
   ]);
 
-  const activeId = user?.activeProfileId ?? null;
 
   return (
     <>
@@ -94,8 +135,9 @@ export default async function ProfilesPage() {
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           Um perfil é o recorte de skills e plugins que um agente enxerga
-          enquanto roda sob ele. O perfil ativo vale para todas as suas sessões,
-          em qualquer máquina.
+          enquanto roda sob ele. Perfis ativos aparecem no seletor do Shiva
+          Code, onde você escolhe um a cada login; públicos também aparecem
+          para os outros usuários.
         </p>
       </div>
 
@@ -115,10 +157,10 @@ export default async function ProfilesPage() {
 
       <NewProfileForm skills={skills} />
 
-      {activeId === null ? (
+      {selectedId === null ? (
         <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-          Nenhum perfil ativo. Enquanto for assim, o agente não recebe nenhuma
-          skill da biblioteca — escolha um abaixo.
+          Nenhum perfil em uso. Enquanto for assim, o agente não recebe nenhuma
+          skill da biblioteca — escolha um no Shiva Code ou use “Usar” abaixo.
         </p>
       ) : null}
 
@@ -141,10 +183,22 @@ export default async function ProfilesPage() {
                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                       {profile.name}
                     </span>
-                    {profile.id === activeId ? (
-                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        ativo
-                      </span>
+                    <span
+                      className={
+                        profile.status === "ACTIVE" ? badgeGreen : badgeZinc
+                      }
+                    >
+                      {profile.status === "ACTIVE" ? "ativo" : "inativo"}
+                    </span>
+                    <span
+                      className={
+                        profile.visibility === "PUBLIC" ? badgeIndigo : badgeZinc
+                      }
+                    >
+                      {profile.visibility === "PUBLIC" ? "público" : "privado"}
+                    </span>
+                    {profile.id === selectedId ? (
+                      <span className={badgeIndigo}>em uso</span>
                     ) : null}
                   </div>
 
@@ -184,17 +238,22 @@ export default async function ProfilesPage() {
                     Mantendo-a rígida é o painel que dita a largura e a linha
                     inteira vaza para fora do cartão. */}
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
-                  {profile.id === activeId ? null : (
-                    <form action={selectProfile}>
-                      <input type="hidden" name="id" value={profile.id} />
-                      <button
-                        type="submit"
-                        className="rounded-lg px-2.5 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
-                      >
-                        Tornar ativo
-                      </button>
-                    </form>
+                  {profile.id === selectedId ||
+                  profile.status !== "ACTIVE" ? null : (
+                    <UseButton id={profile.id} />
                   )}
+
+                  <form action={setProfileStatus}>
+                    <input type="hidden" name="id" value={profile.id} />
+                    <input
+                      type="hidden"
+                      name="status"
+                      value={profile.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}
+                    />
+                    <button type="submit" className={actionClass}>
+                      {profile.status === "ACTIVE" ? "Desativar" : "Ativar"}
+                    </button>
+                  </form>
 
                   <EditProfileForm
                     profile={{
@@ -203,6 +262,8 @@ export default async function ProfilesPage() {
                       description: profile.description,
                       plugins: [...profile.plugins],
                       skillIds: profile.skills.map((entry) => entry.skillId),
+                      visibility: profile.visibility,
+                      status: profile.status,
                     }}
                     skills={skills}
                   />
@@ -223,14 +284,50 @@ export default async function ProfilesPage() {
         </ul>
       )}
 
+      {publicProfiles.length > 0 ? (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+            Perfis públicos de outros usuários
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+            Você pode usá-los, mas só o dono edita.
+          </p>
+
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {publicProfiles.map((profile) => (
+              <li
+                key={profile.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-800"
+              >
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                  <span className="text-zinc-900 dark:text-zinc-50">
+                    {profile.name}
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    de {profile.user.name} · {profile._count.skills} skills
+                    {profile.description ? ` · ${profile.description}` : ""}
+                  </span>
+                  {profile.id === selectedId ? (
+                    <span className={badgeIndigo}>em uso</span>
+                  ) : null}
+                </div>
+                {profile.id === selectedId ? null : (
+                  <UseButton id={profile.id} />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {isAdmin && everyone.length > 0 ? (
         <section className="mt-10">
           <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
             Todos os perfis
           </h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
-            Somente leitura. Um perfil é escopo de execução: entrar no perfil de
-            outra pessoa não é uma operação que exista.
+            Somente leitura. Um perfil privado é escopo de execução do dono:
+            entrar nele não é uma operação que exista.
           </p>
 
           <ul className="mt-3 flex flex-col gap-1.5">

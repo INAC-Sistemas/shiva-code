@@ -287,6 +287,10 @@ export function builtinTabs(ctx: Context, options: BuiltinTabOptions = {}): read
       title: () => t('browser'),
       icon: (size: number) => <IconGlobeOutline16 size={size} />,
       order: 50,
+      // Hidden from the + menu: the agent opens this tab through the
+      // dsh-browser plugin's `browser` tool (openTab ignores `hidden`), so it
+      // is not offered as a manual option.
+      hidden: true,
       // Declarative settings: the sandbox escape hatch, the link-takeover
       // MASTER switch, and the per-protocol takeover switches (http on /
       // https off by default) render under this tab's row in the Side card

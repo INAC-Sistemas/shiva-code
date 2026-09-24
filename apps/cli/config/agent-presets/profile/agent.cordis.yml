@@ -295,6 +295,21 @@
   disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? '').split(',').includes('dsh-skill-library')"
   config:
     endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
+    # The system-development pipeline order, enforced at the `skill` tool: a
+    # stage loads only after /00-start-here and the previous stage were loaded
+    # earlier in the same session. 05-debate is optional after 04; 10 and 11
+    # are helpers that need only 00.
+    prerequisites:
+      01-epic-brief: [00-start-here]
+      02-core-flows: [00-start-here, 01-epic-brief]
+      03-prototype: [00-start-here, 02-core-flows]
+      04-tech-plan: [00-start-here, 03-prototype]
+      05-debate: [00-start-here, 04-tech-plan]
+      06-tickets: [00-start-here, 04-tech-plan]
+      07-build: [00-start-here, 06-tickets]
+      08-review: [00-start-here, 07-build]
+      10-profiles: [00-start-here]
+      11-connections: [00-start-here]
 
 - id: vps-status
   name: dsh-vps-status

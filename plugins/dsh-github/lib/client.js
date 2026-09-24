@@ -268,6 +268,23 @@ function apply(ctx) {
         icon: (size) => Icon(size),
         component: (props) => React.createElement(Panel, props),
       }))
+      // Poll for the agent's `focus` request and bring this tab to the front.
+      ctx.effect(() => {
+        let alive = true
+        let timer = null
+        const tick = async () => {
+          try {
+            const r = await api('focus_poll', {})
+            if (alive && r?.focus && typeof betterSidebar.openTab === 'function') {
+              const sid = betterSidebar.getSnapshot?.()?.sessionId
+              betterSidebar.openTab({ type: TAB_ID }, sid ? { sessionId: sid } : undefined)
+            }
+          } catch { /* offline */ }
+          if (alive) timer = setTimeout(tick, 1200)
+        }
+        tick()
+        return () => { alive = false; if (timer) clearTimeout(timer) }
+      }, `dsh-${PROVIDER.id}: focus poll`)
     },
   })
 }

@@ -29,8 +29,10 @@ function log(msg) {
  * explicit cwd → session matching the id → process cwd.
  */
 function workspaceOf(ctx, payload) {
-  const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
-  if (cwd && resolve(cwd) === cwd) return cwd
+  // The session's own cwd is authoritative: the client-supplied `cwd` can be the
+  // harness launch root (a desktop-only directory) while the conversation lives
+  // in a workspace. Resolve the session first, and fall back to the hint only
+  // when the session is unknown to this backend.
   try {
     const sessions = ctx.get('sessions')
     for (const s of sessions?.list() ?? []) {
@@ -39,6 +41,8 @@ function workspaceOf(ctx, payload) {
       if (payload?.sessionId && sid === payload.sessionId && typeof scwd === 'string' && scwd) return scwd
     }
   } catch { /* sessions unavailable */ }
+  const cwd = typeof payload?.cwd === 'string' ? payload.cwd.trim() : ''
+  if (cwd && resolve(cwd) === cwd) return cwd
   return process.cwd()
 }
 

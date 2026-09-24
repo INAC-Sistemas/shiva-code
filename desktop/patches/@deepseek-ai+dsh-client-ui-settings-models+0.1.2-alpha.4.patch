@@ -887,3 +887,16 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-models/lib/client.
  			onboardingSaving: "保存中…",
  			keyRequired: "请输入 API 密钥后继续。"
  		};
+@@ -2927,12 +3336,6 @@
+ 				order: -100,
+ 				inject: welcomeInjected
+ 			}, WelcomeNotice));
+-			ctx.slots.inject("settings.onboarding", () => ctx.slots.register({
+-				name: "settings.onboarding",
+-				id: "deepseek-official",
+-				order: 0,
+-				inject: deepSeekOnboardingInjected
+-			}, DeepSeekOnboardingDialog));
+ 		}
+ 		//#endregion
+ 		exports.apply = apply;

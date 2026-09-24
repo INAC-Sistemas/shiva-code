@@ -1,0 +1,3 @@
+name: Perfil
+description: Agente completo do modo padrão, mais as skills e ferramentas do perfil selecionado no plugin manager.
+order: 0

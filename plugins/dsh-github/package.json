@@ -1,6 +1,6 @@
 {
   "name": "dsh-github",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "GitHub CLI (gh) connection: install, login and this workspace repo/PR/CI status in a sidebar tab",
   "type": "module",
   "license": "MIT",

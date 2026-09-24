@@ -1,0 +1,49 @@
+{
+  "name": "dsh-mcp",
+  "version": "0.1.0",
+  "description": "MCP server registry for dsh: add, edit, enable and delete MCP servers from a better-sidebar tab, persisted locally and mounted live through dsh-mcp-client without a restart",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-mcp-client": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": "*",
+    "@deepseek-ai/schemastery": "*",
+    "dsh-better-sidebar": ">=0.12.0",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "lib"
+  ]
+}

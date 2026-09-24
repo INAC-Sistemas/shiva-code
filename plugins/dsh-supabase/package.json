@@ -1,6 +1,6 @@
 {
   "name": "dsh-supabase",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Supabase CLI connection: install, login, project link and migration status in a sidebar tab",
   "type": "module",
   "license": "MIT",

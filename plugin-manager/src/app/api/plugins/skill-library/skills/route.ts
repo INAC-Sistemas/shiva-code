@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { authenticateRequest } from "@/lib/api-auth";
+import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import { listSkills } from "@plugins/skill-library";
 
 /**
  * GET /api/plugins/skill-library/skills
  * Header: Authorization: Bearer <token>
+ * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
+ *         selecionado não inclui `dsh-skill-library`
  * 200:    { revision, skills: [{ name, description, whenToUse?, invocation, revision }] }
  *
  * O catálogo, sem corpo — o corpo sai por `/skills/<name>`.
@@ -21,7 +23,7 @@ import { listSkills } from "@plugins/skill-library";
  * explicação.
  */
 export async function GET(request: Request) {
-  const auth = await authenticateRequest(request);
+  const auth = await authenticatePluginRequest(request, "dsh-skill-library");
 
   if (!auth.ok) return auth.response;
 

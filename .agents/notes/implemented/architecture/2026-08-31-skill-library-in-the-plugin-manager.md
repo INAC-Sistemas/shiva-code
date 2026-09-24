@@ -52,7 +52,7 @@ The cost is real and accepted: those eleven names cannot be shadowed locally at 
 
 **Keep the local filesystem provider unmounted so the library is the only source.** Rejected: the user's own skills under `.agents/skills` are theirs, and taking them away is a different decision from protecting the product's.
 
-**Full `upsert` in the seed.** Rejected outright. The seed runs on every container start, so updating would silently revert every edit made in the panel. It creates and never updates; `--force-skills` overwrites, and being an explicit gesture is the point.
+**Full `upsert` in the seed.** The original seed created and never updated, because it ran on every container start and a full update would revert panel edits. That trade-off reversed: versioned `prisma/skills/` recreates library rows on every deploy, keeping row ids so profile selections survive. See [plugin-manager seed recreates library skills](./2026-09-16-plugin-manager-seed-recreates-skills.md).
 
 **`resourceBase: { kind: 'url' }`.** Rejected: the shipped skills carry no companion files, and a URL base tells the model to resolve relative paths against an endpoint that answers 401 to anything without the bearer this plugin holds. `opaque` says the truth — there are no companion files.
 

@@ -6,7 +6,7 @@
 // recebe de outro.
 
 import { parse as parseYaml } from "yaml";
-import { SKILL_NAME_PATTERN } from "@/lib/skills";
+import { SKILL_NAME_PATTERN } from "./skills";
 
 /** Uma skill lida de um SKILL.md, já projetada nas colunas de `LibrarySkill`. */
 export type ParsedSkillFile = {

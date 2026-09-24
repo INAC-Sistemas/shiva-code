@@ -7,7 +7,7 @@ npx prisma generate
 echo "==> Aplicando migrations"
 npx prisma migrate deploy
 
-echo "==> Rodando seed (idempotente)"
+echo "==> Rodando seed (skills recriadas; usuários upsert)"
 npx prisma db seed
 
 echo "==> Subindo Next.js em modo dev"

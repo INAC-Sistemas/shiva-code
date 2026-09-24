@@ -1,0 +1,133 @@
+---
+name: 07-build
+description: Execute tickets through subagent orchestration — the principal agent NEVER writes or edits code; it reads context, spawns a builder, a qa-tester (writes the ticket's test cases without running them) and an evaluator (verifies the work against the ticket's .md artifacts), proves each ticket by walking the real flow itself, and keeps the Kanban honest. Neither deploy files nor the test battery belong here — /08-review asks the requester about both. The execution strategy (loop type, parallelism, phases, failure rule) comes from the validated 06-plano-de-execucao.md, never improvised.
+whenToUse: When tickets from /06-tickets exist and it is time to build. Requires /00-start-here and /06-tickets loaded earlier in this session.
+---
+
+# Build (orchestration)
+
+You are the principal. **You never create or edit code.** You read context, sequence work, spawn subagents, judge evidence, and keep the human informed. Read `/00-start-here` first.
+
+## Entry gate
+
+Requires the tickets from `/06-tickets` **and** a validated `mds/epics/<epic>/06-plano-de-execucao.md`. `read` that plan before spawning anything: it carries the real dependency graph (declared **and** by shared file/symbol), the execution phases, the loop the requester chose, the parallelism, the agent roles, the verification rule and the failure rule. If it is missing or not `status: validated`, **stop and report** — the strategy is the requester's decision, never improvised here.
+
+## Project root
+
+Before the first builder, make sure the project exists **at the workspace root**, beside `mds/` and `prototype/`, in the layout `04-tech-plan.md` records. Create what is missing yourself, through the shell — running a generator is setup, not hand-written code, and the guard denies `pnpm install` to builders:
+
+- the backend with its framework's own generator, never hand-written; when the generator refuses a non-empty folder, generate into a temporary folder and move it to the root without overwriting, as `skill shadcn-ui` step 1 does;
+- the React + Tailwind frontend with `skill shadcn-ui` step 1, using the template, base, preset and frontend folder the plan records, then `pnpm add` in that folder for the packages the plan records (icon pack, `motion`, `@fontsource` fonts, query library). A builder that later needs a package reports it and you install it.
+
+Confirm `components.json` in the frontend folder and a passing build of every part before spawning anyone. No Docker file is created here (`skill engineering-standards` rule 7): every ticket is checked against the app running locally from its framework's own command. Never wrap the whole project in one extra folder.
+
+## The app stays up (one instance, one port, the whole epic)
+
+Right after the project exists, **you** start the application once and leave it running until the epic ends. It is what every check looks at, and at the end it is what the requester sees.
+
+1. `terminal_create` opens a terminal tab the requester can watch, in the workspace root.
+2. `terminal_send` starts the app on the **fixed port `04-tech-plan.md` records** (`pnpm dev`, or the stack's own command), and `terminal_wait_for` waits for its ready line — never a `sleep`, never a polling loop.
+3. Announce the port once, in one line. From here every flow check — yours and every subagent's — goes to that URL.
+
+**No subagent raises a server.** A builder or evaluator that needs the app uses the instance already up; if it looks dead, it says so and you restart it. One epic burned 71 app starts, 36 process kills and 99 `flock` calls across six different ports because every agent raised its own — that is the failure this rule exists to stop. A port is a shared resource, not something to allocate per agent.
+
+Use a terminal tab, never a background job: a job dies when the session is discarded, and the job tooling itself tells the model to kill jobs before the final answer. The terminal belongs to the requester and outlives the turn.
+
+## The triad
+
+| Subagent | May do | May NOT do | Returns |
+|---|---|---|---|
+| **builder** | `write`/`edit` code and files for the ticket scope only; build and typecheck with `bash` | touch tickets' `status:`, redesign UX, widen scope, **start a server** | files changed + commands run + outputs |
+| **qa-tester** | **write the ticket's tests, and nothing else** (`write`/`edit` under `testes/` and the test-runner configs) — unit, typecheck, regression, e2e/flow cases for its "Done when"; it does NOT run them here | edit product code, run the suite | the test files written, and what each one asserts |
+| **evaluator** | `read` the ticket, the epic artifacts (brief/flows/prototype.md/plan) and the diff; judge match | edit anything | GREEN (work matches artifacts) or RED with the exact mismatch list |
+
+**The suite is written here and run later.** Per ticket, the proof is the flow working — the builder's build and typecheck, and the principal's own pass through the real screens. The battery of tests is not executed after each ticket: the cases are written as the epic advances, and `/08-review` asks the requester whether to run the whole thing before delivery. A ticket is not held hostage by a suite nobody asked to run yet.
+
+**Nothing about deploy exists during the build**: no `Dockerfile`, no `docker/entrypoint.sh`, no `docker-compose.yml`, no provider, no hosting question. The system runs locally, the way its framework runs (`pnpm dev`, `pnpm build && pnpm start`, the stack's own command). Deploy files are created only after the requester accepts the system and answers yes to the Docker question in `/08-review`. When a ticket does reach a deploy or database surface after that, run it through the workspace's connection tools — `railway_cli`/`vercel_cli` (deploy), `supabase_cli` (database) — and verify with a real URL, not a local mock: `browser {op:'navigate', url}` then `browser {op:'screenshot'}`. A command that exits successfully is **not** proof the deploy is correct: it must land on the application service (never the database), and the proof is the right service answering on the right URL. Follow the provisioning order and the verification in `/11-connections`.
+
+Spawn with the `subagent` tool, always passing `role` (`builder`, `qa` or `evaluator`) — the guard binds the child's write surface to it, and an omitted role leaves a subagent free to write anywhere. Every spawned agent's prompt contains: the ticket file path, the context-manifest paths, its single role, and the frozen-UX reminder ("prototype.md is a binding contract; mocks/CDNs allowed as declared; do not redesign"). Evaluators always `read` the artifacts themselves — never trust your summary, never trust the builder's.
+
+**The guard is active**: `dsh-tool-guard` limits your own `write`/`edit` to `mds/`, `prototype/` and the product as a fast-fix window — the product is everything in the workspace except `mds/`, `prototype/`, `testes/` and `.git/`; a builder writes the product; qa writes `testes/` and the test-runner configs; an evaluator writes nothing. It denies `status: done` for every agent. A write you expected to succeed coming back denied is the law, not a bug — delegate it to the builder.
+
+## Spawn briefing
+
+The briefing is context injection, not documentation: it consumes the subagent's entire context window, and a long briefing kills the agent before its first file. Every spawn contains, in this order:
+
+1. **Role in one sentence** — what the agent may and may not do.
+2. **Paths + "read first"** — the ticket/artifact path plus only the excerpts the agent needs ("read section X of Y"), never the artifact pasted.
+3. **The GAP** — the acceptance items that still have no proof, numbered. This is the work contract.
+4. **ALREADY PROVEN** — what the principal measured personally, each item with its proof (command + output). The subagent does not re-test any of it; it may at most contest with new evidence. Re-proving existing evidence is the largest source of hours lost.
+5. **HOW IT WILL BE JUDGED** — the evaluator's checklist, verbatim: every line of this ticket's "Done when" plus the `engineering-standards` items it touches. A builder that knows the checks writes to pass them; hiding the checklist is what turned 32% of one epic's dispatches into "fix" rounds (22% of all agent time).
+6. **The app is already running** on the port the plan records — the builder uses it and never starts a server of its own.
+7. **Known environment traps** of this harness (e.g. prefer `curl.exe` over `Invoke-WebRequest` on Windows, pass JSON bodies from a file, `.ps1` saved as UTF-8 with BOM, a local database already running — reuse it, do not raise another).
+
+**UI tickets** add one line to the role: "Load the `shadcn-ui`, `ui-icons`, `ui-palette`, `frontend-design` and `baseline-ui` skills first — plus `react-ui-patterns` when the screen loads or mutates data, and `tailwind-patterns` when the ticket touches the theme CSS; build every standard control from shadcn/ui components added with its CLI, using the template, base and preset from `04-tech-plan.md`, take every icon from the pack that same plan records, take every color from the theme variables set from `mds/epics/<epic>/03-palette.md`, and take fonts and motion tokens from `mds/epics/<epic>/03-design.md` so the screen animates as the prototype did." Load `react-best-practices` only for tickets about data fetching, routing or performance, and never `ui-ux-pro-max` in a builder: the briefing budget above applies to loaded skills too. The evaluator's briefing loads `fixing-accessibility` and `fixing-motion-performance` in review mode and adds the matching checks: a hand-written control that a shadcn component covers is RED, so is a hand-written SVG or emoji that Lucide or Tabler covers, so is a color literal or default Tailwind color outside the theme CSS, so is a screen without the entrance, reveal, feedback and state-change motion of `03-design.md`, so is motion that breaks reduced motion or animates layout on a large surface, so is a missing loading, error or empty state, so is a critical accessibility violation, and so is a UI change without a real-browser screenshot.
+
+**Backend, API and UI tickets** also add: "Load the `engineering-standards` skill and follow it: controllers only receive, delegate and respond, input validated by request validators, business rules in use cases, data transfer objects and repositories only at the boundaries where the plan names a need, responses serialized by the response serializer in the `{data, meta}` / `{error}` envelope, never models or internal structures exposed directly, every public endpoint documented in the API specification (inputs, outputs, errors, authentication, HTTP status codes) as it actually behaves, design-system tokens and components only, implemented with Tailwind CSS, the project's standard chart library, Recharts, and long, heavy or external work in background tasks on a reliable queue with timeout, retries, failure handling and idempotency — never a short operation the caller needs right away." The evaluator's briefing loads the same skill and applies its RED list.
+
+Forbidden in the briefing: pasted artifact content (ticket, schema, plan, contract), "read all of X" for anything over ~20 KB, narrative/history/repetition of the execution plan, more than ~80 lines total. If the briefing does not fit, the spawn's scope is wrong: split the work.
+
+## The acceptance flow (the agent is the user)
+
+The ONE acceptance test is the real user flow, executed by the AGENT with the full browser tool: open the real URL, sign in with the test credential (from a project file or env variable — the value is never echoed into chat or logs), click, fill, land where the flow says, read the outcome in the DOM, and screenshot every key step. A clean console on the new screen is part of GREEN — a console error is a finding. **The agent uses the app; the human is not a tester.**
+
+Forbidden by default: generic batteries (mass invalid cases, byte-by-byte schema re-checks, re-proving what is already measured, bypass probes with no new route). They enter only against direct money, session, or silent-data risk. The cost of a test never exceeds the cost of building what it tests.
+
+If the full browser tool is unavailable in some environment: extract the repo's own CDP driver, once, and drive the same ops through it. The skill NEVER instructs an operation the tool cannot execute — the briefing states the real workaround, never an impossible instruction.
+
+## Per-ticket loop
+
+Follow the phases and the parallelism from `06-plano-de-execucao.md`; the loop type recorded there (a fresh agent per attempt, or the same builder/qa/evaluator carrying the ticket) is the one to run — do not switch it mid-build without asking.
+
+**Open the whole phase, not one ticket.** The plan's phase lists which tickets run together (`06 → … → 12 ∥ 19`, `14 ∥ 15 ∥ 16`). Before spawning anything, **write the eligible list out loud**: "fase N, elegíveis: 04, 13" — every ticket of the phase in `active` whose dependencies are met. Then spawn one builder per ticket on that list, **all in the same reply**, and stop.
+
+**Spawning one when the list held two is disobeying the plan the requester validated**, not a style choice — it is the difference between the epic they approved and a queue of one. Two fronts the plan calls parallel are two spawns in one turn; if you believe a listed ticket cannot start, say which file or symbol it shares with the one running and fix the plan, do not silently serialize.
+
+**A phase closes before the next opens.** Do not start a ticket of phase N+1 while any ticket of phase N is still in `in_progress` or awaiting its evaluator: the phases exist because the plan found real edges between them.
+
+**Inspect in batches, with the right tool.** `read`, `grep` and `glob` are concurrency-safe: several of them in one step run in parallel and cost one round trip. `bash` is exclusive and serializes. So read files with `read`, search with `grep`, list with `glob` — never `cat`, `grep` or `ls` inside `bash` — and put every independent lookup in the SAME step. In one measured epic 53% of all tool calls were trivial lookups, one per step, costing about 250 minutes of pure round trips.
+
+**Never wait.** After spawning, end the turn — the completion of each subagent comes back to you as a notification (`/00-start-here`, "Subagent truth"). A `sleep`, a polling loop or a repeated `list_agents` to check progress is a defect.
+
+1. **List the eligible tickets** of the phase (`active`, dependencies met) and set every one of them to `status: in_progress` (`edit` the frontmatter — the Kanban tab shows it).
+2. **Assemble context** and spawn a **builder per ticket, `role: "builder"`, all in this same reply**. Each builder reports files + build output.
+3. **Spawn the qa-tester** for each ticket, `role: "qa"`: it writes the tests for that ticket's "Done when" (typecheck, unit, regression, flow) under `testes/` and stops — running the battery is `/08-review`'s question to the requester, not this loop's gate.
+4. **Prove the flow yourself**: walk the ticket's screens or endpoints in the running app with the browser tool and read the outcome, as "The acceptance flow" below describes. That is the per-ticket proof.
+5. **Spawn the evaluator**, `role: "evaluator"` — the guard denies it every write, so its verdict is the text it returns: "does the diff match the ticket's requirements AND the epic artifacts?" GREEN → set `status: human_test` (queued for the owner's end-of-epic batch — not an invitation to test now). RED → mismatch list goes back to the builder. Never spawn it as `qa`: that role may write tests, and a judge that can edit what it judges is not independent.
+6. **No human mid-epic.** No intermediate proofs, no test scripts sent, no "go try it" per ticket. The principal publishes what passed the real flow and moves to the next ticket. The human tests exactly ONCE: when the LAST ticket closes — they get the link and use the whole app as a consumer, on their phone. No tables, no reports. Only then does final acceptance happen, and only there does anything move to `done` (whole-product acceptance, never per-piece). A rejected piece returns to the builder with the exact step that broke; two identical episodes in a row = escalate with `ask_user_question`.
+7. When every ticket of the phase is `human_test`, open the next phase — back to step 1, with its own eligible list. Two consecutive rounds with the **same** finding = stall: stop and escalate with `ask_user_question`.
+
+## Round rules
+
+- A round is a builder pass **plus** the principal's own pass through the flow — never a critic alone. The written tests are not a round: nobody runs them here.
+- Never relax a ticket's "Done when" to make a round pass. Changing it is a decision for the requester, recorded in the ticket.
+- The evaluator checks **against the artifacts**, not against the builder's intentions. Traceability: every "Done when" item maps to a written test case or to a flow step the principal walked.
+- Budget: cap rounds per ticket up front (default 5). An unbounded loop burns trust and tokens.
+- **Time budget with a cut**: a subagent with no on-disk progress (a new or altered file, an updated log) for ~40 minutes is treated as stalled — interrupt it and respawn one that inherits what is on disk. A `running` status alone is not progress; the heartbeat exists to give this signal on every beat.
+- **The QA writes against the GAP**: its briefing declares ALREADY PROVEN with the proof of each item, so the cases it writes attack what is still unproven instead of restating what the flow already showed.
+- **Tests are functional first.** The cases cover the ticket's "Done when" end to end — and stop there. No speculative suites hunting defects nobody asked for, no edge-case matrices beyond the contract. Findings that can wait (hardening, coverage breadth, style) are recorded as deferred in the ticket and never block the loop. If the application works as specified, it is GREEN.
+- **Speed is the loop's metric.** Tests and rounds optimize for the shortest path to GREEN; what can be done later is deferred, not done now.
+- Report honestly at the end: rounds, findings raised/resolved, criteria unmet. "3 criteria still unmet" is a useful result; a false "done" is worthless.
+
+## Evidence rules
+
+- **A builder's own checks are not the acceptance proof.** They are a second opinion on unchanged work: the proof is the principal walking the real flow. The qa-tester's cases are written adversarially — to break the work, not to confirm it — and they are run as one battery in `/08-review`, if the requester asks for it. In one epic the builder's 81 assertions passed and an independent test still found a security defect the suite never touched.
+- **Every UI delivery needs a real-browser screenshot.** That is exactly the defect three code-only checks missed and one print caught in minutes.
+- **Mandatory in the written matrix:** route bypass (percent-encoding, case, doubled slashes, `..`), path traversal, forged/expired/`alg`-swapped tokens, missing/extra fields, wrong types, and sensitive-field leakage on **every** route. These cases are written with the rest and run with the battery.
+- **Agent evidence is a claim until the principal measures.** The principal personally checks each ticket's highest-risk item with its own command before accepting. When the local environment cannot produce the proof, the proof comes from the real environment: deploy and read the real log / the real URL.
+- **Command success is not behavioural proof.** A passing build does not prove the screen works. Measure "before" and "after" with the same independent script when one exists.
+- **Instrument error ≠ product error.** Before reporting a defect, confirm the tool is not the cause; reproduce with a second tool when the result is strange. On Windows prefer `curl.exe` for HTTP and pass JSON bodies from a file (`--data-binary @file`), not inline. When testing a rate-limiter or shared state, use a **new value per case**.
+- **Closing hygiene is mandatory.** Any subagent that raised a server, browser or database ends with: the process killed by whoever owns the port, the disposable database deleted, and a printed confirmation (port free + database removed). Leftovers are the agent's failure, not the environment's — an orphaned leftover hijacks the next agent's work.
+- **The publish gate**: production deploy happens only after the requester accepted the system and asked for it in `/08-review`, and then only with a real-browser proof of the delivered flow against the deployed URL. A green suite does not authorize publishing: a delivery can pass hundreds of assertions and still be unusable under real navigation.
+
+## Escalation
+
+Anything the loop cannot settle (ambiguous ticket, conflicting artifacts, missing decision, stalled rounds) → `ask_user_question` with concrete options as consequences. Autonomy is not a licence to guess on a decision the requester owns.
+
+## Close-out
+
+When all tickets are `human_test`/`done`: hand to `/08-review` for the final verification and honest walkthrough.
+
+## Next
+
+When every ticket is `human_test`/`done`, load `/08-review` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

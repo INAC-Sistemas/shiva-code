@@ -21,9 +21,11 @@ export interface ProfileSnapshot {
   active: ActiveProfile | null
   /** Whether the picker is showing because someone asked for it. */
   picking: boolean
+  /** Whether "Adicionar workspace" is waiting on the switch-or-stay question. */
+  promptingWorkspace: boolean
 }
 
-const EMPTY: ProfileSnapshot = { active: null, picking: false }
+const EMPTY: ProfileSnapshot = { active: null, picking: false, promptingWorkspace: false }
 
 /** Shared state for the gate and the sidebar badge. */
 export class ProfileStore {
@@ -66,8 +68,22 @@ export class ProfileStore {
     this.update({ ...this.snapshot, picking: false })
   }
 
+  /** Ask whether to switch profiles before adding a workspace. */
+  openWorkspacePrompt(): void {
+    this.update({ ...this.snapshot, promptingWorkspace: true })
+  }
+
+  /** Dismiss that question. */
+  closeWorkspacePrompt(): void {
+    this.update({ ...this.snapshot, promptingWorkspace: false })
+  }
+
   private update(next: ProfileSnapshot): void {
-    if (next.active === this.snapshot.active && next.picking === this.snapshot.picking) return
+    if (
+      next.active === this.snapshot.active
+      && next.picking === this.snapshot.picking
+      && next.promptingWorkspace === this.snapshot.promptingWorkspace
+    ) return
     this.snapshot = next
     for (const listener of this.listeners) listener()
   }

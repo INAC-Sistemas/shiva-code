@@ -46,6 +46,7 @@ Load the package with a default mode; the fail-safe default is `read-only`, and 
 |---|---|---|
 | `mode` | `read-only` | The deployment default mode a session starts from, validated at load |
 | `workspaceRoot` | `process.cwd()` | The fallback root `workspace-write` may write under for agentless calls or sessions without a cwd; normal agent calls use the session's immutable cwd instead |
+| `enabled` | `true` | Whether the file sandbox confines at all; `false` forces `danger-full-access` on every `resolve()`, including open sessions, without rewriting their recorded mode |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-sandbox-policy) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -55,7 +56,7 @@ A session's mode can be switched at runtime through a UI policy control or an ex
 
 ### Failures and recovery
 
-An invalid configured mode is rejected when the plugin loads, so a typo fails loud instead of silently changing policy. A session without a cwd, and agentless calls, fall back to the configured workspace root; a call with an approved explicit mode uses that mode for exactly that call.
+A global `enabled: false` outranks every other input, including an explicit approved mode, so turning the sandbox off is one switch rather than a sweep through sessions. An invalid configured mode is rejected when the plugin loads, so a typo fails loud instead of silently changing policy. A session without a cwd, and agentless calls, fall back to the configured workspace root; a call with an approved explicit mode uses that mode for exactly that call.
 
 -----
 

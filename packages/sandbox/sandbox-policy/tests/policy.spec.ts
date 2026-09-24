@@ -11,11 +11,34 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
-import SandboxPolicyService, { SANDBOX_MODES, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { SettingsProvider } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import SandboxPolicyService, {
+  SANDBOX_MODES, SANDBOX_SETTINGS_NAMESPACE, setSandboxMode,
+} from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
-async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}) {
+/** Writable memory provider for the global file-sandbox settings specs. */
+class MemorySettings extends SettingsProvider {
+  readonly doc: Record<string, unknown> = {}
+  readonly writable = true
+
+  protected load(): Promise<Record<string, unknown>> {
+    return Promise.resolve(structuredClone(this.doc))
+  }
+
+  protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+    this.doc[ns] = structuredClone(section)
+    return Promise.resolve()
+  }
+}
+
+async function mounted(config: {
+  mode?: 'read-only' | 'workspace-write' | 'danger-full-access'
+  workspaceRoot?: string
+  enabled?: boolean
+} = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, config)
@@ -121,6 +144,42 @@ describe('SandboxPolicyService', () => {
     })
   })
 
+  it('defaults the file sandbox to enabled', async () => {
+    const ctx = await mounted()
+    expect(ctx.sandboxPolicy.enabled).toBe(true)
+  })
+
+  it('a composed enabled:false forces Full access without a settings provider', async () => {
+    const ctx = await mounted({ mode: 'read-only', enabled: false, workspaceRoot: '/fallback' })
+    const active = session('sess-composed-off', '/projects/open')
+    setSandboxMode(active, 'read-only')
+    expect(ctx.sandboxPolicy.enabled).toBe(false)
+    expect(ctx.sandboxPolicy.resolve({ session: active, mode: 'workspace-write' })).toEqual({
+      mode: 'danger-full-access',
+      workspaceRoot: resolve('/projects/open'),
+      sessionId: 'sess-composed-off',
+    })
+    expect(ctx.sandboxPolicy.overrideOf(active)).toBe('read-only')
+  })
+
+  it('a settings overlay disables the file sandbox for open sessions and restores their logged mode', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(MemorySettings)
+    await ctx.plugin(SandboxPolicyService, { mode: 'read-only', workspaceRoot: '/fallback' })
+    const active = session('sess-live-off', '/projects/open')
+    setSandboxMode(active, 'workspace-write')
+    expect(ctx.sandboxPolicy.resolve({ session: active }).mode).toBe('workspace-write')
+
+    await ctx.settings.update(SANDBOX_SETTINGS_NAMESPACE, { enabled: false })
+    expect(ctx.sandboxPolicy.enabled).toBe(false)
+    expect(ctx.sandboxPolicy.resolve({ session: active }).mode).toBe('danger-full-access')
+    expect(ctx.sandboxPolicy.overrideOf(active)).toBe('workspace-write')
+
+    await ctx.settings.update(SANDBOX_SETTINGS_NAMESPACE, { enabled: true })
+    expect(ctx.sandboxPolicy.resolve({ session: active }).mode).toBe('workspace-write')
+  })
+
   it('uses the configured root when a session has no cwd', async () => {
     const ctx = await mounted({ workspaceRoot: '/fallback' })
     expect(ctx.sandboxPolicy.resolve({ session: session('sess-no-cwd') }).workspaceRoot).toBe(resolve('/fallback'))
@@ -149,7 +208,11 @@ describe('SandboxPolicyService', () => {
 })
 
 describe('sandbox:policy request context', () => {
-  async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
+  async function promptMounted(config: {
+    mode?: 'read-only' | 'workspace-write' | 'danger-full-access'
+    workspaceRoot?: string
+    enabled?: boolean
+  } = {}): Promise<Context> {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(SessionProjectionRegistry)
@@ -202,6 +265,16 @@ describe('sandbox:policy request context', () => {
 
     setSandboxMode(active, 'workspace-write')
     expect(await policyContext(ctx, active)).toBe(`Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(resolve('/projects/current'))}. Some platform temporary areas may also be writable.`)
+  })
+
+  it('a global disable renders Full access without rewriting the session log', async () => {
+    const ctx = await promptMounted({ enabled: false })
+    const active = session('sess-global-off', '/projects/current')
+    setSandboxMode(active, 'read-only')
+    expect(await policyContext(ctx, active)).toBe(
+      'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.',
+    )
+    expect(ctx.sessionProjections.stateOf(active, 'sandboxMode')).toBe('read-only')
   })
 
   it('reconstructs resumed policy from the session log and omits diagnostics without an agent', async () => {

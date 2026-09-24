@@ -16,7 +16,7 @@ async function home(contents?: string): Promise<string> {
 describe('the materialized selection', () => {
   it('round-trips a selection', async () => {
     const dir = await home()
-    const active = { id: 'p1', name: 'Web', plugins: ['dsh-mds'], revision: 3 }
+    const active = { id: 'p1', name: 'Web', plugins: ['dsh-mds'], revision: 3, loginGrantedAt: 1_000 }
 
     await writeActiveProfile(dir, active)
 
@@ -47,11 +47,17 @@ describe('the materialized selection', () => {
     expect((await readActiveProfile(dir))?.plugins).toEqual(['dsh-mds'])
   })
 
+  it('reads a record without loginGrantedAt as made under no login, so the next start asks', async () => {
+    const dir = await home(JSON.stringify({ id: 'p1', name: 'Web', plugins: [], revision: 1 }))
+
+    expect((await readActiveProfile(dir))?.loginGrantedAt).toBe(-1)
+  })
+
   it('leaves no partial file behind for the shell to read at spawn', async () => {
     // The write is staged and renamed: a partial write would look like a
     // profile with no plugins, which is a real and very different choice.
     const dir = await home()
-    await writeActiveProfile(dir, { id: 'p1', name: 'Web', plugins: [], revision: 1 })
+    await writeActiveProfile(dir, { id: 'p1', name: 'Web', plugins: [], revision: 1, loginGrantedAt: 0 })
 
     const raw = await readFile(join(dir, ACTIVE_PROFILE_FILE), 'utf8')
     expect(JSON.parse(raw)).toMatchObject({ id: 'p1' })

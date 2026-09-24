@@ -12,6 +12,19 @@ enum Role {
   GUEST
 }
 
+/// Quem pode selecionar um perfil: só o dono, ou qualquer usuário autenticado.
+enum ProfileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+/// Se o perfil está disponível para seleção. Vários podem estar ativos ao mesmo
+/// tempo; qual deles cada usuário usa é `User.selectedProfileId`.
+enum ProfileStatus {
+  ACTIVE
+  INACTIVE
+}
+
 /// Lista de bloqueio dos tokens de API revogados pelo logout.
 ///
 /// O token é um JWT: o servidor não guarda os emitidos, então a única forma de
@@ -144,8 +157,12 @@ model LibrarySkill {
 ///
 /// O recorte é dado da VPS, não arquivo na máquina do cliente: a casca é código
 /// não confiável, e um recorte local seria o cliente escolhendo o próprio
-/// recorte. O token NÃO carrega o perfil — quem sabe qual está ativo é
-/// `User.activeProfileId`, resolvido a cada requisição.
+/// recorte. O token NÃO carrega o perfil — quem sabe qual está em uso é
+/// `User.selectedProfileId`, resolvido a cada requisição.
+///
+/// Só o dono edita. Selecionar é permitido ao dono e, quando `visibility` é
+/// `PUBLIC`, a qualquer usuário; em ambos os casos só enquanto `status` é
+/// `ACTIVE` (`selectableWhere` em `plugins/profile`).
 model Profile {
   id          String  @id @default(uuid())
   userId      String
@@ -160,14 +177,17 @@ model Profile {
   plugins     String[]
   /// Incrementa a cada escrita. É por ele que a casca detecta que o recorte
   /// mudou sem comparar as listas inteiras.
-  revision    Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  revision    Int               @default(1)
+  visibility  ProfileVisibility @default(PRIVATE)
+  status      ProfileStatus     @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  skills    ProfileSkill[]
-  activeFor User[]         @relation("ActiveProfile")
+  skills      ProfileSkill[]
+  selectedBy  User[]         @relation("SelectedProfile")
 
   @@unique([userId, name])
+  @@index([visibility, status])
   @@map("profiles")
 }
 
@@ -200,14 +220,15 @@ model User {
   updatedAt DateTime @updatedAt
 
   profiles Profile[] @relation("ProfileOwner")
-  /// O perfil sob o qual as chamadas deste usuário são resolvidas. Fica aqui, e
-  /// não numa claim do token, para que trocar de perfil não exija emitir nem
-  /// revogar credencial — os tokens já distribuídos passam a resolver o perfil
-  /// novo na requisição seguinte. Consequência aceita: o perfil ativo é por
-  /// USUÁRIO, não por dispositivo. `SetNull` porque apagar o perfil ativo deve
-  /// deixar o usuário sem perfil (a casca reabre o seletor), não apagar a conta.
-  activeProfileId String?
-  activeProfile   Profile? @relation("ActiveProfile", fields: [activeProfileId], references: [id], onDelete: SetNull)
+  /// O perfil sob o qual as chamadas deste usuário são resolvidas — próprio, ou
+  /// público de outro dono. Fica aqui, e não numa claim do token, para que
+  /// trocar de perfil não exija emitir nem revogar credencial. Consequência
+  /// aceita: a seleção é por USUÁRIO, não por dispositivo. Só vale enquanto o
+  /// perfil continua selecionável (ativo, e próprio ou público); fora disso é
+  /// lida como `null` e a casca reabre o seletor. `SetNull` porque apagar o
+  /// perfil deve deixar o usuário sem seleção, não apagar a conta.
+  selectedProfileId String?
+  selectedProfile   Profile? @relation("SelectedProfile", fields: [selectedProfileId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }

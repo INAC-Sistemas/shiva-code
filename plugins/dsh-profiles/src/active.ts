@@ -46,6 +46,9 @@ export async function readActiveProfile(dshHome: string): Promise<ActiveProfile 
     name: row.name,
     plugins: knownPlugins(Array.isArray(row.plugins) ? row.plugins.filter((p): p is string => typeof p === 'string') : []),
     revision: typeof row.revision === 'number' ? row.revision : 0,
+    // -1 never equals a session's `grantedAt` (0 or a clock instant), so a
+    // record written before the field existed asks again at the next start.
+    loginGrantedAt: typeof row.loginGrantedAt === 'number' ? row.loginGrantedAt : -1,
   }
 }
 

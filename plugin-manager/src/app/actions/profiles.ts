@@ -9,6 +9,7 @@ import {
   createProfile as createOwnedProfile,
   isUniqueViolation,
   profileDraftErrors,
+  selectableWhere,
 } from "@plugins/profile";
 import type { ProfileFieldErrors, ProfileFormState } from "@/lib/profiles";
 
@@ -37,6 +38,8 @@ function readProfileInput(
     description: description === "" ? null : description,
     plugins: [...new Set(formData.getAll("plugins").map(String))].sort(),
     skillIds: [...new Set(formData.getAll("skills").map(String))],
+    visibility: formData.get("visibility") === "PUBLIC" ? "PUBLIC" : "PRIVATE",
+    status: formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE",
   };
 
   const fieldErrors = profileDraftErrors(input);
@@ -178,6 +181,8 @@ export async function updateProfile(
           name: read.input.name,
           description: read.input.description,
           plugins: read.input.plugins,
+          visibility: read.input.visibility,
+          status: read.input.status,
           revision: { increment: 1 },
         },
       }),
@@ -208,10 +213,10 @@ export async function updateProfile(
 }
 
 /**
- * Torna um perfil o ativo de quem está logado.
+ * Seleciona um perfil para quem está logado — próprio ou público de outro dono.
  *
- * O `updateMany` filtra por dono no próprio `where`, então um id alheio é um
- * no-op silencioso — a mesma regra da API: não confirmar a existência.
+ * A checagem é `selectableWhere`, a mesma da API: um id privado de outro dono
+ * ou inativo é no-op silencioso, sem confirmar a existência.
  * @param formData - contém o `id` do perfil.
  */
 export async function selectProfile(formData: FormData): Promise<void> {
@@ -220,16 +225,41 @@ export async function selectProfile(formData: FormData): Promise<void> {
 
   if (!id) return;
 
-  const owned = await prisma.profile.findFirst({
-    where: { id, userId: session.userId },
+  const selectable = await prisma.profile.findFirst({
+    where: { id, ...selectableWhere(session.userId) },
     select: { id: true },
   });
 
-  if (owned === null) return;
+  if (selectable === null) return;
 
   await prisma.user.update({
     where: { id: session.userId },
-    data: { activeProfileId: owned.id },
+    data: { selectedProfileId: selectable.id },
+  });
+
+  revalidatePath(PROFILES_PATH);
+}
+
+/**
+ * Ativa ou desativa um perfil de quem está logado.
+ *
+ * Só o dono: o `updateMany` filtra por `(id, userId)`, então um id alheio é
+ * no-op. Incrementa `revision` para a casca de quem o usa perceber a mudança;
+ * quem o tinha selecionado passa a resolver "sem perfil" e vê o seletor.
+ * @param formData - contém o `id` do perfil e o `status` desejado.
+ */
+export async function setProfileStatus(formData: FormData): Promise<void> {
+  const session = await requireSession();
+  const id = String(formData.get("id") ?? "");
+
+  if (!id) return;
+
+  await prisma.profile.updateMany({
+    where: { id, userId: session.userId },
+    data: {
+      status: formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      revision: { increment: 1 },
+    },
   });
 
   revalidatePath(PROFILES_PATH);
@@ -238,7 +268,7 @@ export async function selectProfile(formData: FormData): Promise<void> {
 /**
  * Remove um perfil de quem está logado.
  *
- * Apagar o perfil ativo deixa o usuário sem nenhum (`onDelete: SetNull`), e a
+ * Apagar um perfil deixa sem seleção quem o usava (`onDelete: SetNull`), e a
  * casca reabre o seletor. `count === 0` é no-op silencioso: um id alheio não
  * responde diferente de um inexistente.
  * @param formData - contém o `id` do perfil.

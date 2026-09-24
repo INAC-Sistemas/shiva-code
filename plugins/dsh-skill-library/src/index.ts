@@ -14,6 +14,12 @@
  *
  * `dsh-login` must be mounted in the same profile: this plugin has no credential
  * of its own and reads the session that plugin records.
+ *
+ * A skill the selected profile does not include is not in the catalog, so the
+ * `skill` tool reports it unknown without asking the library. A
+ * `tools/post-execute` listener asks the body endpoint in that case, and when
+ * the library answers 403 `skill-not-in-profile` it replaces the error with
+ * text telling the model the profile does not cover that tool.
  * @module dsh-skill-library
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -30,9 +36,17 @@ import {
   assertTimeout,
   resolveEndpoint,
 } from './config.ts'
-import { LibrarySkillProvider } from './provider.ts'
+import { LibrarySkillProvider, notInProfileText } from './provider.ts'
+import {
+  assertPrerequisites,
+  loadedSkills,
+  missingPrerequisites,
+  type Prerequisites,
+  prerequisiteText,
+} from './prerequisites.ts'
+import type { PostExecuteDecision, PreExecuteDecision } from './tool-events.ts'
 
-export { LibrarySkillProvider, type ProviderOptions } from './provider.ts'
+export { LibrarySkillProvider, notInProfileText, type ProviderOptions } from './provider.ts'
 export {
   parseCatalog,
   parseSkill,
@@ -89,6 +103,14 @@ export interface Config {
   /** Largest response accepted, in bytes. */
   maxBodyBytes?: number
   /**
+   * Load-order rules: skill name → the skills that must have been loaded
+   * earlier in the same session. The `skill` tool refuses a skill whose
+   * prerequisites are missing, telling the model which to load first.
+   * Deployment-specific, so empty by default; the desktop's `profile` preset
+   * sets the system-development pipeline order.
+   */
+  prerequisites?: Record<string, string[]>
+  /**
    * Static headers added to every request (a gateway key, a tenant id).
    * `authorization` is rejected: it carries the signed-in user's session and has
    * one source.
@@ -105,7 +127,21 @@ export const Config: z<Config> = z.object({
   getTimeoutMs: z.number().default(10_000),
   maxBodyBytes: z.number().default(512 * 1024),
   headers: z.dict(z.string()).default({}),
+  prerequisites: z.dict(z.array(z.string())).default({}),
 })
+
+/** Name of the model-facing tool that loads skills (`@deepseek-ai/dsh-tool-skill`). */
+const SKILL_TOOL = 'skill'
+
+/**
+ * The `name` argument of a `skill` call.
+ * @param args - the parsed arguments the model sent.
+ * @returns the name, or undefined when the call carried none.
+ */
+function skillNameOf(args: unknown): string | undefined {
+  const name = typeof args === 'object' && args !== null ? (args as { name?: unknown }).name : undefined
+  return typeof name === 'string' && name !== '' ? name : undefined
+}
 
 /** Complete config after schemastery applies every field default. */
 type ResolvedConfig = Required<Config>
@@ -128,8 +164,27 @@ export function apply(ctx: Context, config: Config): void {
   assertRank(resolved.rank)
   assertMaxBodyBytes(resolved.maxBodyBytes)
   assertHeaders(resolved.headers)
+  const prerequisites: Prerequisites = assertPrerequisites(resolved.prerequisites)
+  // Calls this plugin denied for load order; the post-execute probe skips them.
+  const deniedForOrder = new WeakSet<object>()
 
   const sessionKey = String(loginRecordKey())
+
+  const provider = new LibrarySkillProvider({
+    endpoint,
+    providerName: resolved.providerName,
+    source: resolved.source,
+    rank: resolved.rank,
+    listTimeoutMs: resolved.listTimeoutMs,
+    getTimeoutMs: resolved.getTimeoutMs,
+    maxBodyBytes: resolved.maxBodyBytes,
+    headers: resolved.headers,
+    authorize: store => resolveLoginAuthorization(store, Date.now()),
+    // Read per call, not captured: the credential seam is optional and may
+    // mount after this plugin.
+    store: () => ctx.get('credentials'),
+    warn: message => { ctx.logger?.warn?.(`dsh-skill-library: ${message}`) },
+  })
 
   ctx.skills.registerProvider((control) => {
     // A signed-in catalog is cacheable, so without this the registry would keep
@@ -140,21 +195,33 @@ export function apply(ctx: Context, config: Config): void {
       if (key === sessionKey) control.invalidate()
     })
 
-    return new LibrarySkillProvider({
-      endpoint,
-      providerName: resolved.providerName,
-      source: resolved.source,
-      rank: resolved.rank,
-      listTimeoutMs: resolved.listTimeoutMs,
-      getTimeoutMs: resolved.getTimeoutMs,
-      maxBodyBytes: resolved.maxBodyBytes,
-      headers: resolved.headers,
-      authorize: store => resolveLoginAuthorization(store, Date.now()),
-      // Read per call, not captured: the credential seam is optional and may
-      // mount after this plugin.
-      store: () => ctx.get('credentials'),
-      warn: message => { ctx.logger?.warn?.(`dsh-skill-library: ${message}`) },
-    })
+    return provider
+  })
+
+  // Refuses a skill whose prerequisites were not loaded earlier in this
+  // session. Only calls from an agent are judged: a direct
+  // `ctx.tools.execute()` has no session to read.
+  ctx.on('tools/pre-execute', async (exec, next): Promise<PreExecuteDecision> => {
+    if (exec.name !== SKILL_TOOL || exec.agent === undefined) return next()
+    const requested = skillNameOf(exec.arguments)
+    if (requested === undefined || prerequisites[requested] === undefined) return next()
+    const missing = missingPrerequisites(prerequisites, requested, loadedSkills(exec.agent.session, SKILL_TOOL))
+    if (missing.length === 0) return next()
+    deniedForOrder.add(exec)
+    return { kind: 'deny', reason: prerequisiteText(requested, missing) }
+  })
+
+  // Delegates first so later listeners keep their say, then turns a failed
+  // `skill` call into the profile refusal when the library confirms it. Only
+  // failures are probed, so a working call costs nothing extra.
+  ctx.on('tools/post-execute', async (exec, result, next): Promise<PostExecuteDecision> => {
+    const downstream = await next()
+    if (exec.name !== SKILL_TOOL || !result.isError || downstream.kind !== 'accept') return downstream
+    if (deniedForOrder.has(exec)) return downstream
+    const requested = skillNameOf(exec.arguments)
+    if (requested === undefined) return downstream
+    if (!await provider.refusedByProfile(requested, exec.signal)) return downstream
+    return { kind: 'block', feedback: [{ type: 'text', text: notInProfileText(requested) }] }
   })
 
   // Named at load because the two failure modes look identical from the chat:

@@ -22,6 +22,9 @@ import type { PermissionSelect } from '@deepseek-ai/dsh-permission-presets/clien
 import {
   PermissionRow, type PermissionRowInjected,
 } from '../src/client/PermissionRow.tsx'
+import {
+  SandboxRow, type SandboxRowInjected,
+} from '../src/client/SandboxRow.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { accessEn, accessZh } from '../src/client/locales.ts'
 
@@ -92,6 +95,8 @@ async function bench() {
     },
     permissionRow: () => ctx.slots.entries('settings.general.item')
       .find(entry => entry.component === PermissionRow),
+    sandboxRow: () => ctx.slots.entries('settings.general.item')
+      .find(entry => entry.component === SandboxRow),
   }
 }
 
@@ -109,6 +114,14 @@ describe('ui-permission browser plugin', () => {
     expect(typeof injected?.select).toBe('function')
     await injected!.load()
     await injected!.select('read-only')
+    const sandboxRow = b.sandboxRow()!
+    expect(sandboxRow.options).toEqual({ id: 'sandbox', order: -15 })
+    const sandboxInjected = sandboxRow.inject?.() as SandboxRowInjected | undefined
+    expect(sandboxInjected?.hooks.sandbox).toBeDefined()
+    expect(typeof sandboxInjected?.load).toBe('function')
+    expect(typeof sandboxInjected?.setEnabled).toBe('function')
+    await sandboxInjected!.load()
+    await sandboxInjected!.setEnabled(false)
   })
 
   it('availability follows the projection key; options mark the current value active and exclude custom', async () => {
@@ -184,5 +197,6 @@ describe('ui-permission browser plugin', () => {
     await b.fiber.dispose()
     expect(b.decoration()).toBeUndefined()
     expect(b.permissionRow()).toBeUndefined()
+    expect(b.sandboxRow()).toBeUndefined()
   })
 })

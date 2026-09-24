@@ -10,7 +10,6 @@ English | [中文](README.zh.md)
 ## Summary
 
 This package provides the in-app directory-browsing surface for the Web GUI: a Select Workspace Directory dialog that lists, navigates, and creates folders through the local Host, with no operating-system chooser involved. It fills the two directory-flow slots declared by `ui-workspace`, composing the client side of the browse picking interaction in one cordis.yml row. Choose it when the browser is remote or in-process and no local OS chooser exists; local deployments may prefer the [`-native`](../ui-directory-picker-native/README.md) surface.
-
 ## Table of Contents
 
 - [Use this package](#use-this-package)
@@ -29,7 +28,7 @@ Mount this plugin alongside `ui-workspace` and the host backend [`dsh-host-direc
 
 ### Navigating and creating
 
-Step through folders, edit the path directly, or filter the last pane by prefix; a Host-flagged hidden entry stays hidden until the footer toggle reveals it. **New folder** opens a nested create dialog targeting the selected folder and selects what it creates; **Open** adopts the selected folder, falling back to the listed level. Confirming a directory is the picked path; dismissing the dialog is the cancellation.
+Step through folders, edit the path directly, filter the last pane by prefix, or narrow the panes on screen with the search field under the header; a Host-flagged hidden entry stays hidden until the footer toggle reveals it. **New folder** opens a nested create dialog targeting the selected folder and selects what it creates; **Open** adopts the selected folder, falling back to the listed level. Confirming a directory is the picked path; dismissing the dialog is the cancellation.
 
 -----
 
@@ -73,7 +72,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define the current browse surface. They are current package constraints, not a general file-browser comparison or a task backlog.
 
-- **No search, no multi-select, and no rename or delete** — the dialog lists and creates directories; a target is reached by navigating, editing the path, or filtering the last pane by prefix.
+- **Search covers the listed panes only, and there is no multi-select, rename or delete** — the dialog lists and creates directories; the search field narrows the levels already on screen, and a target elsewhere is reached by navigating or editing the path. A recursive search would need a Host-side walk the `host.listDirectory` primitive does not offer.
 - **Hidden-entry filtering is client-side** — the Host always lists hidden entries and flags them, so the toggle changes only what the dialog renders.
 
 <a id="dev-note"></a>
