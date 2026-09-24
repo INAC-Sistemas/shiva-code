@@ -37,6 +37,32 @@ export const CHAT_PROVIDERS: readonly ChatProviderEntry[] = [
 ]
 
 /**
+ * Narrow the provider list by what the person typed.
+ *
+ * The query matches the display name, the route id and the kind, so "kimi",
+ * "moonshotai" and "agregador" all reach something. The current selection
+ * always survives: it is what the key field and the model list below belong
+ * to, and a filter must not leave the form pointing at a provider that is no
+ * longer on screen.
+ * @param providers - every provider this installation offers.
+ * @param query - the raw search text.
+ * @param selected - the provider the form is currently filled for, if any.
+ * @returns the providers to show, in their original order.
+ */
+export function matchChatProviders<T extends { provider: string, displayName: string, kind: string }>(
+  providers: readonly T[],
+  query: string,
+  selected?: string,
+): T[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return [...providers]
+  return providers.filter(candidate => candidate.provider === selected
+    || candidate.displayName.toLowerCase().includes(needle)
+    || candidate.provider.toLowerCase().includes(needle)
+    || candidate.kind.toLowerCase().includes(needle))
+}
+
+/**
  * Derive the credential reference a route stores its key under when its
  * settings profile names none — the same rule the Models page applies, so a key
  * saved here is the one that page shows as configured.

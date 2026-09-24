@@ -14,6 +14,7 @@ import {
   CHOICE, CHOICE_HINT, CHOICE_SELECTED, ERROR, FIELD, FOOTER, GRID, INPUT, LABEL, LINK, NOTE,
   PRIMARY, SPACER,
 } from '../styles.ts'
+import { matchChatProviders } from '../../providers.ts'
 import { CHAT_CONNECT_ROUTE, CHAT_MODELS_ROUTE, CHAT_PROVIDERS_ROUTE } from '../../wire.ts'
 import type {
   ChatProviderOption, ChatProvidersResult, ModelOption, ModelsResult, OkResult, SetupState,
@@ -37,12 +38,14 @@ export interface ChatStepProps {
  */
 export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
   const [providers, setProviders] = useState<ChatProviderOption[] | undefined>(undefined)
+  const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | undefined>(undefined)
   const [models, setModels] = useState<ModelOption[]>([])
   const [model, setModel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+  const searchId = useId()
   const keyId = useId()
   const modelId = useId()
   const listId = useId()
@@ -98,14 +101,36 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
 
   const keyMissing = apiKey.trim() === '' && option?.configured !== true
 
+  // The selection survives the filter: the key field and the model list below
+  // belong to it.
+  const shown = matchChatProviders(providers, query, selected)
+
   return (
     <>
       {chat.ready && chat.provider !== null && chat.model !== null
         ? <p style={NOTE}>Modelo atual: <strong>{label(chat.provider, chat.model)}</strong>. Você pode mantê-lo ou trocar agora.</p>
         : null}
 
+      <div style={FIELD}>
+        <label style={LABEL} htmlFor={searchId}>Buscar provedor</label>
+        <input
+          id={searchId}
+          type="search"
+          style={INPUT}
+          spellCheck={false}
+          value={query}
+          disabled={busy}
+          placeholder="Nome, rota ou tipo — DeepSeek, kimi, agregador"
+          onChange={(event) => { setQuery(event.target.value) }}
+        />
+      </div>
+
+      {shown.length === 0
+        ? <p style={NOTE}>Nenhum provedor com esse nome. Limpe a busca para ver os {providers.length}.</p>
+        : null}
+
       <div style={GRID} role="radiogroup" aria-label="Provedor do chat">
-        {providers.map(candidate => (
+        {shown.map(candidate => (
           <button
             key={candidate.provider}
             type="button"
