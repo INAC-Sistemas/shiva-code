@@ -15,7 +15,9 @@ login (10_000) → profile picker (9_999) → setup wizard (9_998) → app
 | Memory (OpenViking) | `dsh-openviking` answers `/openviking/api/status` | one embedding request (also reports the vector width), plus one completion when a VLM is set | `POST /openviking/api/configure` |
 | Summary | always | — | completion marker `shiva-setup` in `settings.yaml` |
 
-The chat providers are the ones in `src/providers.ts` that an LLM adapter declares configurable. A pi-ai route whose settings profile names no `apiKeyEnv` gets one before its key is stored, which is the same write the Models page makes. A failed chat test puts back the value the reference held before, so a rejected key never replaces a working one.
+The chat step offers every route an LLM adapter declares configurable, the curated ones from `src/providers.ts` first, and searches them by display name, route id or kind. A pi-ai route whose settings profile names no `apiKeyEnv` gets one before its key is stored, which is the same write the Models page makes. A failed chat test puts back the value the reference held before, so a rejected key never replaces a working one.
+
+The last card is an endpoint of one's own: any OpenAI-compatible server — Ollama, LM Studio, vLLM, a company gateway. The person names it, gives its base address and an optional key, and `chat/custom/models` interrogates the address without storing anything. `chat/custom/connect` then declares the route under the `llm-pi-ai` settings namespace, keyed on the id derived from the name (`Meu Ollama (casa)` → `meu-ollama-casa`), tests it, and on failure removes the profile and the key again: a route that cannot answer is worse than no route, because the Models page would offer it too.
 
 The image model and the OpenViking endpoints are written through those plugins' own routes. Each tool therefore keeps a single writer for its settings, and the Assets and Memory tabs show what the wizard saved.
 
@@ -41,6 +43,8 @@ All are same-origin `POST` routes under `/setup/api`, fenced with `dsh-login`'s 
 | `chat/providers` | — | `{ providers: [{ provider, displayName, kind, configured }] }` |
 | `chat/models` | `{ provider }` | `{ models: [{ id, name }] }`, from model discovery or the registered route |
 | `chat/connect` | `{ provider, model, apiKey? }` | `{ ok: true }` once the route answered and the selection is saved |
+| `chat/custom/models` | `{ baseURL, apiKey? }` | `{ models: [{ id, name }] }` the address serves; nothing is stored |
+| `chat/custom/connect` | `{ displayName, baseURL, model, apiKey? }` | `{ ok: true }` once the declared route answered; a failure leaves nothing declared |
 | `image/connect` | `{ provider: 'openrouter' \| 'fal', apiKey? }` | `{ ok: true }` once the key is tested and stored |
 | `memory/test` | `{ embedding, vlm? }` | `{ dimension }` of the embedding |
 | `complete` | `{ openviking: 'configured' \| 'skipped' \| null }` | `{ ok: true }` |

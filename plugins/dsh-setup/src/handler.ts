@@ -20,10 +20,11 @@ import {
   isHttpUrl, probeChat, probeCompletion, probeEmbedding, probeOpenRouterKey,
 } from './probes.ts'
 import type { FetchLike } from './probes.ts'
-import { CHAT_PROVIDERS, offeredChatProviders, deriveKeyRef } from './providers.ts'
+import { CUSTOM_API, PI_AI_NS, customRouteId, CHAT_PROVIDERS, offeredChatProviders, deriveKeyRef } from './providers.ts'
 import type { ConfigurableProvider, CredentialsFace, LlmFace, SetupServices } from './services.ts'
 import {
-  CHAT_CONNECT_ROUTE, CHAT_MODELS_ROUTE, CHAT_PROVIDERS_ROUTE, COMPLETE_ROUTE,
+  CHAT_CONNECT_ROUTE, CHAT_CUSTOM_CONNECT_ROUTE, CHAT_CUSTOM_MODELS_ROUTE, CHAT_MODELS_ROUTE,
+  CHAT_PROVIDERS_ROUTE, COMPLETE_ROUTE,
   IMAGE_CONNECT_ROUTE, IMAGE_KEY_REFS, MEMORY_TEST_ROUTE, STATE_ROUTE,
 } from './wire.ts'
 import type {
@@ -267,6 +268,94 @@ export function createSetupHandler(
     }
   }
 
+  const customModels = async (body: Record<string, unknown>): Promise<Answer> => {
+    const llm = services.llm()
+    if (llm === undefined) return fail(503, 'O serviço de modelos ainda está carregando.')
+    const baseURL = text(body, 'baseURL')
+    if (!isHttpUrl(baseURL)) return fail(400, 'Informe a URL base do servidor, começando por http:// ou https://.')
+    const apiKey = text(body, 'apiKey')
+    try {
+      const models = await llm.discoverModels(PI_AI_NS, {
+        baseURL,
+        api: CUSTOM_API,
+        ...apiKey === '' ? {} : { apiKey },
+      })
+      return [200, { ok: true, models: models.map(model => ({ id: model.id, name: model.name ?? model.id })) } satisfies ModelsResult]
+    } catch (error) {
+      // The endpoint is the person's own: say what it answered so they can fix
+      // the address or the key, instead of an empty list that reads as "none".
+      return fail(422, `O endereço não respondeu com uma lista de modelos: ${messageOf(error)}`)
+    }
+  }
+
+  const customConnect = async (body: Record<string, unknown>): Promise<Answer> => {
+    const llm = services.llm()
+    const credentials = services.credentials()
+    const settings = services.settings()
+    const defaultModel = services.defaultModel()
+    if (llm === undefined || credentials === undefined || settings === undefined || defaultModel === undefined) {
+      return fail(503, 'Os serviços de configuração ainda estão carregando. Tente de novo em instantes.')
+    }
+    const displayName = text(body, 'displayName')
+    const baseURL = text(body, 'baseURL')
+    const model = text(body, 'model')
+    const apiKey = text(body, 'apiKey')
+    if (displayName === '') return fail(400, 'Dê um nome ao provedor.')
+    if (!isHttpUrl(baseURL)) return fail(400, 'Informe a URL base do servidor, começando por http:// ou https://.')
+    if (model === '') return fail(400, 'Escolha um modelo.')
+    const provider = customRouteId(displayName)
+    if (provider === '') return fail(400, 'O nome precisa ter letras ou números.')
+    if (llm.listConfigurableProviders().some(candidate => candidate.provider === provider)) {
+      return fail(409, `Já existe um provedor chamado "${provider}". Escolha outro nome.`)
+    }
+
+    const ref = deriveKeyRef(provider)
+    if (apiKey !== '') {
+      try {
+        await credentials.set(ref, apiKey)
+      } catch (error) {
+        return fail(409, `Não foi possível salvar a chave: ${messageOf(error)}`)
+      }
+    }
+    // A hand-declared route carries its whole description: pi-ai ships nothing
+    // about this endpoint, so the protocol, the address and at least one model
+    // must be stored or the route cannot be served at all.
+    try {
+      await settings.mutate(PI_AI_NS, [{
+        op: 'set',
+        path: ['providers', provider],
+        value: {
+          displayName,
+          api: CUSTOM_API,
+          baseURL,
+          models: [{ id: model }],
+          ...apiKey === '' ? {} : { apiKeyEnv: ref },
+        },
+      }])
+    } catch (error) {
+      if (apiKey !== '') await credentials.unset(ref).catch(() => undefined)
+      return fail(500, `Não foi possível salvar o provedor: ${messageOf(error)}`)
+    }
+
+    const outcome = await waitForRoute(llm, provider)
+      ? await probeChat(llm, provider, model, options.timeoutMs)
+      : { ok: false as const, message: `O provedor "${displayName}" não ficou disponível depois de configurado.` }
+    if (!outcome.ok) {
+      // Leave nothing half-declared: a route that cannot answer is worse than
+      // no route, because the Models page would offer it too.
+      await settings.mutate(PI_AI_NS, [{ op: 'unset', path: ['providers', provider] }]).catch(() => undefined)
+      if (apiKey !== '') await credentials.unset(ref).catch(() => undefined)
+      return fail(422, outcome.message)
+    }
+
+    try {
+      await defaultModel.saveSelection({ provider, model })
+    } catch (error) {
+      return fail(500, `O provedor funcionou, mas não foi possível salvar o modelo: ${messageOf(error)}`)
+    }
+    return [200, { ok: true } satisfies OkResult]
+  }
+
   const chatConnect = async (body: Record<string, unknown>): Promise<Answer> => {
     const llm = services.llm()
     const credentials = services.credentials()
@@ -406,6 +495,8 @@ export function createSetupHandler(
   const routes: Record<string, (body: Record<string, unknown>) => Promise<Answer>> = {
     [STATE_ROUTE]: state,
     [CHAT_PROVIDERS_ROUTE]: chatProviders,
+    [CHAT_CUSTOM_MODELS_ROUTE]: customModels,
+    [CHAT_CUSTOM_CONNECT_ROUTE]: customConnect,
     [CHAT_MODELS_ROUTE]: chatModels,
     [CHAT_CONNECT_ROUTE]: chatConnect,
     [IMAGE_CONNECT_ROUTE]: imageConnect,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_PROVIDERS, matchChatProviders, offeredChatProviders } from '../src/providers.ts'
+import { CHAT_PROVIDERS, customRouteId, deriveKeyRef, matchChatProviders, offeredChatProviders } from '../src/providers.ts'
 
 describe('searching the chat providers', () => {
   it('matches the display name, the route id and the kind', () => {
@@ -67,5 +67,21 @@ describe('which chat providers the step offers', () => {
       { provider: 'ollama', displayName: 'Ollama', declared: true },
     ])
     expect(matchChatProviders(offered, 'ollama').map(entry => entry.provider)).toEqual(['ollama'])
+  })
+})
+
+describe('deriving a custom route id', () => {
+  it('slugs what the person typed, collapsing punctuation and trimming the edges', () => {
+    expect(customRouteId('Meu Ollama (casa)')).toBe('meu-ollama-casa')
+    expect(customRouteId('  vLLM / A100  ')).toBe('vllm-a100')
+    expect(customRouteId('gateway_v2')).toBe('gateway-v2')
+  })
+
+  it('returns nothing usable for a name with no letters or digits, which the handler rejects', () => {
+    expect(customRouteId('—— ??')).toBe('')
+  })
+
+  it('keys the credential reference on the derived id, as the Models page reads it', () => {
+    expect(deriveKeyRef(customRouteId('Meu Ollama (casa)'))).toBe('MEU_OLLAMA_CASA_API_KEY')
   })
 })

@@ -21,6 +21,10 @@ export const CHAT_PROVIDERS_ROUTE = `${API_PREFIX}/chat/providers`
 export const CHAT_MODELS_ROUTE = `${API_PREFIX}/chat/models`
 /** `POST` {@link ChatConnectRequest} — {@link OkResult}. */
 export const CHAT_CONNECT_ROUTE = `${API_PREFIX}/chat/connect`
+/** `POST` {@link CustomModelsRequest} — {@link ModelsResult}. */
+export const CHAT_CUSTOM_MODELS_ROUTE = `${API_PREFIX}/chat/custom/models`
+/** `POST` {@link CustomConnectRequest} — {@link OkResult}. */
+export const CHAT_CUSTOM_CONNECT_ROUTE = `${API_PREFIX}/chat/custom/connect`
 /** `POST` {@link ImageConnectRequest} — {@link OkResult}. */
 export const IMAGE_CONNECT_ROUTE = `${API_PREFIX}/image/connect`
 /** `POST` {@link MemoryTestRequest} — {@link MemoryTestResult}. */
@@ -92,6 +96,24 @@ export interface ModelOption {
 
 /** Answer of {@link CHAT_MODELS_ROUTE}. */
 export type ModelsResult = { ok: true, models: ModelOption[] } | FailureResult
+
+/** Ask an endpoint the wizard has no route for yet what it serves. */
+export interface CustomModelsRequest {
+  /** Endpoint base, e.g. `http://192.168.0.10:11434/v1`. */
+  baseURL: string
+  /** Sent for this interrogation alone; nothing is stored by it. */
+  apiKey?: string
+}
+
+/** Declare an OpenAI-compatible route of one's own, then test and adopt it. */
+export interface CustomConnectRequest {
+  /** What to call it; the route id is derived from this. */
+  displayName: string
+  baseURL: string
+  model: string
+  /** Stored only when given: a self-hosted server usually needs none. */
+  apiKey?: string
+}
 
 /** Body of {@link CHAT_CONNECT_ROUTE}. */
 export interface ChatConnectRequest {

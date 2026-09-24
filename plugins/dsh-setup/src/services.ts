@@ -61,7 +61,16 @@ export interface ProbeRequest {
 export interface LlmFace {
   listProviders(): Array<{ id: string, name: string }>
   listConfigurableProviders(): ConfigurableProvider[]
-  discoverModels(settingsNs: string, request: { provider: string }): Promise<Array<{ id: string, name?: string }>>
+  /**
+   * Ask what an endpoint serves. A route the adapter already describes needs
+   * only `provider`; one it does not — a server the person declared — supplies
+   * the address, the protocol and, when it authenticates, a one-shot key the
+   * harness never stores.
+   */
+  discoverModels(
+    settingsNs: string,
+    request: { provider?: string, baseURL?: string, api?: string, apiKey?: string },
+  ): Promise<Array<{ id: string, name?: string }>>
   listModels(provider: string): Promise<Array<{ id: string, name: string }>>
   stream(options: ProbeRequest): AsyncIterable<{ type: string }>
 }

@@ -36,6 +36,9 @@ function fakeHost() {
           node = node[segment] as Record<string, unknown>
         }
         if (op.op === 'set') node[op.path.at(-1)!] = op.value
+        // The real service removes the key; a fake that only ever sets would
+        // hide a rollback that never happened.
+        if (op.op === 'unset') delete node[op.path.at(-1)!]
       }
       sections.set(ns, section)
     },
@@ -52,15 +55,40 @@ function fakeHost() {
       // A route only configuration declared: a self-hosted server the adapter
       // ships nothing about. The Models page offers it, so this step must too.
       { provider: 'ollama', displayName: 'Ollama', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'ollama'], declared: true },
+      // Whatever the settings document declares joins the directory, which is
+      // how a route the wizard just wrote becomes offerable.
+      ...Object.entries(piAiProfiles())
+        .filter(([id]) => id !== 'openai' && id !== 'ollama')
+        .map(([id, profile]) => ({
+          provider: id,
+          displayName: (profile as { displayName?: string }).displayName ?? id,
+          settingsNs: 'llm-pi-ai',
+          settingsPath: ['providers', id],
+          declared: true,
+        })),
     ],
     discoverModels: async (ns, request) => {
       if (ns !== 'llm-pi-ai') throw new Error('no discovery')
-      return [{ id: `${request.provider}-model` }]
+      // A declared endpoint answers about itself; a known route answers by name.
+      if (request.baseURL !== undefined) {
+        if (!request.baseURL.includes('reachable')) throw new Error('connection refused')
+        return [{ id: 'llama3', name: 'Llama 3' }, { id: 'qwen3' }]
+      }
+      return [{ id: `${request.provider!}-model` }]
     },
     listModels: async provider => [{ id: `${provider}-listed`, name: 'Listed' }],
     async* stream(options) {
       requests.push({ provider: options.provider, model: options.model })
-      const ref = options.provider === 'deepseek-official' ? 'DEEPSEEK_API_KEY' : piAiProfiles()[options.provider]?.apiKeyEnv
+      const profile = piAiProfiles()[options.provider]
+      const ref = options.provider === 'deepseek-official' ? 'DEEPSEEK_API_KEY' : profile?.apiKeyEnv
+      // A declared route that names no reference authenticates with nothing,
+      // which is how a self-hosted server is reached.
+      if (profile !== undefined && ref === undefined) {
+        yield options.model === 'broken'
+          ? { type: 'finish', reason: { kind: 'error', failure: { message: 'model not found' } } }
+          : { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
       const key = ref === undefined ? undefined : refs.get(ref)
       yield key?.startsWith('good') === true
         ? { type: 'finish', reason: { kind: 'stop' } }
@@ -152,6 +180,74 @@ describe('chat', () => {
       { provider: 'openai', displayName: 'OpenAI', kind: 'Fabricante', configured: false },
       { provider: 'ollama', displayName: 'Ollama', kind: 'Configurado aqui', configured: false },
     ])
+  })
+
+  /** The pi-ai profiles as the document holds them, for assertions. */
+  const declaredProfiles = (): Record<string, { displayName?: string, apiKeyEnv?: string, baseURL?: string, api?: string, models?: unknown }> =>
+    (host.sections.get('llm-pi-ai')?.providers ?? {}) as Record<string, { displayName?: string, apiKeyEnv?: string, baseURL?: string, api?: string, models?: unknown }>
+
+  it('asks a custom endpoint what it serves, and says what it answered when it cannot', async () => {
+    const found = await call('/setup/api/chat/custom/models', { baseURL: 'http://reachable.local:11434/v1' })
+    expect(found.body.models).toEqual([{ id: 'llama3', name: 'Llama 3' }, { id: 'qwen3', name: 'qwen3' }])
+
+    const refused = await call('/setup/api/chat/custom/models', { baseURL: 'http://nowhere.local:11434/v1' })
+    expect(refused.status).toBe(422)
+    expect(refused.body.message).toContain('connection refused')
+
+    expect((await call('/setup/api/chat/custom/models', { baseURL: 'ollama' })).status).toBe(400)
+  })
+
+  it('declares a custom route without a key, tests it and adopts its model', async () => {
+    const { status } = await call('/setup/api/chat/custom/connect', {
+      displayName: 'Meu Ollama (casa)',
+      baseURL: 'http://reachable.local:11434/v1',
+      model: 'llama3',
+    })
+    expect(status).toBe(200)
+    // The route carries its whole description, because the adapter ships
+    // nothing about this endpoint.
+    expect(declaredProfiles()['meu-ollama-casa']).toEqual({
+      displayName: 'Meu Ollama (casa)',
+      api: 'openai-completions',
+      baseURL: 'http://reachable.local:11434/v1',
+      models: [{ id: 'llama3' }],
+    })
+    expect(host.selection()).toEqual({ provider: 'meu-ollama-casa', model: 'llama3' })
+    // It is offered from then on, like any other route.
+    const offered = (await call('/setup/api/chat/providers')).body.providers as Array<{ provider: string }>
+    expect(offered.map(entry => entry.provider)).toContain('meu-ollama-casa')
+  })
+
+  it('stores a key when one is given, under the reference the route derives', async () => {
+    await call('/setup/api/chat/custom/connect', {
+      displayName: 'Gateway',
+      baseURL: 'http://reachable.local/v1',
+      model: 'llama3',
+      apiKey: 'good-gateway',
+    })
+    expect(declaredProfiles().gateway?.apiKeyEnv).toBe('GATEWAY_API_KEY')
+    expect(host.refs.get('GATEWAY_API_KEY')).toBe('good-gateway')
+  })
+
+  it('leaves nothing half-declared when the route cannot answer', async () => {
+    const { status, body } = await call('/setup/api/chat/custom/connect', {
+      displayName: 'Quebrado',
+      baseURL: 'http://reachable.local/v1',
+      model: 'broken',
+    })
+    expect(status).toBe(422)
+    expect(body.message).toContain('model not found')
+    expect(declaredProfiles().quebrado).toBeUndefined()
+  })
+
+  it('refuses a name that collides with a route this installation already has', async () => {
+    const { status, body } = await call('/setup/api/chat/custom/connect', {
+      displayName: 'OpenAI',
+      baseURL: 'http://reachable.local/v1',
+      model: 'llama3',
+    })
+    expect(status).toBe(409)
+    expect(body.message).toContain('openai')
   })
 
   it('lists models through discovery, falling back to the registered route', async () => {

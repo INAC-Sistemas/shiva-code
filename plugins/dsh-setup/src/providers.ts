@@ -106,6 +106,32 @@ export function matchChatProviders<T extends { provider: string, displayName: st
     || candidate.kind.toLowerCase().includes(needle))
 }
 
+/** Settings namespace whose adapter serves hand-declared routes. */
+export const PI_AI_NS = 'llm-pi-ai'
+
+/**
+ * Wire protocol a custom route speaks. One protocol, not a choice: every
+ * server someone points this wizard at — Ollama, LM Studio, vLLM, a gateway —
+ * answers the OpenAI completions shape, and a protocol picker on the first
+ * screen would ask for a decision nobody arrives with. The Models page still
+ * edits the field for the rest.
+ */
+export const CUSTOM_API = 'openai-completions'
+
+/**
+ * The route id derived from what the person named their provider.
+ *
+ * Lowercase, with runs of anything else collapsed into single dashes and the
+ * edges trimmed, so "Meu Ollama (casa)" becomes `meu-ollama-casa`. The id is
+ * what the settings document, the credential reference and the model selection
+ * all key on, which is why it is derived once, here.
+ * @param displayName - what the person typed.
+ * @returns the route id, or an empty string when nothing usable remains.
+ */
+export function customRouteId(displayName: string): string {
+  return displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
 /**
  * Derive the credential reference a route stores its key under when its
  * settings profile names none — the same rule the Models page applies, so a key
