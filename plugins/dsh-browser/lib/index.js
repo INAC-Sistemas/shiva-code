@@ -105,25 +105,26 @@ const FULL_OPS = ['click', 'fill', 'read', 'eval', 'console', 'wait_for', 'wait'
 const BROWSER_OPS = [...TAB_OPS, ...FULL_OPS]
 
 /**
- * The permanent gate for full-scope automation: a top-level
- * `browserFullAccess: true` in the harness settings.yaml. Read on every
- * attempt, so flipping the flag takes effect without a restart. No flag, no
- * full scope — the tool refuses with the exact remedy.
+ * The permanent gate for full-scope automation. Granted by default; only a
+ * top-level `browserFullAccess: false` in the harness settings.yaml revokes it.
+ * Read on every attempt, so flipping the flag takes effect without a restart.
  */
 async function fullAccessEnabled() {
   const home = process.env.DSH_HOME
-  if (!home) return false
+  if (!home) return true
+  let text
   try {
-    const text = await readFile(join(home, 'settings.yaml'), 'utf8')
-    return /^browserFullAccess\s*:\s*true\s*$/m.test(text)
+    text = await readFile(join(home, 'settings.yaml'), 'utf8')
   } catch {
-    return false
+    // A missing or unreadable settings.yaml carries no revocation; the default grant stands.
+    return true
   }
+  return !/^browserFullAccess\s*:\s*false\s*$/m.test(text)
 }
 
 const FULL_ACCESS_HINT =
-  'recusado: automação de página real (scope "full") exige a flag permanente browserFullAccess: true ' +
-  'no settings.yaml do harness (DSH_HOME). Sem approval por sessão de propósito: ou a flag está ligada, ou a op não roda.'
+  'recusado: automação de página real (scope "full") foi desligada por browserFullAccess: false ' +
+  'no settings.yaml do harness (DSH_HOME). Remova a linha ou troque por true para liberar; não há approval por sessão.'
 
 /** Build the agent tool that drives the better-sidebar browser tab. */
 function createTool(ctx) {
@@ -134,8 +135,8 @@ function createTool(ctx) {
       'navigate (open the Browser tab at url) · focus (bring an open Browser tab to the front) · screenshot (capture the app ' +
       'window showing the Browser tab; saved under the workspace and returned as a path) · open_external (open url in the ' +
       'machine\'s default browser, e.g. an OAuth or dashboard link) · plus FULL-SCOPE page automation: click, fill, read, ' +
-      'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these require scope:"full" and the ' +
-      'permanent browserFullAccess: true flag in the harness settings.yaml; with it you drive ANY real URL like a user ' +
+      'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these require scope:"full", which is ' +
+      'available unless the owner turned it off (browserFullAccess: false); with it you drive ANY real URL like a user ' +
       '(logins included: read credentials from a project file or env var, never from chat). fill never echoes the value. ' +
       'Prefer click/fill by role+name (accessibility) over text: text matching can hit a container. Never reload through ' +
       'eval — use op "reload". Use wait_stable (or screenshot settle, default on) before a print so a page that mounts ' +
@@ -148,7 +149,7 @@ function createTool(ctx) {
     parameters: {
       op: { type: 'string', required: true, enum: BROWSER_OPS, description: 'Operation to run.' },
       url: { type: 'string', description: 'Target URL (open/navigate/open_external).' },
-      scope: { type: 'string', enum: ['workspace', 'full'], description: 'workspace (default) = tab sandbox as today; full = drive any real URL (needs browserFullAccess: true in settings.yaml).' },
+      scope: { type: 'string', enum: ['workspace', 'full'], description: 'workspace (default) = tab sandbox as today; full = drive any real URL (on by default; browserFullAccess: false in settings.yaml turns it off).' },
       selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for/scroll/upload).' },
       text: { type: 'string', description: 'Visible text to match instead of a selector (click/wait_for).' },
       role: { type: 'string', description: 'ARIA role for an accessible lookup (click/fill), e.g. "button", "link", "textbox".' },

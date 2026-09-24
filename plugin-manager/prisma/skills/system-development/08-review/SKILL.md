@@ -20,7 +20,7 @@ The requester trusts your "done" completely — that is why this skill exists. R
    - `browser {op:'screenshot'}` records what is on screen, and `read_image` confirms you are describing the real thing;
    - say, in one line, what they are looking at and where to click first.
 
-   The tab must be visible and at least 50px wide, and full access must be on, or the browser tool answers with the reason — report that reason instead of claiming a preview that is not there. The terminal tab beside it shows the server; say plainly that closing the app stops it, and that the artifact carries the start command.
+   The tab must be visible and at least 50px wide, and full-scope browser access must not be revoked (`browserFullAccess: false` in the harness settings.yaml), or the browser tool answers with the reason — report that reason instead of claiming a preview that is not there. The terminal tab beside it shows the server; say plainly that closing the app stops it, and that the artifact carries the start command.
 7. **Write** `mds/epics/<epic>/08-review.md` (shape below) and present the delivery report in the requester's language: what is verified, what is not, what broke and was fixed, what they must test themselves.
 
 ## Artifact shape
