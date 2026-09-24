@@ -21,11 +21,23 @@ Before the first builder, make sure the project exists **at the workspace root**
 
 Confirm `components.json` in the frontend folder and a passing build of every part before spawning anyone. No Docker file is created here (`skill engineering-standards` rule 7): every ticket is checked against the app running locally from its framework's own command. Never wrap the whole project in one extra folder.
 
+## The app stays up (one instance, one port, the whole epic)
+
+Right after the project exists, **you** start the application once and leave it running until the epic ends. It is what every check looks at, and at the end it is what the requester sees.
+
+1. `terminal_create` opens a terminal tab the requester can watch, in the workspace root.
+2. `terminal_send` starts the app on the **fixed port `04-tech-plan.md` records** (`pnpm dev`, or the stack's own command), and `terminal_wait_for` waits for its ready line — never a `sleep`, never a polling loop.
+3. Announce the port once, in one line. From here every flow check — yours and every subagent's — goes to that URL.
+
+**No subagent raises a server.** A builder or evaluator that needs the app uses the instance already up; if it looks dead, it says so and you restart it. One epic burned 71 app starts, 36 process kills and 99 `flock` calls across six different ports because every agent raised its own — that is the failure this rule exists to stop. A port is a shared resource, not something to allocate per agent.
+
+Use a terminal tab, never a background job: a job dies when the session is discarded, and the job tooling itself tells the model to kill jobs before the final answer. The terminal belongs to the requester and outlives the turn.
+
 ## The triad
 
 | Subagent | May do | May NOT do | Returns |
 |---|---|---|---|
-| **builder** | `write`/`edit` code and files for the ticket scope only; build with `bash`/`pwsh`/`terminal_*` | touch tickets' `status:`, redesign UX, widen scope | files changed + commands run + outputs |
+| **builder** | `write`/`edit` code and files for the ticket scope only; build and typecheck with `bash` | touch tickets' `status:`, redesign UX, widen scope, **start a server** | files changed + commands run + outputs |
 | **qa-tester** | **write the ticket's tests, and nothing else** (`write`/`edit` under `testes/` and the test-runner configs) — unit, typecheck, regression, e2e/flow cases for its "Done when"; it does NOT run them here | edit product code, run the suite | the test files written, and what each one asserts |
 | **evaluator** | `read` the ticket, the epic artifacts (brief/flows/prototype.md/plan) and the diff; judge match | edit anything | GREEN (work matches artifacts) or RED with the exact mismatch list |
 
@@ -45,7 +57,9 @@ The briefing is context injection, not documentation: it consumes the subagent's
 2. **Paths + "read first"** — the ticket/artifact path plus only the excerpts the agent needs ("read section X of Y"), never the artifact pasted.
 3. **The GAP** — the acceptance items that still have no proof, numbered. This is the work contract.
 4. **ALREADY PROVEN** — what the principal measured personally, each item with its proof (command + output). The subagent does not re-test any of it; it may at most contest with new evidence. Re-proving existing evidence is the largest source of hours lost.
-5. **Known environment traps** of this harness (e.g. prefer `curl.exe` over `Invoke-WebRequest` on Windows, pass JSON bodies from a file, `.ps1` saved as UTF-8 with BOM, a local database already running — reuse it, do not raise another).
+5. **HOW IT WILL BE JUDGED** — the evaluator's checklist, verbatim: every line of this ticket's "Done when" plus the `engineering-standards` items it touches. A builder that knows the checks writes to pass them; hiding the checklist is what turned 32% of one epic's dispatches into "fix" rounds (22% of all agent time).
+6. **The app is already running** on the port the plan records — the builder uses it and never starts a server of its own.
+7. **Known environment traps** of this harness (e.g. prefer `curl.exe` over `Invoke-WebRequest` on Windows, pass JSON bodies from a file, `.ps1` saved as UTF-8 with BOM, a local database already running — reuse it, do not raise another).
 
 **UI tickets** add one line to the role: "Load the `shadcn-ui`, `ui-icons`, `ui-palette`, `frontend-design` and `baseline-ui` skills first — plus `react-ui-patterns` when the screen loads or mutates data, and `tailwind-patterns` when the ticket touches the theme CSS; build every standard control from shadcn/ui components added with its CLI, using the template, base and preset from `04-tech-plan.md`, take every icon from the pack that same plan records, take every color from the theme variables set from `mds/epics/<epic>/03-palette.md`, and take fonts and motion tokens from `mds/epics/<epic>/03-design.md` so the screen animates as the prototype did." Load `react-best-practices` only for tickets about data fetching, routing or performance, and never `ui-ux-pro-max` in a builder: the briefing budget above applies to loaded skills too. The evaluator's briefing loads `fixing-accessibility` and `fixing-motion-performance` in review mode and adds the matching checks: a hand-written control that a shadcn component covers is RED, so is a hand-written SVG or emoji that Lucide or Tabler covers, so is a color literal or default Tailwind color outside the theme CSS, so is a screen without the entrance, reveal, feedback and state-change motion of `03-design.md`, so is motion that breaks reduced motion or animates layout on a large surface, so is a missing loading, error or empty state, so is a critical accessibility violation, and so is a UI change without a real-browser screenshot.
 
@@ -70,6 +84,8 @@ Follow the phases and the parallelism from `06-plano-de-execucao.md`; the loop t
 **Spawning one when the list held two is disobeying the plan the requester validated**, not a style choice — it is the difference between the epic they approved and a queue of one. Two fronts the plan calls parallel are two spawns in one turn; if you believe a listed ticket cannot start, say which file or symbol it shares with the one running and fix the plan, do not silently serialize.
 
 **A phase closes before the next opens.** Do not start a ticket of phase N+1 while any ticket of phase N is still in `in_progress` or awaiting its evaluator: the phases exist because the plan found real edges between them.
+
+**Inspect in batches, with the right tool.** `read`, `grep` and `glob` are concurrency-safe: several of them in one step run in parallel and cost one round trip. `bash` is exclusive and serializes. So read files with `read`, search with `grep`, list with `glob` — never `cat`, `grep` or `ls` inside `bash` — and put every independent lookup in the SAME step. In one measured epic 53% of all tool calls were trivial lookups, one per step, costing about 250 minutes of pure round trips.
 
 **Never wait.** After spawning, end the turn — the completion of each subagent comes back to you as a notification (`/00-start-here`, "Subagent truth"). A `sleep`, a polling loop or a repeated `list_agents` to check progress is a defect.
 

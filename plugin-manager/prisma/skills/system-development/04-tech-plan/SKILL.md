@@ -40,6 +40,8 @@ The workspace's connection tools are the real mechanism for these, and the plan 
 
 Development runs on SQLite whenever the system needs a database (`skill engineering-standards` rule 8); this plan records the production database and how one schema stays valid on both.
 
+Record one Decisions row for **how the application runs locally**: the start command and a **fixed port** (pick one and write it down — `3100`, `4300`, whatever is free). `/07-build` starts that one instance in a terminal tab and keeps it up for the whole epic, every check points at it, and `/08-review` hands it over as the preview. A port decided per agent, at run time, is what produced 71 app starts and 99 lock calls in one epic.
+
 Every system deploys as the Docker image of `skill engineering-standards` rule 7, so whatever target is chosen later must run that image: Railway builds the root `Dockerfile`, and a VPS runs it with `docker compose` over `ssh_run`. Vercel does not run the image and its migrations-on-start entrypoint, so it is an option only if the requester asks for it after acceptance, recorded with their words and with how migrations and seed run there instead. Record this as a requirement on the target, not as a chosen provider.
 
 ## Procedure
