@@ -14,7 +14,7 @@
  * `dsh-openviking` never shows the memory step.
  * @module dsh-setup/client/SetupGate
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { ASSETS_STATUS, MEMORY_STATUS, pluginStatus, post } from './api.ts'
 import type { AssetsStatus, MemoryStatus } from './api.ts'
@@ -27,7 +27,7 @@ import type { SummaryRow } from './steps/SummaryStep.tsx'
 import {
   BACKDROP, CARD, EYEBROW, PROGRESS, SEGMENT, SEGMENT_DONE, SUBTITLE, TITLE,
 } from './styles.ts'
-import { memoryInstalling, planSetup } from '../plan.ts'
+import { memoryInstalling, planSetup, withMemoryStep } from '../plan.ts'
 import type { StepId } from '../plan.ts'
 import { STATE_ROUTE } from '../wire.ts'
 import type { MemoryChoice, SetupState } from '../wire.ts'
@@ -131,10 +131,18 @@ export function SetupGate({ session }: SetupGateProps): ReactNode {
     return () => controller.abort()
   }, [signedIn])
 
+  // The step being shown, readable from callbacks without re-creating them.
+  const shown = useRef(0)
+  useEffect(() => { shown.current = index }, [index])
+
   /** Re-read the host state after a step stored something, keeping the step list. */
   const refresh = useCallback(async () => {
     const read = await readFacts()
-    if (read !== undefined) setFacts(read)
+    if (read === undefined) return
+    setFacts(read)
+    // A late answer from `dsh-openviking` still earns its step: see
+    // `withMemoryStep`.
+    if (read.memory !== null) setSteps(current => withMemoryStep(current, shown.current))
   }, [])
 
   const advance = useCallback((record: Results) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { memoryInstalling, planSetup, SETUP_VERSION } from '../src/plan.ts'
+import { memoryInstalling, planSetup, SETUP_VERSION, withMemoryStep } from '../src/plan.ts'
 import type { SetupFacts } from '../src/plan.ts'
 
 const done: SetupFacts = {
@@ -64,5 +64,20 @@ describe('the memory step and the OpenViking installer', () => {
 
   it('stops waiting on a failed install, so the step never traps the person', () => {
     expect(memoryInstalling({ installed: false, phase: 'error' })).toBe(false)
+  })
+})
+
+describe('a memory step whose plugin answered late', () => {
+  it('takes its own place before the summary', () => {
+    expect(withMemoryStep(['chat', 'image', 'summary'], 0)).toEqual(['chat', 'image', 'memory', 'summary'])
+  })
+
+  it('is never offered twice', () => {
+    const planned = ['chat', 'memory', 'summary'] as const
+    expect(withMemoryStep(planned, 0)).toEqual(['chat', 'memory', 'summary'])
+  })
+
+  it('leaves a wizard already on its summary alone', () => {
+    expect(withMemoryStep(['chat', 'summary'], 1)).toEqual(['chat', 'summary'])
   })
 })

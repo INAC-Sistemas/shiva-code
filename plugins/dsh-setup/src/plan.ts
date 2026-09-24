@@ -36,6 +36,29 @@ export function memoryInstalling(status: { installed: boolean, phase: string }):
 /** One screen of the wizard, in display order. */
 export type StepId = 'chat' | 'image' | 'memory' | 'summary'
 
+/**
+ * Offer the memory step to a wizard that opened without it.
+ *
+ * Which steps exist is decided when the wizard opens, and `dsh-openviking` may
+ * still be booting then: its status route answers late, and the step would be
+ * missing for the whole run — the person reaches the end never having been
+ * asked about memory. Every finished step re-reads the facts, so the step is
+ * inserted in its own place, before the summary, the moment the route answers.
+ *
+ * A wizard already showing the summary keeps it: bouncing someone back from
+ * the last screen to an optional step they were never offered reads as the
+ * wizard restarting itself.
+ * @param steps - the steps as planned so far.
+ * @param index - the step being shown.
+ * @returns the steps, with `memory` inserted when it belongs and is missing.
+ */
+export function withMemoryStep(steps: readonly StepId[], index: number): StepId[] {
+  if (steps.includes('memory')) return [...steps]
+  const summary = steps.indexOf('summary')
+  if (summary === -1 || index >= summary) return [...steps]
+  return [...steps.slice(0, summary), 'memory', ...steps.slice(summary)]
+}
+
 /** The facts {@link planSetup} decides from. */
 export interface SetupFacts {
   /** Whether the default chat route can serve a request. */
