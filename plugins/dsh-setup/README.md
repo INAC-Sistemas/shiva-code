@@ -19,6 +19,8 @@ The chat step offers every route an LLM adapter declares configurable, the curat
 
 The last card is an endpoint of one's own: any OpenAI-compatible server — Ollama, LM Studio, vLLM, a company gateway. The person names it, gives its base address and an optional key, and `chat/custom/models` interrogates the address without storing anything. `chat/custom/connect` then declares the route under the `llm-pi-ai` settings namespace, keyed on the id derived from the name (`Meu Ollama (casa)` → `meu-ollama-casa`), tests it, and on failure removes the profile and the key again: a route that cannot answer is worse than no route, because the Models page would offer it too.
 
+The route always names a credential, even when the person gives no key: the OpenAI-compatible protocol refuses a route that names none with `No API key for provider`, whatever its server accepts, so a blank key stores `KEYLESS_PLACEHOLDER` under the derived reference. A local server ignores the value, and the credential seam — unlike profile `headers` — keeps it where the redactor can see it.
+
 The image model and the OpenViking endpoints are written through those plugins' own routes. Each tool therefore keeps a single writer for its settings, and the Assets and Memory tabs show what the wizard saved.
 
 ## When the wizard opens

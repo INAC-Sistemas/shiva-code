@@ -119,6 +119,20 @@ export const PI_AI_NS = 'llm-pi-ai'
 export const CUSTOM_API = 'openai-completions'
 
 /**
+ * What a route stores as its key when the endpoint asks for none.
+ *
+ * A route naming no credential resolves as configured-but-keyless, and pi-ai's
+ * OpenAI-compatible implementation then refuses it with `No API key for
+ * provider` before any request leaves: that protocol requires an API key or an
+ * `Authorization` header ([llm-pi-ai](../../../packages/llm/llm-pi-ai/README.md)).
+ * A stored placeholder is what the Models page writes for a local server too,
+ * and it keeps the value inside the credential seam, where the redactor can
+ * see it, instead of in profile `headers`, where it cannot. Servers that take
+ * no key ignore the value.
+ */
+export const KEYLESS_PLACEHOLDER = 'local'
+
+/**
  * The route id derived from what the person named their provider.
  *
  * Lowercase, with runs of anything else collapsed into single dashes and the

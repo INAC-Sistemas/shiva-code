@@ -20,7 +20,7 @@ import {
   isHttpUrl, probeChat, probeCompletion, probeEmbedding, probeOpenRouterKey,
 } from './probes.ts'
 import type { FetchLike } from './probes.ts'
-import { CUSTOM_API, PI_AI_NS, customRouteId, CHAT_PROVIDERS, offeredChatProviders, deriveKeyRef } from './providers.ts'
+import { CUSTOM_API, KEYLESS_PLACEHOLDER, PI_AI_NS, customRouteId, CHAT_PROVIDERS, offeredChatProviders, deriveKeyRef } from './providers.ts'
 import type { ConfigurableProvider, CredentialsFace, LlmFace, SetupServices } from './services.ts'
 import {
   CHAT_CONNECT_ROUTE, CHAT_CUSTOM_CONNECT_ROUTE, CHAT_CUSTOM_MODELS_ROUTE, CHAT_MODELS_ROUTE,
@@ -310,12 +310,10 @@ export function createSetupHandler(
     }
 
     const ref = deriveKeyRef(provider)
-    if (apiKey !== '') {
-      try {
-        await credentials.set(ref, apiKey)
-      } catch (error) {
-        return fail(409, `Não foi possível salvar a chave: ${messageOf(error)}`)
-      }
+    try {
+      await credentials.set(ref, apiKey === '' ? KEYLESS_PLACEHOLDER : apiKey)
+    } catch (error) {
+      return fail(409, `Não foi possível salvar a chave: ${messageOf(error)}`)
     }
     // A hand-declared route carries its whole description: pi-ai ships nothing
     // about this endpoint, so the protocol, the address and at least one model
@@ -324,16 +322,10 @@ export function createSetupHandler(
       await settings.mutate(PI_AI_NS, [{
         op: 'set',
         path: ['providers', provider],
-        value: {
-          displayName,
-          api: CUSTOM_API,
-          baseURL,
-          models: [{ id: model }],
-          ...apiKey === '' ? {} : { apiKeyEnv: ref },
-        },
+        value: { displayName, api: CUSTOM_API, baseURL, models: [{ id: model }], apiKeyEnv: ref },
       }])
     } catch (error) {
-      if (apiKey !== '') await credentials.unset(ref).catch(() => undefined)
+      await credentials.unset(ref).catch(() => undefined)
       return fail(500, `Não foi possível salvar o provedor: ${messageOf(error)}`)
     }
 
@@ -344,7 +336,7 @@ export function createSetupHandler(
       // Leave nothing half-declared: a route that cannot answer is worse than
       // no route, because the Models page would offer it too.
       await settings.mutate(PI_AI_NS, [{ op: 'unset', path: ['providers', provider] }]).catch(() => undefined)
-      if (apiKey !== '') await credentials.unset(ref).catch(() => undefined)
+      await credentials.unset(ref).catch(() => undefined)
       return fail(422, outcome.message)
     }
 

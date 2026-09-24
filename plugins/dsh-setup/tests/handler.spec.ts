@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createSetupHandler } from '../src/handler.ts'
+import { KEYLESS_PLACEHOLDER } from '../src/providers.ts'
 import { SETUP_VERSION } from '../src/plan.ts'
 import type { FetchLike } from '../src/probes.ts'
 import type {
@@ -43,7 +44,7 @@ function fakeHost() {
       sections.set(ns, section)
     },
   }
-  const piAiProfiles = () => (sections.get('llm-pi-ai')!.providers ?? {}) as Record<string, { apiKeyEnv?: string }>
+  const piAiProfiles = () => (sections.get('llm-pi-ai')!.providers ?? {}) as Record<string, { apiKeyEnv?: string, baseURL?: string, displayName?: string }>
   const llm: LlmFace = {
     listProviders: () => [
       { id: 'deepseek-official', name: 'DeepSeek' },
@@ -81,16 +82,22 @@ function fakeHost() {
       requests.push({ provider: options.provider, model: options.model })
       const profile = piAiProfiles()[options.provider]
       const ref = options.provider === 'deepseek-official' ? 'DEEPSEEK_API_KEY' : profile?.apiKeyEnv
-      // A declared route that names no reference authenticates with nothing,
-      // which is how a self-hosted server is reached.
-      if (profile !== undefined && ref === undefined) {
+      const key = ref === undefined ? undefined : refs.get(ref)
+      // The OpenAI-compatible protocol refuses a route that names no resolvable
+      // credential before any request leaves, however keyless its server is.
+      if (key === undefined) {
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: `No API key for provider: ${options.provider}` } } }
+        return
+      }
+      // A hand-declared self-hosted server ignores what the key says, so only
+      // the model decides; a curated route checks the key itself.
+      if (profile?.baseURL !== undefined) {
         yield options.model === 'broken'
           ? { type: 'finish', reason: { kind: 'error', failure: { message: 'model not found' } } }
           : { type: 'finish', reason: { kind: 'stop' } }
         return
       }
-      const key = ref === undefined ? undefined : refs.get(ref)
-      yield key?.startsWith('good') === true
+      yield key.startsWith('good')
         ? { type: 'finish', reason: { kind: 'stop' } }
         : { type: 'finish', reason: { kind: 'error', failure: { message: 'invalid api key' } } }
     },
@@ -205,13 +212,17 @@ describe('chat', () => {
     })
     expect(status).toBe(200)
     // The route carries its whole description, because the adapter ships
-    // nothing about this endpoint.
+    // nothing about this endpoint. It names a credential even though the
+    // server asks for none: the protocol refuses a route that names none, so
+    // the placeholder is what makes a keyless server reachable at all.
     expect(declaredProfiles()['meu-ollama-casa']).toEqual({
       displayName: 'Meu Ollama (casa)',
       api: 'openai-completions',
       baseURL: 'http://reachable.local:11434/v1',
       models: [{ id: 'llama3' }],
+      apiKeyEnv: 'MEU_OLLAMA_CASA_API_KEY',
     })
+    expect(host.refs.get('MEU_OLLAMA_CASA_API_KEY')).toBe(KEYLESS_PLACEHOLDER)
     expect(host.selection()).toEqual({ provider: 'meu-ollama-casa', model: 'llama3' })
     // It is offered from then on, like any other route.
     const offered = (await call('/setup/api/chat/providers')).body.providers as Array<{ provider: string }>
@@ -238,6 +249,7 @@ describe('chat', () => {
     expect(status).toBe(422)
     expect(body.message).toContain('model not found')
     expect(declaredProfiles().quebrado).toBeUndefined()
+    expect(host.refs.has('QUEBRADO_API_KEY')).toBe(false)
   })
 
   it('refuses a name that collides with a route this installation already has', async () => {
