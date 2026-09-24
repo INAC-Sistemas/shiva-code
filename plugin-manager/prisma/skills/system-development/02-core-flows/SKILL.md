@@ -12,7 +12,7 @@ Map behaviour, not components. Read `/00-start-here` first. Requires `mds/epics/
 
 1. **Read the brief.** `read` the brief; every flow must trace to a Must Do or a Behaviour scenario in it.
 2. **List the actors** — end user, agent, background job, external system. A flow with an unnamed actor hides an assumption.
-3. **One flow per actor goal** — not per screen, not per endpoint. "Book a slot" is a flow; "click plus" is a step.
+3. **One flow per actor goal** — not per screen, not per endpoint. External systems the brief's Surface and delivery topics named are actors too: a provider that calls a webhook in, a system this one notifies, an API consumer. Each gets its flow in the direction it moves. "Book a slot" is a flow; "click plus" is a step.
 4. **Happy path in numbered steps**: actor action → system response → what they see.
 5. **Unhappy paths per flow**: empty state, no permission, network failure, abandonment halfway, two actors at once. Most product defects live here; most flow documents skip it.
 6. **Record the UX decisions each flow forces**: where confirmation happens, what is undoable, what is remembered between sessions, what the user must be told versus what stays silent.

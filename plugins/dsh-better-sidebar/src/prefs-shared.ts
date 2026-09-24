@@ -29,8 +29,11 @@ export interface SidebarPrefs {
   /**
    * Whether the model-facing agent terminal tools (terminal_create / list /
    * send / read / wait_for / resize / signal / close) are injected into the
-   * model's toolset. Off by default: the feature stays dormant until the
-   * user explicitly enables it in the side card settings.
+   * model's toolset. On by default: the build process keeps the application
+   * under construction alive in a terminal tab the requester can watch, and
+   * without these tools it has no long-lived process to show. The side card
+   * settings turn them off, which also disposes every terminal the agent
+   * opened.
    */
   agentTerminalTools: boolean
   /**
@@ -228,7 +231,7 @@ export const SIDEBAR_PREFS_DEFAULTS: SidebarPrefs = {
   defaultWidthPercent: WIDTH_PERCENT_DEFAULT,
   autoOpenSubagent: true,
   autoOpenJobs: true,
-  agentTerminalTools: false,
+  agentTerminalTools: true,
   bottomPanelAutoTerminal: true,
   terminalFontFamily: '',
   terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,

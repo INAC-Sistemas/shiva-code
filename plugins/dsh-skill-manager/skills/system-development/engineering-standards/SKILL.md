@@ -1,12 +1,12 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
 whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each ticket's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI ticket.
 ---
 
 # Engineering standards
 
-These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment whose files are written only after acceptance (rule 7).
+These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment (rule 7), and the deploy files are written by the publication ticket when the brief's Surface and delivery answer asked for a container.
 
 ## The rules
 
@@ -128,9 +128,9 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 **Do not go asynchronous by default.** Do not move an operation to asynchronous execution solely for architectural purposes. Synchronous execution is preferred when the operation is short-lived and the caller requires its result immediately.
 
-### 7. Containerized deployment (only after the system is accepted)
+### 7. Containerized deployment (when the brief asked for a container)
 
-Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target — but **no deploy file is written until the requester has used the finished system, accepted it, and answered yes to the Docker question in `/08-review`**. During `/04-tech-plan` this rule is a requirement on the future target; during `/06-tickets` and `/07-build` nothing here is built, and the system runs locally from its framework's own command. On a yes, one publication ticket creates everything below at once — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh`, `docker-compose.yml` — and proves it. On a no, the delivery is complete without them.
+Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target. Whether the files are written is answered once, in `/01-epic-brief` stage F, and never asked again: on a yes, **one publication ticket** — the last of the build — creates `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` and `docker-compose.yml` at once and proves them from an empty database; no earlier ticket creates or checks any of them. On a no, no deploy file is ever written and the delivery is complete without them. During `/04-tech-plan` this rule is a requirement on the image and the target; the provider, the account and the domain remain questions for after acceptance (`/08-review`).
 
 **The image.**
 - `Dockerfile` (multi-stage: dependencies, build, runtime) and `.dockerignore` at the workspace root. The runtime stage carries only what serving, migrating and seeding need; build tools stay in the earlier stages.
@@ -161,6 +161,23 @@ A failed migration or seed stops the container instead of serving on an old sche
 - When the plan cannot keep one schema honest on both, it says so and development runs the production engine in `docker-compose.yml` instead — recorded as a decision, not improvised in a ticket.
 - The seed of rule 7 runs the same way on the development file and on the production database.
 
+### 9. Webhooks
+
+A webhook is an HTTP call the system did not ask for at that moment — someone else's event arriving, or this system telling someone else that something happened. `/01-epic-brief` stage F records whether either exists; when neither does, this rule adds nothing to the ticket.
+
+**Inbound — an endpoint the sender calls.**
+- **The signature is verified before anything else.** The raw body, exactly as received, is checked against the sender's shared secret before the payload is parsed, trusted or written. A body already deserialized by a framework is not the body the signature covers — read the raw bytes.
+- **Delivery is idempotent by the event's own id.** The same event arrives twice whenever the sender does not see a success in time; the handler records the id it processed and turns a repeat into a no-op, not a second charge or a second e-mail.
+- **The answer is fast and the work is asynchronous.** The endpoint validates, records the event and answers 2xx; the processing goes to the mechanism of rule 6. A sender that waits for business logic retries a delivery that actually worked.
+- **Every outcome the sender must distinguish has its own status**, documented like any other endpoint (rule 3): accepted, duplicate, rejected signature, malformed payload.
+
+**Outbound — the system calling someone else.**
+- **Retried with backoff, up to a recorded limit**, because the receiver is down exactly when it matters. Exhausted attempts go to a dead-letter store that a person can inspect and replay — never a silent drop, never an infinite loop.
+- **Each delivery is signed and carries a stable event id**, so the receiver can verify and de-duplicate the same way this system does inbound.
+- **What was sent, when, with which response, is recorded.** "The webhook was sent" without a record is a claim, not a fact.
+
+**Documentation.** An inbound endpoint is a public endpoint: it belongs in the OpenAPI of rule 3 with its payload, its signature header and every status it answers. Outbound events are documented as events — AsyncAPI, or a named section of `04-tech-plan.md` listing each event, when it fires, its payload and its retry policy.
+
 ## Backend: mapping roles to a stack
 
 The backend rules hold in any language; the plan records how the chosen stack realizes each role. The table only illustrates — it is not a list of allowed stacks.
@@ -172,6 +189,7 @@ The backend rules hold in any language; the plan records how the chosen stack re
 | Use case | service module under `lib/server/` | Action / Service | Provider (service) | `@Service` | Service / MediatR handler | service module | service |
 | Response serializer | serializer function | API Resource | response mapper / `class-transformer` | response DTO + mapper | response record + mapper | Serializer / response model | response struct + mapper |
 | API specification | `@asteasolutions/zod-to-openapi` | Scramble / `l5-swagger` | `@nestjs/swagger` | springdoc-openapi | Swashbuckle / NSwag | drf-spectacular / built-in OpenAPI | swaggo / oapi-codegen |
+| Webhook signature | `node:crypto` `createHmac` + `timingSafeEqual` | `hash_hmac` + `hash_equals` | `crypto` `createHmac` + `timingSafeEqual` | `Mac` + `MessageDigest.isEqual` | `HMACSHA256` + `CryptographicOperations.FixedTimeEquals` | `hmac.new` + `hmac.compare_digest` | `hmac` + `hmac.Equal` |
 | Background tasks | BullMQ worker | Queued Jobs + Horizon | BullMQ | Spring Batch / a message broker consumer | Hangfire / a hosted worker | Celery / RQ | asynq / a broker consumer |
 
 Whatever the stack, the plan names for rule 6 the queue mechanism, where timeouts, attempts, backoff and failure handlers are declared, how a task is dispatched only after commit, how scheduled tasks are kept from overlapping, and the worker process in the deployment.
@@ -199,10 +217,11 @@ Record the backend language and framework, then add one **Decisions** row per ru
 | Design system | tokens: colors from `03-palette.md`, typography and motion from `03-design.md`, the spacing/radius scale; implemented with Tailwind CSS + shadcn/ui, theme CSS file named |
 | Data visualization | Recharts via shadcn `chart`, colors from `chart-1` … `chart-5` — or "none" when the product has no charts |
 | Asynchronous processing | which operations run in the background and why (rule 6 criteria); the queue mechanism and queues by workload; timeout, attempts and backoff per task; failure handling and alerting; status resource and how the UI follows it; scheduled tasks; the worker process in the deployment — or "none" with the reason |
+| Webhooks | inbound: each provider, the endpoint path, where its secret comes from, the signature scheme and replay window, the event-id store that makes it idempotent and the queue the work goes to; outbound: which events, the subscription store, the signing header, the queue, timeout/attempts/backoff, the dead-letter store and how a delivery is retried by hand, and the event catalog's format and URL — or "none", citing the brief's Surface and delivery answer |
 | Containerized deployment | the Dockerfile stages and runtime base image; the production migration command and the seed command, with the stable key that makes the seed idempotent and which data is production-only vs demo; how the runtime gets the migration CLI; the `docker-compose.yml` services; a hosting target that runs the image |
 | Database | SQLite in development (the file path and the `DATABASE_URL` that names it) and the production database; when they differ, the ORM and migration command that keep one schema valid on both, and what is done about what SQLite cannot represent — or the recorded decision to run the production engine in development too |
 
-The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary. A rule the requester overrides is recorded with their words.
+The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary, and the handler and event-id store of each webhook in either direction. A rule the requester overrides is recorded with their words.
 
 ## In /06-tickets
 
@@ -213,11 +232,13 @@ Each ticket's **Implementation contract** names its request validator, use case,
 - [ ] Business rules live in `<UseCase>`; any data transfer object only carries data (no database access, no side effects) and exists for the boundary the plan names.
 - [ ] Response serialized by `<ResponseSerializer>` in the `{data, meta}` envelope; no model or internal structure is exposed directly.
 - [ ] Endpoint documented in the API specification with its input, output, errors, authentication and every HTTP status it answers, matching its behavior.
+- [ ] Inbound webhook (when the ticket has one): signature and timestamp verified against the raw body before anything is parsed or acted on; an unsigned, mis-signed or stale call rejected with no side effect; the provider's event id processed twice changes nothing; the endpoint answers 2xx inside the provider's timeout and the work runs in the background; the endpoint, its headers and every status it answers are in the API specification.
+- [ ] Outbound webhook (when the ticket has one): dispatched from the queue after commit, signed, with a timeout, retried with the recorded backoff up to the recorded maximum; an exhausted delivery lands in the dead-letter store with its error and can be retried by hand; the event is in the event catalog with a real payload example.
 - [ ] Background work (when the ticket has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
 - [ ] UI built from the design system's tokens and components (Tailwind utilities and theme variables only); any chart uses the project's standard library (Recharts).
 - [ ] Schema or seed changes (when the ticket has any): from an empty database, the app's own migrate and seed commands bring it up and the flow works; running them again applies nothing and duplicates no row.
 
-The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication ticket, written only after the requester accepts the system and asks for Docker (`/08-review`).
+The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication ticket, which exists only when the brief's Surface and delivery answer asked for a container, and is the last ticket of the build.
 
 ## In /07-build
 
@@ -232,6 +253,11 @@ Builders of backend, API or UI tickets load this skill with the others the ticke
 - a response serializer that queries, computes business results or changes state;
 - request data used without its request validator validating it;
 - a public endpoint missing from the API specification, or documented without its input, output, errors, authentication or status codes, or differently from how it behaves (open `/docs` or the JSON and compare);
+- an inbound webhook that parses or acts on a payload before verifying its signature, that verifies against a re-serialized body instead of the raw bytes, that compares signatures without a constant-time helper, that has no replay window, or that has no idempotency guard on the provider's event id;
+- an inbound webhook that does its work inside the request instead of handing it to the queue of rule 6, or that answers non-2xx for an event it already processed;
+- an outbound webhook sent inline from the request, unsigned, without a timeout, without a retry limit and backoff, or with nowhere for an exhausted delivery to land;
+- a webhook secret in the code instead of the environment, or a whole sensitive payload in the logs;
+- a webhook in either direction missing from the event catalog, or documented differently from what it actually sends or accepts;
 - a component that fetches, transforms and renders a large tree at once;
 - a one-off value where a design-system token exists (color literal, arbitrary spacing or size), or a component rebuilt where the library has it;
 - styling outside Tailwind and the theme variables;

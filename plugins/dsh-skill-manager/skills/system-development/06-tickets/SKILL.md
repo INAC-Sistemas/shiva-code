@@ -16,8 +16,8 @@ Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-vali
 
 - Location: `mds/epics/<epic>/06-tickets/NN-<slug>.md` (NN = execution order).
 - Frontmatter (the Kanban tab reads this): `ticket: <slug>`, `epic: <epic>`, `status: active`, `title: <imperative summary>`. Agents move a ticket `active → in_progress → code_test → human_test` (that is `/07-build`'s job). **Never write `status: done`** — Done is the human's move on the Kanban.
-- Coverage matrix first: every UX id, Must Do, contract and test requirement maps to ≥1 ticket. Nothing unmapped.
-- **The publication ticket is the last one and stays `active` until the requester accepts the system and asks for Docker** (`/08-review`). It is the only ticket that writes deploy files — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, `docker-compose.yml` (`skill engineering-standards` rule 7) — and no earlier ticket may create or check any of them. Its provider is not decided now.
+- Coverage matrix first: every UX id, Must Do, contract and test requirement maps to ≥1 ticket. Nothing unmapped. Every **yes** in the brief's Surface and delivery topics maps too — an API needs its documented endpoints and its `/docs`, a webhook needs its handler in each declared direction, a role needs its permission checks, an integration needs its adapter, a report needs its screen and export.
+- **The publication ticket exists only when the brief's Surface and delivery topics asked for a container**, and then it is the last ticket of the last phase — the build ends with it done, not with it pending. When the brief said no container, there is no publication ticket at all. It is the only ticket that writes deploy files — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` applying migrations and running the idempotent seed on every start, `docker-compose.yml` (`skill engineering-standards` rule 7) — and no earlier ticket may create or check any of them. Its provider, account and domain are not decided now — those are asked after acceptance, in `/08-review`.
 
 ## Ticket body contract
 
@@ -42,7 +42,7 @@ title: <imperative title>
 - Request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and component split — with the stack's actual names (`skill engineering-standards`)
 - Compatibility constraints
 ## Steps (concrete implementation + evidence steps)
-## Tests to write (cases for the Done when; written under `testes/`, run only if the requester asks for the battery in /08-review)
+## Tests to write (cases for the Done when; written under `testes/`, run as one battery in /08-review)
 ## Done when
 - [ ] <observable condition>
 - [ ] <the flow step the principal walks in the running app → what is seen>
@@ -64,7 +64,7 @@ Read this ticket and the context-manifest files. Implement only this scope. Do n
 4. `write` every ticket with the full body contract above.
 5. Verify the tree: every ticket inside `06-tickets/`, frontmatter complete, deps point at existing files, matrix fully mapped.
 6. **Analyse the real dependency graph** (below) — declared dependencies are not enough; find the tickets that touch the same files or symbols.
-7. **Ask the requester** the three execution questions (loop, parallelism, approval cadence) in one `ask_user_question` call — plain language, options as consequences.
+7. **Ask the requester** the three execution questions (loop, parallelism, how they are kept informed) in one `ask_user_question` call — plain language, options as consequences. This is the last thing asked before the build; from `/07-build` on, whatever comes up is decided and reported.
 8. **Write `06-plano-de-execucao.md`** from the template below.
 9. Present it; set `status: validated` only after the requester confirms.
 10. Hand off: "tickets are on the Kanban and the execution plan is validated; execution is `/07-build`. Nothing has been coded."
@@ -87,9 +87,10 @@ The stage is **not** done when the tickets are written; it is done when the exec
    - "One at a time, in order" (simplest to follow; slowest).
    - "Only the independent fronts run together" (faster; depends on the analysis above being right).
    - "As much as the analysis allows" (fastest; most moving parts; a failure is harder to attribute).
-3. **How much control over each step**:
-   - "Approve each ticket before the next starts" (you see every step; slowest).
-   - "Approve the whole sequence up front" (fast; you review at the end, not in the middle).
+3. **How they want to be kept informed while it is built**:
+   - "Tell me each decision as you take it, in one line" (recommended — they watch the system fill the preview and read every decision as it happens).
+   - "Just give me the whole list at the end" (quieter; they read the decisions at delivery).
+   Say this before the call, in their language: **either way the build does not stop to ask.** From the first ticket to the last, whatever comes up is decided, written into `07-decisoes.md` and told to them — these options choose only *when* they hear it.
 
 Record the answer **and what it implies**, not just the label.
 
