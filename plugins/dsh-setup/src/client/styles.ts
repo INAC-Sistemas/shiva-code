@@ -122,6 +122,25 @@ export const CHOICE_SELECTED: CSSProperties = {
   boxShadow: 'inset 0 0 0 1px var(--dsw-alias-brand-primary)',
 }
 
+/**
+ * A choice pinned below {@link GRID_SCROLL} instead of inside it: one row, name
+ * and hint side by side, so it reads as an action rather than a thirty-first
+ * card.
+ */
+export const CHOICE_ROW: CSSProperties = {
+  ...CHOICE,
+  flexDirection: 'row',
+  alignItems: 'baseline',
+  gap: 8,
+}
+
+export const CHOICE_ROW_SELECTED: CSSProperties = {
+  ...CHOICE_SELECTED,
+  flexDirection: 'row',
+  alignItems: 'baseline',
+  gap: 8,
+}
+
 export const CHOICE_HINT: CSSProperties = {
   color: 'var(--dsw-alias-label-tertiary)',
   fontSize: 11,

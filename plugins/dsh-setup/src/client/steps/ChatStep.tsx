@@ -15,8 +15,8 @@ import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { post } from '../api.ts'
 import {
-  CHOICE, CHOICE_HINT, CHOICE_SELECTED, ERROR, FIELD, FOOTER, GRID_SCROLL, INPUT, LABEL, LINK, NOTE,
-  PRIMARY, SECONDARY, SPACER,
+  CHOICE, CHOICE_HINT, CHOICE_ROW, CHOICE_ROW_SELECTED, CHOICE_SELECTED, ERROR, FIELD, FOOTER,
+  GRID_SCROLL, INPUT, LABEL, LINK, NOTE, PRIMARY, SECONDARY, SPACER,
 } from '../styles.ts'
 import { matchChatProviders } from '../../providers.ts'
 import {
@@ -190,40 +190,47 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
       </div>
 
       {shown.length === 0
-        ? <p style={NOTE}>Nenhum provedor com esse nome. Limpe a busca para ver os {providers.length}.</p>
+        ? <p style={NOTE}>Nenhum provedor com esse nome entre os {providers.length}. Limpe a busca, ou adicione um personalizado abaixo.</p>
         : null}
 
-      <div style={GRID_SCROLL} role="radiogroup" aria-label="Provedor do chat">
-        {shown.map(candidate => (
-          <button
-            key={candidate.provider}
-            type="button"
-            role="radio"
-            aria-checked={candidate.provider === selected}
-            style={candidate.provider === selected ? CHOICE_SELECTED : CHOICE}
-            disabled={busy}
-            onClick={() => {
-              setSelected(candidate.provider)
-              setError(undefined)
-            }}
-          >
-            <span>{candidate.displayName}</span>
-            <span style={CHOICE_HINT}>{candidate.configured ? `${candidate.kind} · chave salva` : candidate.kind}</span>
-          </button>
-        ))}
+      <div style={FIELD} role="radiogroup" aria-label="Provedor do chat">
+        <div style={GRID_SCROLL}>
+          {shown.map(candidate => (
+            <button
+              key={candidate.provider}
+              type="button"
+              role="radio"
+              aria-checked={candidate.provider === selected}
+              style={candidate.provider === selected ? CHOICE_SELECTED : CHOICE}
+              disabled={busy}
+              onClick={() => {
+                setSelected(candidate.provider)
+                setError(undefined)
+              }}
+            >
+              <span>{candidate.displayName}</span>
+              <span style={CHOICE_HINT}>{candidate.configured ? `${candidate.kind} · chave salva` : candidate.kind}</span>
+            </button>
+          ))}
+        </div>
+        {/*
+          Pinned below the scrolling grid, never inside it: as the last of thirty
+          cards this choice sits off-screen, and it is also the one a search for
+          a provider the list does not have must leave standing.
+        */}
         <button
           type="button"
           role="radio"
           aria-checked={custom}
-          style={custom ? CHOICE_SELECTED : CHOICE}
+          style={custom ? CHOICE_ROW_SELECTED : CHOICE_ROW}
           disabled={busy}
           onClick={() => {
             setSelected(CUSTOM)
             setError(undefined)
           }}
         >
-          <span>Personalizado</span>
-          <span style={CHOICE_HINT}>Endereço próprio · compatível com OpenAI</span>
+          <span>+ Adicionar personalizado</span>
+          <span style={CHOICE_HINT}>Endereço próprio compatível com OpenAI — Ollama, vLLM, gateway</span>
         </button>
       </div>
 
