@@ -201,7 +201,10 @@ describe('generation projection onto the app-boot contract', () => {
     const result = await execFileAsync(
       process.execPath,
       [pnpmRunner, pnpmEntry, 'install', '--ignore-scripts', '--no-frozen-lockfile', '--offline'],
-      { cwd: dir }
+      // The runner only recovers projections for a run inside
+      // `$DSH_HOME/profiles`; every other run is plain pnpm with inherited
+      // stdio. This fixture's home is the temporary one, so it says so.
+      { cwd: dir, env: { ...process.env, DSH_HOME: home } }
     )
 
     expect(result.stderr).toContain('excluded 1 generation projection(s) from pnpm')

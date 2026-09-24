@@ -192,14 +192,6 @@
         toolName: subagent
         modelSelectionSettings: true
         backgroundMode: continuable
-        # Children run the mechanical half of the build process (write this
-        # file, write its tests, read the diff and judge it), where the
-        # principal's `high` effort buys nothing and is paid on every step: a
-        # measured epic spent 335 of its 391 generation minutes inside
-        # children, at ~6.5s per step. The parent keeps its own effort — this
-        # row only binds what the child starts with.
-        agentOptions:
-          reasoningEffort: low
 
     # Fork omits model selection so provider/model stay equal to the parent and
     # the inherited history remains eligible for KV Cache reuse. This preset
