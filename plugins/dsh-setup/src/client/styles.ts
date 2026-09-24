@@ -85,6 +85,20 @@ export const GRID: CSSProperties = {
   gap: 8,
 }
 
+/**
+ * The provider grid, capped so a long list scrolls instead of pushing the key
+ * field and the actions below the fold. The cap is about three rows at the
+ * card's width — nine providers there, fewer on a narrow window — and a list
+ * that fits shows no scrollbar at all.
+ */
+export const GRID_SCROLL: CSSProperties = {
+  ...GRID,
+  maxHeight: 196,
+  overflowY: 'auto',
+  // Clearance so the scrollbar never sits on a card's border.
+  paddingRight: 4,
+}
+
 export const CHOICE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',

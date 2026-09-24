@@ -11,7 +11,7 @@ import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { post } from '../api.ts'
 import {
-  CHOICE, CHOICE_HINT, CHOICE_SELECTED, ERROR, FIELD, FOOTER, GRID, INPUT, LABEL, LINK, NOTE,
+  CHOICE, CHOICE_HINT, CHOICE_SELECTED, ERROR, FIELD, FOOTER, GRID_SCROLL, INPUT, LABEL, LINK, NOTE,
   PRIMARY, SPACER,
 } from '../styles.ts'
 import { matchChatProviders } from '../../providers.ts'
@@ -129,7 +129,7 @@ export function ChatStep({ chat, onDone }: ChatStepProps): ReactNode {
         ? <p style={NOTE}>Nenhum provedor com esse nome. Limpe a busca para ver os {providers.length}.</p>
         : null}
 
-      <div style={GRID} role="radiogroup" aria-label="Provedor do chat">
+      <div style={GRID_SCROLL} role="radiogroup" aria-label="Provedor do chat">
         {shown.map(candidate => (
           <button
             key={candidate.provider}
