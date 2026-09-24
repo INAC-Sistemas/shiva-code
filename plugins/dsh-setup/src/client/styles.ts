@@ -9,12 +9,21 @@
  */
 import type { CSSProperties } from 'react'
 
-/** Covers the app outright: nothing behind it is usable before setup. */
+/**
+ * Covers the app outright: nothing behind it is usable before setup.
+ *
+ * `safe center` on the block axis, never plain centering: a card taller than
+ * the window would be centered past the scroll origin, putting its top — the
+ * progress rail, the title and the first fields — above the scrollable area,
+ * where no scrollbar reaches. Overflowing, the card starts at the top instead
+ * and this element scrolls the whole of it.
+ */
 export const BACKDROP: CSSProperties = {
   position: 'absolute',
   inset: 0,
   display: 'grid',
-  placeItems: 'center',
+  alignItems: 'safe center',
+  justifyItems: 'center',
   padding: 24,
   overflow: 'auto',
   fontFamily: 'var(--dsw-font-family)',
