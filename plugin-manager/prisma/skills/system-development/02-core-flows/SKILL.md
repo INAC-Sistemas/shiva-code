@@ -1,12 +1,12 @@
 ---
 name: 02-core-flows
 description: Map what the user actually does — actors, journeys, happy and unhappy paths, and the UX decisions each flow forces — as mds/epics/<epic>/02-flows.md, before any technical design freezes them.
-whenToUse: Right after /01-epic-brief is validated, before /03-plano. Requires /00-start-here and /01-epic-brief loaded earlier in this session.
+whenToUse: Right after /01-epic-brief is validated (or written as a draft in `rapido` mode), before /03-plano. Requires /00-start-here and /01-epic-brief loaded earlier in this session.
 ---
 
 # Core Flows
 
-Map behaviour, not components. Read `/00-start-here` first. Requires `mds/epics/<epic>/01-brief.md` with `status: validated` — flows invented without a stated problem describe a product nobody asked for.
+Map behaviour, not components. Read `/00-start-here` first. Requires `mds/epics/<epic>/01-brief.md` with `status: validated`, or `status: draft` with `mode: rapido` — flows invented without a stated problem describe a product nobody asked for.
 
 ## Procedure
 
@@ -16,7 +16,7 @@ Map behaviour, not components. Read `/00-start-here` first. Requires `mds/epics/
 4. **Happy path in numbered steps**: actor action → system response → what they see.
 5. **Unhappy paths per flow**: empty state, no permission, network failure, abandonment halfway, two actors at once. Most product defects live here; most flow documents skip it.
 6. **Record the UX decisions each flow forces**: where confirmation happens, what is undoable, what is remembered between sessions, what the user must be told versus what stays silent.
-7. **Write** `mds/epics/<epic>/02-flows.md` (shape below), read it back in plain language, get the explicit yes, set `status: validated`.
+7. **Write** `mds/epics/<epic>/02-flows.md` (shape below). In `completo`, read it back in plain language, get the explicit yes, set `status: validated`. In `rapido`, leave it `status: draft` and do not ask: `/03-plano` presents the brief, the flows and the plan for one approval.
 8. **Hand off to `/03-plano`**: "next I'll settle the colors, the look and how it will be built, and then I'll build the real system one screen at a time — you validate each screen before I start the next."
 
 ## Artifact shape
@@ -59,4 +59,4 @@ Use a mermaid diagram when a flow has more than three participants or branches. 
 
 ## Next
 
-When the flows are validated, load `/03-plano` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.
+When the flows are validated (or written as a draft in `rapido`), load `/03-plano` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

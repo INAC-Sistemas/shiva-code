@@ -1,7 +1,7 @@
 ---
 name: 03-plano
 description: The short stage between the validated flows and the first real screen — pick the palette and the visual direction with the requester, settle the technical direction (stack, layout, fixed port, database, authentication, shadcn preset, icons, engineering standards) and the order in which the screens will be built, starting with the Authorization Layer, as mds/epics/<epic>/03-plano.md. Brings only consequence-bearing decisions to the requester, in one call. Writes no tarefa and no code.
-whenToUse: After /02-core-flows is validated and before /04-construcao. Requires /00-start-here and /02-core-flows loaded earlier in this session.
+whenToUse: After /02-core-flows is validated (or written as a draft in `rapido` mode) and before /04-construcao. Requires /00-start-here and /02-core-flows loaded earlier in this session.
 ---
 
 # Plano
@@ -10,7 +10,7 @@ Settle what the first line of code depends on, then get out of the way: `/04-con
 
 ## Entry contract
 
-Requires `mds/epics/<epic>/01-brief.md` and `02-flows.md` with `status: validated`. Read them by path — `read`, not memory — including the brief's `## Authorization layer` table and its **Surface and delivery** table: each of the six answers becomes a Decisions row or an explicit "none" with the reason.
+Requires `mds/epics/<epic>/01-brief.md` and `02-flows.md` with `status: validated` — or, when the brief says `mode: rapido`, with `status: draft`, to be approved here together with the plan. Read them by path — `read`, not memory — including the brief's `## Authorization layer` table and its **Surface and delivery** table: each of the six answers becomes a Decisions row or an explicit "none" with the reason.
 
 ## Part 0 — Palette and visual direction
 
@@ -66,7 +66,7 @@ This is a list, not tarefas: `/04-construcao` writes each tarefa when it starts 
 2. Part 0: palette, then visual direction.
 3. **Ground truth**: when the workspace already holds code, inspect the paths this touches. Use `web_search`/`web_fetch` to confirm a library's current API and maintenance before choosing it.
 4. Frame the forks, debate the costly ones, and put every consequence-bearing question in one `ask_user_question` call.
-5. **Write** `mds/epics/<epic>/03-plano.md` (shape below) with `status: draft`, present it in plain language, and set `status: validated` only after the requester confirms.
+5. **Write** `mds/epics/<epic>/03-plano.md` (shape below) with `status: draft`, present it in plain language, and set `status: validated` only after the requester confirms. In `rapido`, this is the one approval of the discovery: present the brief, the flows and the plan in one message — the problem in a sentence, the roles table, the flows as one line each, the screens in build order, the consequence-bearing decisions — ask once, fold any correction into the artifact it belongs to, and set all three to `status: validated` on the same yes.
 
 ## Artifact shape
 

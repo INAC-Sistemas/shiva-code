@@ -1,6 +1,6 @@
 ---
 name: 01-epic-brief
-description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features — starting with the Authorization Layer, the user types and roles every feature is written for — and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /04-construcao onward the agent decides alone and reports. No solutions, no tech.
+description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features — starting with the Authorization Layer, the user types and roles every feature is written for — and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning, `rapido` (a short interview in at most three calls, approved later together with the flows and the plan) by default and `completo` (Lean Startup, Business Model Canvas, Design Thinking in full) for a new product to sell — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /04-construcao onward the agent decides alone and reports. No solutions, no tech.
 whenToUse: Starting any new initiative. First pipeline stage, after /00-start-here. Requires /00-start-here loaded earlier in this session.
 ---
 
@@ -11,6 +11,15 @@ Capture what the initiative is and where its edges are, before anyone plans how 
 ## Create the epic
 
 Epic = one folder. `write` nothing yet: first **choose a kebab-case slug naming the outcome** (e.g. `agendamento-barbearia`), then run the investigation below. The folder `mds/epics/<slug>/` is created when the brief is written.
+
+## Choose the depth — rápido by default
+
+Every question before the first screen delays it. Pick the mode before the first question, tell the requester in one sentence which one and why, and record it as `mode:` in the brief's frontmatter.
+
+- **`rapido` (default)** — the system serves an operation the requester already runs (their business, their team, their clients). Ask only: A1–A2 (whose problem, what they do today), C q32 (the laziest version that still helps) and q39 (how we will know they use it), then D0, D, E and F in full. Stages A3–A10, B and the rest of C are skipped and recorded as skipped. Batch it into **at most three** `ask_user_question` calls: (1) A1–A2, q32, q39 and D0; (2) D's features, screens and data; (3) E and F together. In this mode the brief, the flows and the plan are approved **once, together**, at the end of `/03-plano`: write the brief as `status: draft`, read it back in two or three sentences, and move on.
+- **`completo`** — the requester asks for it, or the brief is a new product they intend to sell (revenue from customers who do not exist yet). Run every stage below with its full count, and approve the brief on its own before `/02-core-flows`.
+
+When a `rapido` answer reveals a new business that has to find customers, switch to `completo` out loud.
 
 ## The investigation — five stages, in this order
 
@@ -72,7 +81,9 @@ These are **scope**, not technology: whether another system talks to this one, w
 
 ## Coverage check before writing
 
-Count: A=10, B=9 blocks, C=20 across four modes, D=the D0 table confirmed (or "nobody signs in" recorded) + capabilities with their roles + scenarios complete, E=list presented and answered, F=6 answered or refused. A stage short of its count is a stage to go back and finish — not to summarise. F short of six is worse than the others: what it does not ask, nobody asks — the build decides it alone.
+Count in `completo`: A=10, B=9 blocks, C=20 across four modes, D=the D0 table confirmed (or "nobody signs in" recorded) + capabilities with their roles + scenarios complete, E=list presented and answered, F=6 answered or refused. A stage short of its count is a stage to go back and finish — not to summarise. F short of six is worse than the others: what it does not ask, nobody asks — the build decides it alone.
+
+Count in `rapido`: A1–A2, q32 and q39 answered, then D, E and F with the same counts as `completo`. The skipped stages are listed under `## Unknowns` as skipped, not left out silently.
 
 ## Write the artifact
 
@@ -83,6 +94,7 @@ The artifact lives in the workspace and is read and edited in the **MDS** tab (a
 epic: <slug>
 artifact: 01-brief
 status: draft
+mode: rapido | completo
 ---
 # <initiative name>
 ## Problem / ## Outcome (observable!) / ## Riskiest assumption
@@ -97,7 +109,7 @@ status: draft
 ## Proposed and rejected (suggestion → decision → why) / ## Unknowns
 ```
 
-Set `status: validated` only after the requester reads it and says yes explicitly. Then hand off: "next I'll map what the user actually does, screen by screen — `/02-core-flows`."
+In `completo`, set `status: validated` only after the requester reads it and says yes explicitly. In `rapido`, leave it `draft`: `/03-plano` validates it together with the flows and the plan. Then hand off: "next I'll map what the user actually does, screen by screen — `/02-core-flows`."
 
 ## Rules
 

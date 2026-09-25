@@ -1,12 +1,12 @@
 ---
 name: 04-construcao
-description: Build the real system screen by screen, right away — there is no prototype and no upfront breakdown. Each screen is one tarefa, written when it starts, carrying its real frontend (React + Tailwind + shadcn/ui) and the real backend it needs. The principal agent NEVER writes code; per tarefa it spawns a builder, a qa-tester and an evaluator, walks the screen itself in the Browser tab, then hands the screen to the requester and waits — they validate it in the chat or ask for adjustments, and only after their "aprovado" is the tarefa finalizada and the next screen started. Every status move is announced in one line; the system is ready when every tarefa is finalizada.
+description: Build the real system screen by screen, right away — there is no prototype and no upfront breakdown. Each screen is one tarefa, written when it starts, carrying its real frontend (React + Tailwind + shadcn/ui) and the real backend it needs. The principal agent NEVER writes code; per tarefa it spawns a builder, then the evaluator and qa-tester in parallel while it walks the screen itself in the Browser tab, then hands the screen to the requester — and while they validate it in the chat, the next screen is already being built (one screen ahead, never more). A tarefa is finalizada only after their "aprovado". Every status move is announced in one line; the system is ready when every tarefa is finalizada.
 whenToUse: When 03-plano.md is validated and it is time to build. Requires /00-start-here and /03-plano loaded earlier in this session.
 ---
 
 # Construção (tela a tela)
 
-You are the principal. **You never create or edit code.** You read context, write each tarefa, spawn subagents, judge evidence, and put every finished screen in front of the requester for validation. Read `/00-start-here` first.
+You are the principal. **You never create code, and you edit it only for the one- or two-line defects your own browser walk exposes.** You read context, write each tarefa, spawn subagents, judge evidence, and put every finished screen in front of the requester for validation. Read `/00-start-here` first.
 
 The system is built for real from the first screen: the frontend the requester validates is the frontend that ships, and the data it shows comes from the real backend and database. There is no mock stage to translate later.
 
@@ -29,7 +29,7 @@ Confirm `components.json` and a passing build of every part before the first tar
 1. `terminal_create` opens a terminal tab the requester can watch, in the workspace root.
 2. `terminal_send` starts the app on the **fixed port `03-plano.md` records**, and `terminal_wait_for` waits for its ready line — never a `sleep`, never a polling loop.
 3. `browser {op:'open', url:'http://localhost:<port>'}`, then `browser {op:'screenshot'}` and `read_image` to confirm a real page is on screen.
-4. Say it once, in one line, in their language: the port, and that each screen will appear there and wait for their validation before the next one starts.
+4. Say it once, in one line, in their language: the port, that each screen will appear there for their validation, and that you keep building the next one while they look.
 
 A preview that cannot open — tab closed or under 50px, `browserFullAccess: false` in the harness settings.yaml — is reported in one line with the real reason; without it the requester validates from your screenshots.
 
@@ -37,7 +37,11 @@ A preview that cannot open — tab closed or under 50px, `browserFullAccess: fal
 
 ## One screen = one tarefa
 
-Screens are built **one at a time, in the order of `03-plano.md`** — never two at once, never the next before the current one is validated. Screen 01 is the Authorization Layer whenever anyone signs in.
+Screens are built **in the order of `03-plano.md`**, on a conveyor one screen deep: while screen N waits for the requester's validation, screen N+1 is being built. Screen 01 is the Authorization Layer whenever anyone signs in; screen 02 starts as soon as 01 is handed over.
+
+- **Never more than one screen ahead** of the oldest screen not yet approved. When N+1 is ready and N is still unapproved, the conveyor stops and you end the turn — a cross-cutting adjustment to N would otherwise ripple into a growing pile of screens.
+- **One builder at a time in the workspace.** Two builders editing the same files overwrite each other. An adjustment the requester asks for on N waits until the builder of N+1 returns, then goes out. Only when the adjustment changes what N+1 is building, stop N+1's builder early with `interrupt_agent`, send the adjustment out, and resume N+1 afterwards with its GAP plus the adjustment.
+- **Cross-cutting feedback travels forward.** When their words on N also apply to other screens ("the header", "the buttons", a label), copy them into N+1's `## Validation` and its builder's GAP in the same reply.
 
 A tarefa is written **when its screen starts**, never in advance: `mds/epics/<epic>/tarefas/NN-<slug>.md`, about 200 words, short and objective.
 
@@ -82,10 +86,14 @@ The Kanban shows the same statuses as A fazer, Iniciada, Testando, Em validaçã
 
 1. **Write the tarefa**, set `status: in_progress`, announce it.
 2. **Spawn the builder**, `role: "builder"`: it builds the screen and the backend it needs — frontend and backend in the same tarefa — and reports files + build output.
-3. **Check it before they see it.** Set `status: code_test` and announce it. Spawn the qa-tester (`role: "qa"`) to write the tarefa's tests under `testes/` (run as one battery in `/05-revisao`). Walk the screen yourself in the Browser tab as the acceptance flow below describes. Spawn the evaluator (`role: "evaluator"`) to judge the diff against the tarefa, the brief, the flows and `03-plano.md`. RED goes back to the builder with the exact mismatch list; budget 5 rounds per screen before you change the approach (the scope, the decomposition, the agent) and record why.
-4. **Hand it over.** On GREEN, set `status: human_test`, `browser {op:'navigate'}` to the screen, `screenshot`, `read_image`, announce it, and ask for validation in plain language: what the screen does, where to click, which role to sign in as (the test credential lives in a project file or environment variable — never echoed). In the same message, put any question this screen raised that only they can answer, and any credential only they hold. Then **end the turn and wait** — no next screen is started, spawned or written while this one waits.
-5. **They ask for adjustments** → write their words into the tarefa's `## Validation`, set `status: in_progress`, announce "em ajuste", and go back to step 2 with those words as the builder's gap. Their rounds have no budget: the screen is theirs.
-6. **They approve** ("aprovado", "pode seguir", or an unmistakable equivalent) → write it into `## Validation`, set `status: done`, announce "finalizada (N de M)", and start the next screen at step 1. The first approval also sets `03-design.md` to `status: validated`. Anything short of an explicit approval is not one — ask.
+3. **Check it before they see it — in parallel.** Set `status: code_test` and announce it. In **one** step spawn the evaluator (`role: "evaluator"`, judges the diff against the tarefa, the brief, the flows and `03-plano.md`) and the qa-tester (`role: "qa"`, writes the tarefa's tests under `testes/`, run as one battery in `/05-revisao`), then walk the screen yourself in the Browser tab as the acceptance flow below describes while they run. The qa-tester is not on the critical path: the screen goes to the requester on your walk plus the evaluator's GREEN, and its tests land whenever it returns.
+   - **RED blocks only for what the requester would feel or what is a risk**: a Done-when line not met, a route without the permission check, data persisted or leaked wrongly, a missing loading/error/empty state, a critical accessibility violation, a color, icon or control outside the palette, the icon pack or shadcn/ui, a screen without the motion of `03-design.md`. Anything smaller is a line in `04-decisoes.md` and a GAP item for the next builder, not a new round.
+   - **Fix one- or two-line defects yourself** when your walk exposes them — a label, a class, a missing `await` — in the fast-fix window the guard gives you, instead of a new builder round.
+   - RED goes back to the builder with the exact mismatch list; budget **3 rounds** per screen before you change the approach (the scope, the decomposition, the agent) and record why.
+4. **Hand it over, then keep building.** On GREEN, set `status: human_test`, `browser {op:'navigate'}` to the screen, `screenshot`, `read_image`, announce it, and ask for validation in plain language: what the screen does, where to click, which role to sign in as (the test credential lives in a project file or environment variable — never echoed). In the same message, put any question this screen raised that only they can answer, and any credential only they hold. **In the same reply, start the next screen at step 1** unless the conveyor is full (one screen already ahead) or this was the last screen. End the turn only when nothing is left for you to do without them: the builder notice brings you back.
+5. **When several screens wait, ask once.** Screens that reached `human_test` while they were away go in one message ("Telas 03 e 04 prontas para sua validação"); they approve or adjust each in the same answer.
+6. **They ask for adjustments** → write their words into the tarefa's `## Validation`, set `status: in_progress`, announce "em ajuste", and send those words as the builder's gap as soon as no other builder is running (see "One builder at a time"). Their rounds have no budget: the screen is theirs.
+7. **They approve** ("aprovado", "pode seguir", or an unmistakable equivalent) → write it into `## Validation`, set `status: done`, announce "finalizada (N de M)", and let the conveyor move: the screen after the one already ahead starts at step 1. The first approval also sets `03-design.md` to `status: validated`. Anything short of an explicit approval is not one — ask.
 
 A screen may change what the brief, the flows or the plan said: `edit` those artifacts in the same reply, so they keep describing the system that exists.
 
