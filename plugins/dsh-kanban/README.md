@@ -1,21 +1,26 @@
 # dsh-kanban
 
-Kanban board over the workspace's implementation tickets for dsh web: a
-better-sidebar tab that reads the `status` frontmatter of
+Kanban board over the workspace's tarefas (one per functionality of the system)
+for dsh web: a better-sidebar tab that reads the `status` frontmatter of
 `mds/epics/<epic>/06-tickets/NN-<slug>.md` and moves cards through
-`active → in_progress → code_test → human_test → done`.
+`active → in_progress → code_test → human_test → done`. The board shows these
+statuses as **A fazer → Iniciada → Testando → Finalizada → Aceita**; the file
+names, the folder and the `status:` values stay in the form the skills and
+`dsh-tool-guard` read.
 
 ## Experience
 
-1. No `mds/` folder yet → the tab explains where tickets will appear.
-2. Folder exists → one column per status plus an **Other** column for tickets
+The copy is Portuguese and calls every card a *tarefa*.
+
+1. No `mds/` folder yet → the tab explains where tarefas will appear.
+2. Folder exists → one column per status plus an **Outras** column for tarefas
    with a missing or unrecognized status (nothing is dropped).
-3. A card shows the ticket title, its epic and its ticket slug. The status
-   dropdown sets any status; the **→** button advances one step. Moving to
-   **Done** asks for confirmation, because Done is the human's acceptance, not
+3. A card shows the tarefa title, its epic and its slug. The status dropdown
+   sets any status; the **→** button advances one step. Moving to **Aceita**
+   (`done`) asks for confirmation, because acceptance is the human's move, not
    the agent's.
-4. Clicking a card title opens a read-only preview of the ticket.
-5. The board polls every 4 s, so edits agents make directly to the ticket files
+4. Clicking a card title opens a read-only preview of the tarefa.
+5. The board polls every 4 s, so edits agents make directly to the tarefa files
    appear without a reload.
 
 ## API

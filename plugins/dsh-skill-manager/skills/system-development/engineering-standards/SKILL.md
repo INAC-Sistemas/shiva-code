@@ -1,12 +1,12 @@
 ---
 name: engineering-standards
 description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
-whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each ticket's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI ticket.
+whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each tarefa's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI tarefa.
 ---
 
 # Engineering standards
 
-These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per ticket, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment (rule 7), and the deploy files are written by the publication ticket when the brief's Surface and delivery answer asked for a container.
+These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per tarefa, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment (rule 7), and the deploy files are written by the publication tarefa when the brief's Surface and delivery answer asked for a container.
 
 ## The rules
 
@@ -130,7 +130,7 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 ### 7. Containerized deployment (when the brief asked for a container)
 
-Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target. Whether the files are written is answered once, in `/01-epic-brief` stage F, and never asked again: on a yes, **one publication ticket** — the last of the build — creates `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` and `docker-compose.yml` at once and proves them from an empty database; no earlier ticket creates or checks any of them. On a no, no deploy file is ever written and the delivery is complete without them. During `/04-tech-plan` this rule is a requirement on the image and the target; the provider, the account and the domain remain questions for after acceptance (`/08-review`).
+Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target. Whether the files are written is answered once, in `/01-epic-brief` stage F, and never asked again: on a yes, **one publication tarefa** — the last of the build — creates `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` and `docker-compose.yml` at once and proves them from an empty database; no earlier tarefa creates or checks any of them. On a no, no deploy file is ever written and the delivery is complete without them. During `/04-tech-plan` this rule is a requirement on the image and the target; the provider, the account and the domain remain questions for after acceptance (`/08-review`).
 
 **The image.**
 - `Dockerfile` (multi-stage: dependencies, build, runtime) and `.dockerignore` at the workspace root. The runtime stage carries only what serving, migrating and seeding need; build tools stay in the earlier stages.
@@ -150,7 +150,7 @@ A failed migration or seed stops the container instead of serving on an old sche
 
 **Local run.** `docker-compose.yml` at the root starts the application with the same image and entrypoint as deploy, plus the services it needs (queue, the workers of rule 6, and a database server when development does not use SQLite); a service database is waited for with `depends_on` and `condition: service_healthy`.
 
-**Evidence, once the files exist.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing. This is the publication ticket's own "Done when" — never a check on a ticket built before the acceptance.
+**Evidence, once the files exist.** From an empty database, `docker compose up --build` logs the migrations applied, the seed run and the server listening, and the application answers; a second start applies no migration and the seed changes nothing. This is the publication tarefa's own "Done when" — never a check on a tarefa built before the acceptance.
 
 ### 8. Development database
 
@@ -158,12 +158,12 @@ A failed migration or seed stops the container instead of serving on an old sche
 
 - The database URL comes from the environment (`DATABASE_URL=file:./data/dev.db`), never hardcoded, so only the variable changes between environments.
 - `/04-tech-plan` records the production database. When it is not SQLite, it also records **how one schema serves both**: an ORM whose migrations are generated for the production engine, the migration command for each environment, and what the plan does about anything SQLite cannot represent (native enums, concurrent writers, `jsonb` operators, strict types). Prisma is the case to watch: `migrate dev` generates SQL for the provider configured at that moment, so migrations generated against SQLite do not apply to Postgres.
-- When the plan cannot keep one schema honest on both, it says so and development runs the production engine in `docker-compose.yml` instead — recorded as a decision, not improvised in a ticket.
+- When the plan cannot keep one schema honest on both, it says so and development runs the production engine in `docker-compose.yml` instead — recorded as a decision, not improvised in a tarefa.
 - The seed of rule 7 runs the same way on the development file and on the production database.
 
 ### 9. Webhooks
 
-A webhook is an HTTP call the system did not ask for at that moment — someone else's event arriving, or this system telling someone else that something happened. `/01-epic-brief` stage F records whether either exists; when neither does, this rule adds nothing to the ticket.
+A webhook is an HTTP call the system did not ask for at that moment — someone else's event arriving, or this system telling someone else that something happened. `/01-epic-brief` stage F records whether either exists; when neither does, this rule adds nothing to the tarefa.
 
 **Inbound — an endpoint the sender calls.**
 - **The signature is verified before anything else.** The raw body, exactly as received, is checked against the sender's shared secret before the payload is parsed, trusted or written. A body already deserialized by a framework is not the body the signature covers — read the raw bytes.
@@ -225,24 +225,24 @@ The traceability matrix names the request validator, use case and response seria
 
 ## In /06-tickets
 
-Each ticket's **Implementation contract** names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries **only the checks that apply to it**, with the symbols filled in — a ticket that touches no endpoint copies no endpoint check, and no ticket copies this list whole:
+Each tarefa's **Implementation contract** names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries **only the checks that apply to it**, with the symbols filled in — a tarefa that touches no endpoint copies no endpoint check, and no tarefa copies this list whole:
 
 - [ ] Input validated by `<RequestValidator>`; invalid input answers 422 (or the plan's validation status) in the error envelope.
 - [ ] Controller only receives, delegates to `<UseCase>` and returns what `<ResponseSerializer>` produces.
 - [ ] Business rules live in `<UseCase>`; any data transfer object only carries data (no database access, no side effects) and exists for the boundary the plan names.
 - [ ] Response serialized by `<ResponseSerializer>` in the `{data, meta}` envelope; no model or internal structure is exposed directly.
 - [ ] Endpoint documented in the API specification with its input, output, errors, authentication and every HTTP status it answers, matching its behavior.
-- [ ] Inbound webhook (when the ticket has one): signature and timestamp verified against the raw body before anything is parsed or acted on; an unsigned, mis-signed or stale call rejected with no side effect; the provider's event id processed twice changes nothing; the endpoint answers 2xx inside the provider's timeout and the work runs in the background; the endpoint, its headers and every status it answers are in the API specification.
-- [ ] Outbound webhook (when the ticket has one): dispatched from the queue after commit, signed, with a timeout, retried with the recorded backoff up to the recorded maximum; an exhausted delivery lands in the dead-letter store with its error and can be retried by hand; the event is in the event catalog with a real payload example.
-- [ ] Background work (when the ticket has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
+- [ ] Inbound webhook (when the tarefa has one): signature and timestamp verified against the raw body before anything is parsed or acted on; an unsigned, mis-signed or stale call rejected with no side effect; the provider's event id processed twice changes nothing; the endpoint answers 2xx inside the provider's timeout and the work runs in the background; the endpoint, its headers and every status it answers are in the API specification.
+- [ ] Outbound webhook (when the tarefa has one): dispatched from the queue after commit, signed, with a timeout, retried with the recorded backoff up to the recorded maximum; an exhausted delivery lands in the dead-letter store with its error and can be retried by hand; the event is in the event catalog with a real payload example.
+- [ ] Background work (when the tarefa has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
 - [ ] UI built from the design system's tokens and components (Tailwind utilities and theme variables only); any chart uses the project's standard library (Recharts).
-- [ ] Schema or seed changes (when the ticket has any): from an empty database, the app's own migrate and seed commands bring it up and the flow works; running them again applies nothing and duplicates no row.
+- [ ] Schema or seed changes (when the tarefa has any): from an empty database, the app's own migrate and seed commands bring it up and the flow works; running them again applies nothing and duplicates no row.
 
-The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication ticket, which exists only when the brief's Surface and delivery answer asked for a container, and is the last ticket of the build.
+The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication tarefa, which exists only when the brief's Surface and delivery answer asked for a container, and is the last tarefa of the build.
 
 ## In /07-build
 
-Builders of backend, API or UI tickets load this skill with the others the ticket needs. The evaluator's briefing loads it too and marks RED:
+Builders of backend, API or UI tarefas load this skill with the others the tarefa needs. The evaluator's briefing loads it too and marks RED:
 
 - a controller with business rules, direct access to more than one repository, complex transformations, or direct external calls;
 - a request validator, data transfer object or response serializer executing business rules, or a data transfer object touching the database or causing side effects;
@@ -267,6 +267,6 @@ Builders of backend, API or UI tickets load this skill with the others the ticke
 - a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason;
 - a development setup that requires a database server although the plan records SQLite, or a hardcoded database URL instead of one read from the environment;
 - any deploy file (`Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml`, provider config) created before the requester accepted the system and asked for Docker;
-- in the publication ticket: a `Dockerfile` that is not multi-stage, a missing `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
+- in the publication tarefa: a `Dockerfile` that is not multi-stage, a missing `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
 
 Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend> --exclude-dir=node_modules --exclude-dir=.next` finds nothing.

@@ -1,7 +1,7 @@
 ---
 name: frontend-design
 description: Give every interface a deliberate visual direction — named aesthetic, font pairing, composition, depth and a motion language where every page animates — record it as mds/epics/<epic>/03-design.md, and build screens that could not be mistaken for a template.
-whenToUse: Before the first screen of /03-prototype (right after /ui-palette), whenever a page, landing, dashboard or component is created or restyled in the prototype or the React app, when /04-tech-plan records fonts and motion, and when /07-build briefs a UI ticket.
+whenToUse: Before the first screen of /03-prototype (right after /ui-palette), whenever a page, landing, dashboard or component is created or restyled in the prototype or the React app, when /04-tech-plan records fonts and motion, and when /07-build briefs a UI tarefa.
 ---
 
 # Frontend design

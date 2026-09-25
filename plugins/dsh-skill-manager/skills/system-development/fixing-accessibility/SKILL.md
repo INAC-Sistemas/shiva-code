@@ -1,7 +1,7 @@
 ---
 name: fixing-accessibility
 description: Make interfaces usable by keyboard, screen reader and low-vision users — accessible names, keyboard access, focus and dialogs, semantics, form errors, announcements, contrast, and motion that respects reduced-motion — and audit a file with quoted violations and minimal fixes.
-whenToUse: Whenever buttons, links, inputs, menus, dialogs, tabs, forms, icon-only controls, hover interactions or animations are added or changed in the prototype or the React app, and when the /07-build evaluator checks a UI ticket. Pass a file path to get a review.
+whenToUse: Whenever buttons, links, inputs, menus, dialogs, tabs, forms, icon-only controls, hover interactions or animations are added or changed in the prototype or the React app, and when the /07-build evaluator checks a UI tarefa. Pass a file path to get a review.
 ---
 
 # Fixing accessibility

@@ -1,7 +1,7 @@
 ---
 name: baseline-ui
 description: Enforce the UI baseline that separates finished interfaces from AI-generated slop in Tailwind projects — stack, component, interaction, motion, typography, layout, performance and design constraints — and review a file against them with quoted violations and concrete fixes.
-whenToUse: Whenever UI code is written or reviewed in the /03-prototype HTML or a React + Tailwind app, when /07-build briefs a UI ticket, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
+whenToUse: Whenever UI code is written or reviewed in the /03-prototype HTML or a React + Tailwind app, when /07-build briefs a UI tarefa, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
 ---
 
 # Baseline UI

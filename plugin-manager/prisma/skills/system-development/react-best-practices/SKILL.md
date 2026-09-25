@@ -1,7 +1,7 @@
 ---
 name: react-best-practices
 description: Write fast React and Next.js code by Vercel's 45 performance rules ranked by impact — eliminate async waterfalls, cut bundle size, server-side caching and serialization (Next.js), cached client fetching, fewer re-renders, cheaper rendering and JavaScript hot paths — each with the incorrect and correct pattern.
-whenToUse: Whenever React components, hooks, data fetching, routes or Server Components are written, reviewed or refactored, when a screen is slow or the bundle is large, and when /07-build briefs or evaluates a ticket that touches React code.
+whenToUse: Whenever React components, hooks, data fetching, routes or Server Components are written, reviewed or refactored, when a screen is slow or the bundle is large, and when /07-build briefs or evaluates a tarefa that touches React code.
 ---
 
 # React best practices

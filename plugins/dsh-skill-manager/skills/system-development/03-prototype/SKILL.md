@@ -91,10 +91,10 @@ design: mds/epics/<epic>/03-design.md (<aesthetic name>)
 
 ## Traceability and frozen text
 
-- **Traceability must be real.** Every `UX-…` id a later stage cites must exist in this frozen `prototype.md`. In one epic 63 `UX-*` ids were cited by the tickets while `prototype.md` contained none (only `data-screen` names) — the link was prose, not a bond. When you freeze, give every screen/state/action a stable `UX-…` id in the contract, so the ticket stage can resolve them mechanically.
+- **Traceability must be real.** Every `UX-…` id a later stage cites must exist in this frozen `prototype.md`. In one epic 63 `UX-*` ids were cited by the tarefas while `prototype.md` contained none (only `data-screen` names) — the link was prose, not a bond. When you freeze, give every screen/state/action a stable `UX-…` id in the contract, so the tarefa stage can resolve them mechanically.
 - **Frozen text is amended, never edited.** Once `prototype.md` is frozen, never edit it in place. Every change enters as a recorded **amendment**: what it was, what it becomes, why, and who decided. Before the build that is the owner, in their words. During `/07-build` the principal decides it alone — the build does not stop for a screen the prototype left incomplete — and the amendment carries the principal's decision, its reason and the row it got in `07-decisoes.md`. What never changes is the mechanism: the frozen text is amended, never edited to match the code. In one epic the agent edited the frozen `prototype.md` to match the code — the owner's decision was right, the mechanism was wrong (adjusting the spec to the code), and QA flagged it as a governance defect.
 - If prototype and contract diverge, the contract rules — but register the divergence, do not silence it.
-- Contract text existing in **three versions** (prototype, contract, ticket) means the ticket stage did not check the quotes: require byte-for-byte equality.
+- Contract text existing in **three versions** (prototype, contract, tarefa) means the tarefa stage did not check the quotes: require byte-for-byte equality.
 
 ## Next
 

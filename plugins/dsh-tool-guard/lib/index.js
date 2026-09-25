@@ -220,7 +220,7 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
   // The frozen prototype contract: once a ticket leaves the build loop, the
   // contract stops changing — amendments go to their own artifact.
   if (epic && basename(file).toLowerCase() === 'prototype.md' && epicIsFrozen(cwd, epic)) {
-    return `GUARD[prototype]: bloqueado — prototype.md do épico está congelado (ticket em code_test ou além); emendas vão em arquivo próprio, nunca no congelado`
+    return `GUARD[prototype]: bloqueado — prototype.md do épico está congelado (tarefa em code_test ou além); emendas vão em arquivo próprio, nunca no congelado`
   }
 
   // Traceability: a ticket may only cite UX-* ids the prototype declares.
@@ -229,7 +229,7 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
     const declared = declaredUxIds(cwd, epic)
     const missing = [...cited].filter((id) => !declared.has(id))
     if (missing.length > 0) {
-      return `GUARD[traceability]: bloqueado — ticket cita UX-* inexistente em prototype.md: ${missing.join(', ')}`
+      return `GUARD[traceability]: bloqueado — tarefa cita UX-* inexistente em prototype.md: ${missing.join(', ')}`
     }
   }
 
@@ -242,7 +242,7 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
       : str(args.content)
     const newStatus = frontmatterStatus(finalText)
     if (oldStatus === 'active' && newStatus !== oldStatus && newStatus !== 'in_progress') {
-      return `GUARD[kanban]: bloqueado — ticket 'active' só vira 'in_progress' (tentativa: ${oldStatus} → ${newStatus ?? '<nenhum>'})`
+      return `GUARD[kanban]: bloqueado — tarefa 'active' só vira 'in_progress' (tentativa: ${oldStatus} → ${newStatus ?? '<nenhum>'})`
     }
   }
 

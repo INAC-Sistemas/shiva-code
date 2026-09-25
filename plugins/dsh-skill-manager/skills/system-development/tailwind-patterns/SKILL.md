@@ -1,7 +1,7 @@
 ---
 name: tailwind-patterns
 description: Write Tailwind the way this flow ships it — v3.4 Play CDN configured by prototype/theme.js in the prototype, v4 CSS-first @theme in the React app — with palette role colors, design-direction fonts, motion tokens and keyframes, container queries, responsive and dark-mode patterns, and no arbitrary-value sprawl.
-whenToUse: Whenever Tailwind classes, theme CSS, tokens, keyframes or responsive layout are written or reviewed in the /03-prototype HTML or a React + Tailwind app, and when /07-build briefs a UI ticket that touches styling or the theme file.
+whenToUse: Whenever Tailwind classes, theme CSS, tokens, keyframes or responsive layout are written or reviewed in the /03-prototype HTML or a React + Tailwind app, and when /07-build briefs a UI tarefa that touches styling or the theme file.
 ---
 
 # Tailwind patterns

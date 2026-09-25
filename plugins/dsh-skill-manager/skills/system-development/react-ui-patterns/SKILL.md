@@ -1,7 +1,7 @@
 ---
 name: react-ui-patterns
 description: Build every async React screen with complete, animated UI states — loading only without data, skeletons shaped like the content, errors always surfaced with retry, empty states with one next action, disabled triggers with progress, optimistic updates with rollback — using shadcn/ui, sonner toasts and motion.
-whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /07-build briefs or evaluates a UI ticket that touches data.
+whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /07-build briefs or evaluates a UI tarefa that touches data.
 ---
 
 # React UI patterns

@@ -1,7 +1,7 @@
 ---
 name: ui-icons
 description: Take every application icon from Lucide, or from Tabler when Lucide has no glyph — install the package with pnpm, import by name, and never hand-write an SVG, ship an emoji as an icon, or add a third icon pack.
-whenToUse: Whenever work adds or changes an icon in a UI — buttons, navigation, empty states, menus, status, form fields — in the React app or in the /03-prototype HTML. Also when /04-tech-plan records the frontend stack and when /07-build briefs a UI ticket.
+whenToUse: Whenever work adds or changes an icon in a UI — buttons, navigation, empty states, menus, status, form fields — in the React app or in the /03-prototype HTML. Also when /04-tech-plan records the frontend stack and when /07-build briefs a UI tarefa.
 ---
 
 # UI icons
@@ -12,7 +12,7 @@ Icons come from **Lucide** first, **Tabler** second. A hand-drawn `<svg>`, an em
 
 1. **A pack is already in the project** — `grep` `package.json` for `lucide-react` and `@tabler/icons-react` before installing anything. Whichever is there is the project's pack; use it and do not add the other.
 2. **Nothing installed** — Lucide.
-3. **Tabler** only when Lucide has no glyph for the meaning (Tabler carries far more, notably brand, finance and device glyphs), or a requester constraint names it. Both may coexist in one project **only** in that case, and the ticket report says which screen needed the Tabler glyph.
+3. **Tabler** only when Lucide has no glyph for the meaning (Tabler carries far more, notably brand, finance and device glyphs), or a requester constraint names it. Both may coexist in one project **only** in that case, and the tarefa report says which screen needed the Tabler glyph.
 
 Never search for a glyph by guessing an export name. Read the pack's catalog: [lucide.dev/icons](https://lucide.dev/icons) and [tabler.io/icons](https://tabler.io/icons), with `web_fetch` when a name is uncertain. An import that does not exist is a build error, not a missing feature.
 

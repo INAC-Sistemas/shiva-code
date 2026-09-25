@@ -1,7 +1,7 @@
 ---
 name: fixing-motion-performance
 description: Keep the required page motion smooth — choose the cheapest rendering mechanism, avoid layout thrashing, drive scroll-linked motion without scroll listeners, limit paint and blur — and audit a file for animation jank with quoted violations and concrete fixes.
-whenToUse: Whenever an animation, transition, scroll reveal or parallax is added or changed in the prototype or the React app, when motion stutters, and when the /07-build evaluator checks a UI ticket. Pass a file path to get a review.
+whenToUse: Whenever an animation, transition, scroll reveal or parallax is added or changed in the prototype or the React app, when motion stutters, and when the /07-build evaluator checks a UI tarefa. Pass a file path to get a review.
 ---
 
 # Fixing motion performance

@@ -13,11 +13,11 @@ window.__ModuleLoader__.load({ id: 'dsh-kanban', factory: (require) => {
 const TAB_ID = 'dsh-kanban:board'
 
 const STATUSES = [
-  { id: 'active', label: 'Active' },
-  { id: 'in_progress', label: 'In progress' },
-  { id: 'code_test', label: 'Code test' },
-  { id: 'human_test', label: 'Human test' },
-  { id: 'done', label: 'Done' },
+  { id: 'active', label: 'A fazer' },
+  { id: 'in_progress', label: 'Iniciada' },
+  { id: 'code_test', label: 'Testando' },
+  { id: 'human_test', label: 'Finalizada' },
+  { id: 'done', label: 'Aceita' },
 ]
 const STATUS_LABEL = Object.fromEntries(STATUSES.map((s) => [s.id, s.label]))
 const ADVANCE = { active: 'in_progress', in_progress: 'code_test', code_test: 'human_test', human_test: 'done' }
@@ -117,13 +117,13 @@ function KanbanView(props) {
 
   const move = React.useCallback(async (card, next) => {
     if (!next || next === card.status || busy) return
-    if (next === 'done' && !window.confirm(`Mark "${card.title || card.ticket}" as Done?\n\nDone is the human's acceptance, not the agent's.`)) return
+    if (next === 'done' && !window.confirm(`Marcar a tarefa "${card.title || card.ticket}" como Aceita?\n\nAceitar é decisão de quem pediu o sistema, nunca do agente.`)) return
     setBusy(card.file)
     const r = await api('move', { file: card.file, status: next })
     setBusy(null)
     if (!r.ok) return say(r.error || 'move failed', true)
     setCards((prev) => (prev ?? []).map((c) => (c.file === card.file ? { ...c, status: next } : c)))
-    say(`Moved to ${STATUS_LABEL[next] || next}`)
+    say(`Movida para ${STATUS_LABEL[next] || next}`)
   }, [busy, say])
 
   const openPreview = React.useCallback(async (card) => {
@@ -138,7 +138,7 @@ function KanbanView(props) {
   const columns = React.useMemo(() => {
     const cols = STATUSES.map((s) => ({ ...s, cards: [] }))
     const byId = new Map(cols.map((c) => [c.id, c]))
-    const other = { id: 'other', label: 'Other', cards: [] }
+    const other = { id: 'other', label: 'Outras', cards: [] }
     for (const card of filtered) (byId.get(card.status) || other).cards.push(card)
     return other.cards.length ? [...cols, other] : cols
   }, [filtered])
@@ -149,19 +149,19 @@ function KanbanView(props) {
     const options = STATUSES.slice()
     if (card.status && !STATUS_LABEL[card.status]) options.unshift({ id: card.status, label: card.status })
     return h('div', { key: card.file, className: 'kb-card' + (busyHere ? ' busy' : '') },
-      h('div', { className: 'kb-card-title', title: 'Preview ticket', onClick: () => openPreview(card) }, card.title || card.ticket),
+      h('div', { className: 'kb-card-title', title: 'Ver tarefa', onClick: () => openPreview(card) }, card.title || card.ticket),
       h('div', { className: 'kb-card-meta' },
         h('span', { className: 'kb-epic', title: card.epic }, card.epic),
         h('span', { className: 'kb-ticket', title: card.name }, card.ticket)),
       h('div', { className: 'kb-card-actions' },
         h('select', {
-          value: card.status || '', disabled: busyHere, title: 'Set status',
+          value: card.status || '', disabled: busyHere, title: 'Mudar status',
           onChange: (e) => move(card, e.target.value),
         },
-          card.status ? null : h('option', { value: '', disabled: true }, '(no status)'),
+          card.status ? null : h('option', { value: '', disabled: true }, '(sem status)'),
           options.map((s) => h('option', { key: s.id, value: s.id }, s.label))),
         next ? h('button', {
-          className: 'kb-btn', disabled: busyHere, title: `Advance to ${STATUS_LABEL[next]}`,
+          className: 'kb-btn', disabled: busyHere, title: `Avançar para ${STATUS_LABEL[next]}`,
           onClick: () => move(card, next),
         }, '→') : null),
     )
@@ -169,15 +169,15 @@ function KanbanView(props) {
 
   if (!status) {
     return h('div', { className: 'kb-root' },
-      h('div', { className: 'kb-hint' }, 'Loading…'),
+      h('div', { className: 'kb-hint' }, 'Carregando…'),
       toast && h('div', { className: 'kb-toast' + (toast.err ? ' err' : '') }, toast.msg))
   }
 
   if (!status.exists) {
     return h('div', { className: 'kb-root' },
       h('div', { className: 'kb-hint' },
-        h('div', null, 'This workspace has no ', h('code', null, 'mds/'), ' folder yet.',
-          h('br'), 'Tickets appear here once ', h('code', null, '06-tickets'), ' writes ', h('code', null, 'mds/epics/<epic>/06-tickets/*.md'), '.')),
+        h('div', null, 'Este workspace ainda não tem a pasta ', h('code', null, 'mds/'), '.',
+          h('br'), 'As tarefas aparecem aqui quando ', h('code', null, '06-tickets'), ' escreve ', h('code', null, 'mds/epics/<epic>/06-tickets/*.md'), '.')),
       toast && h('div', { className: 'kb-toast' + (toast.err ? ' err' : '') }, toast.msg))
   }
 
@@ -185,16 +185,16 @@ function KanbanView(props) {
     h('div', { className: 'kb-bar' },
       h('span', { className: 'kb-title' }, 'Kanban'),
       epics.length > 1
-        ? h('select', { className: 'kb-select', value: epic, onChange: (e) => setEpic(e.target.value), title: 'Filter by epic' },
-          h('option', { value: '' }, 'All epics'),
+        ? h('select', { className: 'kb-select', value: epic, onChange: (e) => setEpic(e.target.value), title: 'Filtrar por épico' },
+          h('option', { value: '' }, 'Todos os épicos'),
           epics.map((e) => h('option', { key: e, value: e }, e)))
         : null,
       h('span', { className: 'kb-spacer' }),
-      h('span', { className: 'kb-count' }, `${filtered.length} ticket${filtered.length === 1 ? '' : 's'}`),
-      h('button', { className: 'kb-btn', title: 'Reload', onClick: loadList }, '⟳')),
+      h('span', { className: 'kb-count' }, `${filtered.length} tarefa${filtered.length === 1 ? '' : 's'}`),
+      h('button', { className: 'kb-btn', title: 'Recarregar', onClick: loadList }, '⟳')),
     cards && cards.length === 0
       ? h('div', { className: 'kb-hint' },
-        h('div', null, 'No tickets yet.', h('br'), 'They live under ', h('code', null, 'mds/epics/<epic>/06-tickets/'), ' (skill /06-tickets).'))
+        h('div', null, 'Nenhuma tarefa ainda.', h('br'), 'Elas ficam em ', h('code', null, 'mds/epics/<epic>/06-tickets/'), ' (skill /06-tickets).'))
       : h('div', { className: 'kb-board' },
         columns.map((col) => h('div', { key: col.id, className: 'kb-col' },
           h('div', { className: 'kb-col-h' },
@@ -207,7 +207,7 @@ function KanbanView(props) {
       h('div', { className: 'kb-modal', onClick: (e) => e.stopPropagation() },
         h('div', { className: 'kb-modal-bar' },
           h('span', { className: 'kb-modal-path', title: selected.file }, selected.file),
-          h('button', { className: 'kb-btn', onClick: () => setSelected(null) }, 'Close')),
+          h('button', { className: 'kb-btn', onClick: () => setSelected(null) }, 'Fechar')),
         h('pre', { className: 'kb-modal-body' }, selected.content))),
     toast && h('div', { className: 'kb-toast' + (toast.err ? ' err' : '') }, toast.msg),
   )

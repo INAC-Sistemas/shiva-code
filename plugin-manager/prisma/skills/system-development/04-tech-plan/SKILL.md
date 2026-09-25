@@ -48,7 +48,7 @@ Every system deploys as the Docker image of `skill engineering-standards` rule 7
 
 1. `read` brief, flows, prototype.md, db-schema.json — including the brief's **Surface and delivery** table: each of its six answers becomes a Decisions row or an explicit "none" with the reason.
 2. **Ground truth**: inspect the actual code paths this change touches. A plan from assumption is the most expensive artifact there is. Use `web_search`/`web_fetch` to confirm a library's current API and maintenance before choosing it.
-3. **Freeze the UX IDs**: every screen/state/action in prototype.md gets a stable id (`UX-<screen>-<n>`) used by tickets.
+3. **Freeze the UX IDs**: every screen/state/action in prototype.md gets a stable id (`UX-<screen>-<n>`) used by tarefas.
 4. **Frame technical forks only** — where engineers could reasonably disagree: storage, runtime, contracts, delivery, security, concurrency, backup, rollback, observability, tests.
 5. Per decision, record: options, choice, why, rejected alternative, trade-off, reversibility.
 6. **Translate** each prototype behaviour into its real mechanism (persistence replaces localStorage, real auth replaces fake) with the failure handling the mock hid.
@@ -82,7 +82,7 @@ status: draft
 - Trade-offs in the project's own terms, not textbook virtues.
 - The plan describes the code as of its writing; when they later disagree, the code is right — `edit` the plan.
 - Leave genuinely open questions open, each with what evidence would settle it. Never invent a decision.
-- Do not create tickets here. That is `/06-tickets`.
+- Do not create tarefas here. That is `/06-tickets`.
 
 ## Next
 
