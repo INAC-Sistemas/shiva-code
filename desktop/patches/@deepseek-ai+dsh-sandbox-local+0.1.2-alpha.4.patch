@@ -1,0 +1,21 @@
+diff --git a/node_modules/@deepseek-ai/dsh-sandbox-local/lib/index.js b/node_modules/@deepseek-ai/dsh-sandbox-local/lib/index.js
+index c65a752..8c178e8 100644
+--- a/node_modules/@deepseek-ai/dsh-sandbox-local/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-sandbox-local/lib/index.js
+@@ -34,6 +34,7 @@ function bwrapProfileArgs(policy) {
+ 	if (policy.mode === "workspace-write") {
+ 		args.push("--tmpfs", "/tmp");
+ 		args.push("--bind", policy.workspaceRoot, policy.workspaceRoot);
++		for (const root of policy.extraWritableRoots ?? []) args.push("--bind", root, root);
+ 	}
+ 	return args;
+ }
+@@ -44,7 +45,7 @@ function bwrapProfileArgs(policy) {
+ */
+ function landlockProfileArgs(policy) {
+ 	const readWrite = ["/dev/null"];
+-	if (policy.mode === "workspace-write") readWrite.push("/tmp", policy.workspaceRoot);
++	if (policy.mode === "workspace-write") readWrite.push("/tmp", policy.workspaceRoot, ...policy.extraWritableRoots ?? []);
+ 	return grantArgs({
+ 		readOnly: ["/"],
+ 		readWrite

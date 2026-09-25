@@ -180,6 +180,34 @@ export function snapshotOf(handle: AgentTerminalHandle): AgentTerminalSnapshot {
   return out
 }
 
+/** POSIX shells that accept `export NAME=value` (fish ships `export` as a compatibility function). */
+const EXPORTING_SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish'])
+
+/**
+ * The line that gives an agent terminal the Harness process's own `PATH`.
+ *
+ * Agent terminals start as login shells, and the user's profile files reorder
+ * `PATH` after spawn — so `pnpm` or `node` in the terminal could resolve to a
+ * different binary than the agent's `bash` tool, which inherits the Harness
+ * `PATH` as is. One project then got installed by one pnpm major and run by
+ * another. Re-exporting the Harness `PATH` after the profile ran makes both
+ * surfaces resolve the same toolchain.
+ * @param shell - the shell executable the terminal spawns.
+ * @param path - the Harness `PATH`; undefined or empty leaves the shell alone.
+ * @param platform - the host platform; Windows shells keep their own `PATH`.
+ * @returns the line to write before the command, or undefined when the shell is not a known POSIX shell.
+ */
+export function agentPathLine(
+  shell: string,
+  path: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  if (platform === 'win32' || path === undefined || path === '') return undefined
+  const base = shell.slice(shell.lastIndexOf('/') + 1)
+  if (!EXPORTING_SHELLS.has(base)) return undefined
+  return `export PATH='${path.replaceAll("'", `'\\''`)}'`
+}
+
 /**
  * The agent terminal registry. The constructor takes the resolved shell
  * binary (the same `defaultShell()` the UI-tab registry uses) and runs the
@@ -219,6 +247,7 @@ export class AgentPtyRegistry {
   ): string {
     const uuid = randomUUID()
     const dims = clampDims(cols, rows)
+    const pathLine = agentPathLine(shell ?? this.shell, process.env.PATH)
     const pty = this.nodePty.spawn(shell ?? this.shell, shellSpawnArgs(shellArgs ?? this.shellArgs), {
       name: 'xterm-256color',
       cols: dims.cols,
@@ -248,14 +277,16 @@ export class AgentPtyRegistry {
       handle.exitSignal = signal
       this.notify()
     })
-    if (command !== '') {
-      // Write the command + Enter so it runs in the freshly spawned shell.
-      // Use \r (carriage return) — the actual character a terminal sends for
-      // the Enter key — not \n (line feed). PowerShell treats a bare \n as a
-      // soft line break (continuation prompt ">>") rather than a command
-      // submit; \r is the cross-shell Enter semantics on both POSIX and Windows.
+    const input = [pathLine, command === '' ? undefined : command].filter((line) => line !== undefined)
+    if (input.length > 0) {
+      // Write each line + Enter so it runs in the freshly spawned shell, after
+      // the login profile. Use \r (carriage return) — the actual character a
+      // terminal sends for the Enter key — not \n (line feed). PowerShell
+      // treats a bare \n as a soft line break (continuation prompt ">>")
+      // rather than a command submit; \r is the cross-shell Enter semantics on
+      // both POSIX and Windows.
       try {
-        pty.write(`${command}\r`)
+        pty.write(input.map((line) => `${line}\r`).join(''))
       } catch {
         // A spawn that failed between onData and onExit surfaces its own
         // exit; the create call still returns the uuid so the model can

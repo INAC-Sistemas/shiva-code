@@ -290,13 +290,24 @@ export function buildHarnessSpawnOptions(
   agentPresetRoot?: string,
   defaultVpsUrl: string = PRODUCTION_VPS_URL
 ): SpawnOptionsWithoutStdio {
-  const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = environment
+  const {
+    ELECTRON_RUN_AS_NODE: _runAsNode,
+    NODE_ENV: _nodeEnv,
+    NODE_ENV_ELECTRON_VITE: _electronViteNodeEnv,
+    ...parentEnvironment
+  } = environment
   const pathKey = platform === 'win32' ? 'Path' : 'PATH'
 
   // ELECTRON_RUN_AS_NODE must not reach the Harness process itself: the macOS
   // utility process is launched with Chromium switches (--type=utility, …)
   // that Node rejects as bad options. The Harness entry re-declares Node mode
   // from the inside, for its children only.
+  //
+  // NODE_ENV (and electron-vite's NODE_ENV_ELECTRON_VITE) describe how the
+  // desktop itself was built, not the agent's projects: `electron-vite dev`
+  // sets NODE_ENV=development, and every agent command inherited it, so a
+  // project's `next build` ran with a non-standard NODE_ENV and failed while
+  // prerendering.
   //
   // On Windows, `detached: true` puts the Harness in its own process group
   // and console. Without it, a child process that calls `os.kill(pid, 0)`

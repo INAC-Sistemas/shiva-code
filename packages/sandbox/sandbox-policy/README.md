@@ -47,6 +47,7 @@ Load the package with a default mode; the fail-safe default is `read-only`, and 
 | `mode` | `read-only` | The deployment default mode a session starts from, validated at load |
 | `workspaceRoot` | `process.cwd()` | The fallback root `workspace-write` may write under for agentless calls or sessions without a cwd; normal agent calls use the session's immutable cwd instead |
 | `enabled` | `true` | Whether the file sandbox confines at all; `false` forces `danger-full-access` on every `resolve()`, including open sessions, without rewriting their recorded mode |
+| `extraWritableRoots` | `[]` | Absolute directories outside the session workspace that `workspace-write` also grants, such as package-manager caches shared across projects; each is created at load when missing, and a relative entry fails the load |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-sandbox-policy) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -124,6 +125,8 @@ Current DSH file policy: read-only. Any available operation enforced by the DSH 
 Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "<workspace root>". Some platform temporary areas may also be writable.
 ```
 
+With `extraWritableRoots` configured, the sentence `It may also modify files under: "<root>", "<root>".` follows the workspace root.
+
 ##### Danger-full-access
 
 ```markdown
@@ -145,7 +148,7 @@ The stable system prompt remains byte-identical across mode changes. A changed f
 
 These limits define the policy surface this package provides. They are current package constraints, not a general sandbox comparison or a task backlog.
 
-- **One primary workspace root per session** — policy resolves `SessionHeader.cwd`; extra writable roots are not part of `SandboxExecutionPolicy`.
+- **One primary workspace root per session** — policy resolves `SessionHeader.cwd`; the only other writable roots are the deployment-wide `extraWritableRoots`, which are the same for every session.
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.
 

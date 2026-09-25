@@ -195,6 +195,17 @@ describe('Harness launch contract', () => {
     expect(exported.env).toMatchObject({ VPS_URL: 'https://staging.example' })
   })
 
+  it('keeps the desktop build mode out of the Harness environment', () => {
+    const options = buildHarnessSpawnOptions('/launch-root', '/harness', 'linux', {
+      PATH: '/usr/bin',
+      NODE_ENV: 'development',
+      NODE_ENV_ELECTRON_VITE: 'development'
+    })
+
+    expect(options.env).not.toHaveProperty('NODE_ENV')
+    expect(options.env).not.toHaveProperty('NODE_ENV_ELECTRON_VITE')
+  })
+
   it('does not detach the Harness on macOS or Linux', () => {
     // `detached: true` is a Windows-only escape hatch. The macOS path uses
     // Electron's UtilityProcess fork, and Linux spawns are unaffected by

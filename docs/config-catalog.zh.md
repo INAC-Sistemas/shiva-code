@@ -1845,12 +1845,19 @@ export interface Config {
    * is turned back on. The Settings overlay writes the same field.
    */
   enabled?: boolean
+  /**
+   * Absolute directories outside the session workspace that `workspace-write`
+   * also grants (default: none) — for example the package-manager caches a
+   * deployment wants shared across projects. Each is created at load when
+   * missing; a relative entry fails the load.
+   */
+  extraWritableRoots?: string[]
 }
 ```
 
 依赖：[`SandboxMode`](subsystems/sandbox.zh.md)
 
-来源：[`packages/sandbox/sandbox-policy/src/index.ts:84`](../packages/sandbox/sandbox-policy/src/index.ts)
+来源：[`packages/sandbox/sandbox-policy/src/index.ts:106`](../packages/sandbox/sandbox-policy/src/index.ts)
 
 <a id="deepseek-aidsh-sdk-app"></a>
 
@@ -3197,7 +3204,7 @@ export interface Config {
 export type ToolPresentationMode = 'native' | 'ptc' | 'both'
 ```
 
-来源：[`packages/core/tools/src/index.ts:647`](../packages/core/tools/src/index.ts)
+来源：[`packages/core/tools/src/index.ts:649`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 

@@ -595,15 +595,17 @@ export type PostToolDecision =
 /**
  * Best-effort human-readable message from an arbitrary thrown value: Error
  * instances use `.message`; non-Error objects with a string `message`
- * property (e.g. `throw { message: 'denied' }`) use it too; everything else
- * is stringified.
+ * property (e.g. `throw { message: 'denied' }`) use it too; other objects —
+ * such as an abort reason `{ kind: 'user' }` rethrown by `throwIfAborted()` —
+ * are rendered as JSON; everything else is stringified.
  */
 function errorMessage(error: unknown): string {
   try {
     if (error instanceof Error) return error.message
-    if (typeof error === 'object' && error !== null
-      && 'message' in error && typeof error.message === 'string') {
-      return error.message
+    if (typeof error === 'object' && error !== null) {
+      if ('message' in error && typeof error.message === 'string') return error.message
+      const json = JSON.stringify(error)
+      if (json !== undefined) return json
     }
     return String(error)
   } catch {

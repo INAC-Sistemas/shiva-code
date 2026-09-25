@@ -42,6 +42,13 @@ export interface SandboxExecutionPolicy {
   /** Absolute root directory `workspace-write` may write under. */
   workspaceRoot: string
   /**
+   * Absolute directories outside the workspace that `workspace-write` may also
+   * write under, as the deployment configured them on `ctx.sandboxPolicy`
+   * (package-manager caches, for example). Absent or empty grants nothing
+   * extra; ignored in every other mode.
+   */
+  extraWritableRoots?: readonly string[]
+  /**
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
    * each live session/workspace pair a random private temp directory and SID,

@@ -36,6 +36,19 @@
     default: profile
     roots: !!js "[{ path: process.env.DSH_DESKTOP_PRESET_ROOT, trust: 'system' }]"
 
+# The agent's package managers keep their caches in the home directory, which
+# workspace-write does not grant: an npm or pnpm call in a sandboxed `bash`
+# failed with EROFS on ~/.npm/_cacache, and the agent worked around it by
+# writing caches into the project. These roots grant exactly the npm cache and
+# the pnpm store and cache, nothing else under home. Windows ACL ignores them.
+# This row replaces the base bundle's whole config, so `mode` and
+# `workspaceRoot` are restated as dsh-base declares them.
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+    extraWritableRoots: !!js "(() => { const home = process.env.HOME; if (process.platform === 'win32' || !home) return []; return process.platform === 'darwin' ? [home + '/.npm', home + '/Library/pnpm', home + '/Library/Caches/pnpm'] : [home + '/.npm', home + '/.local/share/pnpm', home + '/.cache/pnpm'] })()"
+
 - id: dsh-market
   inject: [desktopProfiles]
   config:

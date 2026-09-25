@@ -47,6 +47,7 @@ kind: "package-reference"
 | `mode` | `read-only` | 会话起始的部署默认模式，加载时验证 |
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用或没有 cwd 的会话在 `workspace-write` 下可写入的回退根目录；普通 agent 调用改用会话的不可变 cwd |
 | `enabled` | `true` | 文件沙箱是否生效；`false` 会让每次 `resolve()` 都强制 `danger-full-access`，包括已打开的会话，且不改写它们记录的模式 |
+| `extraWritableRoots` | `[]` | 会话工作区之外、`workspace-write` 同样授予写权限的绝对路径目录，例如跨项目共享的包管理器缓存；缺失的目录在加载时创建，相对路径条目会使加载失败 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -124,6 +125,8 @@ Current DSH file policy: read-only. Any available operation enforced by the DSH 
 Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "<workspace root>". Some platform temporary areas may also be writable.
 ```
 
+配置了 `extraWritableRoots` 时，工作区根目录之后会紧跟一句 `It may also modify files under: "<root>", "<root>".`。
+
 ##### 完全访问
 
 ```markdown
@@ -145,7 +148,7 @@ Current DSH file policy: danger-full-access. The DSH file sandbox does not restr
 
 这些限制界定了本包提供的策略范围。它们是当前的包级约束，并非通用沙箱对比，也不是待办事项清单。
 
-- **每个会话只有一个主要工作区根目录**——策略解析 `SessionHeader.cwd`；额外可写根目录不属于 `SandboxExecutionPolicy`。
+- **每个会话只有一个主要工作区根目录**——策略解析 `SessionHeader.cwd`；唯一的其他可写根目录是部署级的 `extraWritableRoots`，对每个会话都相同。
 - **仅限文件操作模式**——`SandboxMode` 管控文件操作；网络和进程策略不在其词汇中，因此这里没有限制它们的旋钮。
 - **有意概述临时区域**——强制执行后端会授予不同的平台临时区域，这些区域在策略解析后才会选定，因此无法在当前上下文中如实枚举。
 

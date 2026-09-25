@@ -38,6 +38,7 @@ async function mounted(config: {
   mode?: 'read-only' | 'workspace-write' | 'danger-full-access'
   workspaceRoot?: string
   enabled?: boolean
+  extraWritableRoots?: string[]
 } = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
@@ -185,6 +186,31 @@ describe('SandboxPolicyService', () => {
     expect(ctx.sandboxPolicy.resolve({ session: session('sess-no-cwd') }).workspaceRoot).toBe(resolve('/fallback'))
   })
 
+  it('grants the configured extra roots under workspace-write only, creating them at load', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    try {
+      const cache = join(base, 'npm-cache')
+      const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/fallback', extraWritableRoots: [cache] })
+      const canonical = realpathSync.native(cache)
+      expect(ctx.sandboxPolicy.resolve()).toEqual({
+        mode: 'workspace-write',
+        workspaceRoot: resolve('/fallback'),
+        extraWritableRoots: [canonical],
+      })
+      const readOnly = session('sess-ro', '/projects/ro')
+      setSandboxMode(readOnly, 'read-only')
+      expect(ctx.sandboxPolicy.resolve({ session: readOnly })).not.toHaveProperty('extraWritableRoots')
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a relative extra writable root at load', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await expect(ctx.plugin(SandboxPolicyService, { extraWritableRoots: ['relative/cache'] })).rejects.toThrow(/absolute path/)
+  })
+
   it('rejects a mode outside the closed vocabulary at load', async () => {
     const ctx = new Context()
     // Config validation runs when the fiber activates, and the policy seam
@@ -212,6 +238,7 @@ describe('sandbox:policy request context', () => {
     mode?: 'read-only' | 'workspace-write' | 'danger-full-access'
     workspaceRoot?: string
     enabled?: boolean
+    extraWritableRoots?: string[]
   } = {}): Promise<Context> {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -265,6 +292,18 @@ describe('sandbox:policy request context', () => {
 
     setSandboxMode(active, 'workspace-write')
     expect(await policyContext(ctx, active)).toBe(`Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(resolve('/projects/current'))}. Some platform temporary areas may also be writable.`)
+  })
+
+  it('names the extra writable roots in the workspace-write policy', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-extra-'))
+    try {
+      const cache = join(base, 'pnpm-store')
+      const ctx = await promptMounted({ mode: 'workspace-write', workspaceRoot: '/fallback', extraWritableRoots: [cache] })
+      const active = session('sess-extra', '/projects/current')
+      expect(await policyContext(ctx, active)).toBe(`Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(resolve('/projects/current'))}. It may also modify files under: ${JSON.stringify(realpathSync.native(cache))}. Some platform temporary areas may also be writable.`)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
   })
 
   it('a global disable renders Full access without rewriting the session log', async () => {

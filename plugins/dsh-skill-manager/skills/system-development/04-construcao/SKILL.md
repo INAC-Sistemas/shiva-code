@@ -27,7 +27,7 @@ Confirm `components.json` and a passing build of every part before the first tar
 **The app stays up, and the preview is open.**
 
 1. `terminal_create` opens a terminal tab the requester can watch, in the workspace root.
-2. `terminal_send` starts the app on the **fixed port `03-plano.md` records**, and `terminal_wait_for` waits for its ready line — never a `sleep`, never a polling loop.
+2. `terminal_send` starts the app on the **fixed port `03-plano.md` records**, and `terminal_wait_for` waits for its ready line — never a `sleep`, never a polling loop. Start it with the absolute `pnpm` path that `command -v pnpm` prints in `bash`, never a bare `pnpm`: the tab's login shell may resolve another pnpm (`/00-start-here`, Terminals). When `terminal_wait_for` times out, `terminal_read` first — a prompt waiting for an answer (`Proceed? (Y/n)`, `Do you want to continue?`) is the usual cause, and waiting longer never answers it.
 3. `browser {op:'open', url:'http://localhost:<port>'}`, then `browser {op:'screenshot'}` and `read_image` to confirm a real page is on screen.
 4. Say it once, in one line, in their language: the port, that each screen will appear there for their validation, and that you keep building the next one while they look.
 

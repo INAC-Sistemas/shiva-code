@@ -83,6 +83,12 @@ describe('profile dialects', () => {
     ])
   })
 
+  it('bwrap and landlock workspace-write: also bind the extra writable roots', () => {
+    const extra = { ...WW, extraWritableRoots: ['/cache/npm', '/cache/pnpm'] }
+    expect(bwrapProfileArgs(extra).slice(-6)).toEqual(['--bind', '/cache/npm', '/cache/npm', '--bind', '/cache/pnpm', '/cache/pnpm'])
+    expect(landlockProfileArgs(extra)).toEqual(['--ro', '/', '--rw', '/dev/null', '--rw', '/tmp', '--rw', '/ws', '--rw', '/cache/npm', '--rw', '/cache/pnpm'])
+  })
+
   it('landlock read-only: readable tree plus a writable /dev/null, nothing else', () => {
     // /dev/null specifically, NOT /dev: a whole-/dev grant would let confined
     // commands write real host paths beneath it (/dev/shm) under read-only.

@@ -1555,6 +1555,36 @@ function snapshotOf(handle) {
 	}
 	return out;
 }
+/** POSIX shells that accept `export NAME=value` (fish ships `export` as a compatibility function). */
+const EXPORTING_SHELLS = new Set([
+	"sh",
+	"bash",
+	"zsh",
+	"dash",
+	"ksh",
+	"mksh",
+	"fish"
+]);
+/**
+* The line that gives an agent terminal the Harness process's own `PATH`.
+*
+* Agent terminals start as login shells, and the user's profile files reorder
+* `PATH` after spawn — so `pnpm` or `node` in the terminal could resolve to a
+* different binary than the agent's `bash` tool, which inherits the Harness
+* `PATH` as is. One project then got installed by one pnpm major and run by
+* another. Re-exporting the Harness `PATH` after the profile ran makes both
+* surfaces resolve the same toolchain.
+* @param shell - the shell executable the terminal spawns.
+* @param path - the Harness `PATH`; undefined or empty leaves the shell alone.
+* @param platform - the host platform; Windows shells keep their own `PATH`.
+* @returns the line to write before the command, or undefined when the shell is not a known POSIX shell.
+*/
+function agentPathLine(shell, path, platform = process.platform) {
+	if (platform === "win32" || path === void 0 || path === "") return void 0;
+	const base = shell.slice(shell.lastIndexOf("/") + 1);
+	if (!EXPORTING_SHELLS.has(base)) return void 0;
+	return `export PATH='${path.replaceAll("'", `'\\''`)}'`;
+}
 /**
 * The agent terminal registry. The constructor takes the resolved shell
 * binary (the same `defaultShell()` the UI-tab registry uses) and runs the
@@ -1584,6 +1614,7 @@ var AgentPtyRegistry = class {
 	create(sessionId, title, command, cwd, cols = 80, rows = 24, shell, shellArgs) {
 		const uuid = randomUUID();
 		const dims = clampDims(cols, rows);
+		const pathLine = agentPathLine(shell ?? this.shell, process.env.PATH);
 		const pty = this.nodePty.spawn(shell ?? this.shell, shellSpawnArgs(shellArgs ?? this.shellArgs), {
 			name: "xterm-256color",
 			cols: dims.cols,
@@ -1611,8 +1642,9 @@ var AgentPtyRegistry = class {
 			handle.exitSignal = signal;
 			this.notify();
 		});
-		if (command !== "") try {
-			pty.write(`${command}\r`);
+		const input = [pathLine, command === "" ? void 0 : command].filter((line) => line !== void 0);
+		if (input.length > 0) try {
+			pty.write(input.map((line) => `${line}\r`).join(""));
 		} catch {}
 		this.sessions.set(uuid, handle);
 		this.notify();

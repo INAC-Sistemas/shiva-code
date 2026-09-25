@@ -1,0 +1,14 @@
+diff --git a/node_modules/@deepseek-ai/dsh-sandbox/lib/index.js b/node_modules/@deepseek-ai/dsh-sandbox/lib/index.js
+index 9fb79a7..bead0db 100644
+--- a/node_modules/@deepseek-ai/dsh-sandbox/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-sandbox/lib/index.js
+@@ -157,7 +157,8 @@ function writableRoots(policy) {
+ 	return [...new Set([
+ 		policy.workspaceRoot,
+ 		"/tmp",
+-		tmpdir()
++		tmpdir(),
++		...policy.extraWritableRoots ?? []
+ 	].map(canonicalPath))];
+ }
+ //#endregion
