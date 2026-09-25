@@ -1,7 +1,7 @@
 ---
 name: react-ui-patterns
 description: Build every async React screen with complete, animated UI states — loading only without data, skeletons shaped like the content, errors always surfaced with retry, empty states with one next action, disabled triggers with progress, optimistic updates with rollback — using shadcn/ui, sonner toasts and motion.
-whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /07-build briefs or evaluates a UI tarefa that touches data.
+whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /04-construcao briefs or evaluates a UI tarefa that touches data.
 ---
 
 # React UI patterns
@@ -19,7 +19,7 @@ Every screen that touches data has five states: loading, error, empty, success a
 
 ## Data layer
 
-Use the query library recorded in `04-tech-plan.md` (TanStack Query below; SWR is equivalent). Never fetch in a raw `useEffect` + `useState` pair: it has no cache, deduplication, retry or cancellation.
+Use the query library recorded in `03-plano.md` (TanStack Query below; SWR is equivalent). Never fetch in a raw `useEffect` + `useState` pair: it has no cache, deduplication, retry or cancellation.
 
 ## Loading
 
@@ -169,7 +169,7 @@ The empty state enters with the same fade + translate as content.
 - [ ] Content, list items, errors and empty states animate in with the tokens; removals animate out.
 - [ ] Reduced motion keeps every state visible.
 
-**Validation in the prototype**
-- [ ] Each state has a labeled demo control ("simular erro", "simular vazio") so the requester can trigger it, per `/03-prototype`.
+**Validation by the requester**
+- [ ] Each state the requester cannot reach with real data (error, empty) is described in the validation message with how to see it — seed data, a role, or a step that triggers it — so they validate it on the real screen (`/04-construcao`).
 
 _Adapted from the community `react-ui-patterns` skill._

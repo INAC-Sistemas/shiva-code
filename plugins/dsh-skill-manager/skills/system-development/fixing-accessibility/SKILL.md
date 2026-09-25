@@ -1,7 +1,7 @@
 ---
 name: fixing-accessibility
 description: Make interfaces usable by keyboard, screen reader and low-vision users — accessible names, keyboard access, focus and dialogs, semantics, form errors, announcements, contrast, and motion that respects reduced-motion — and audit a file with quoted violations and minimal fixes.
-whenToUse: Whenever buttons, links, inputs, menus, dialogs, tabs, forms, icon-only controls, hover interactions or animations are added or changed in the prototype or the React app, and when the /07-build evaluator checks a UI tarefa. Pass a file path to get a review.
+whenToUse: Whenever buttons, links, inputs, menus, dialogs, tabs, forms, icon-only controls, hover interactions or animations are added or changed in the React app, and when the /04-construcao evaluator checks a UI tarefa. Pass a file path to get a review.
 ---
 
 # Fixing accessibility
@@ -62,7 +62,7 @@ Accessibility is part of done, not a later pass. shadcn/ui's Radix primitives (`
 
 ### 8. Media and motion (medium)
 Pages animate in this flow (`/frontend-design`); animation must stay accessible:
-- `prefers-reduced-motion: reduce` replaces movement with short opacity fades — `MotionConfig reducedMotion="user"` in React, a `matchMedia` check in the prototype. Content and state changes remain.
+- `prefers-reduced-motion: reduce` replaces movement with short opacity fades — `MotionConfig reducedMotion="user"` in React, a `matchMedia` check in plain CSS/JS. Content and state changes remain.
 - Entering content is never `aria-hidden` or `inert` while it animates, and never blocks pointer or keyboard input.
 - No flashing more than three times per second; no parallax or auto-motion that cannot be paused beyond five seconds.
 - Images have meaningful alt text or `alt=""`; videos with speech have captions; no autoplaying sound.

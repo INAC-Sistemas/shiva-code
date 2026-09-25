@@ -1,12 +1,12 @@
 ---
 name: ui-palette
-description: Let the requester choose the product's color palette before the first prototype screen — propose palettes from the brief and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/03-palette.md, the one source of every color the prototype and the React app use.
-whenToUse: At the start of /03-prototype, before any screen is built. Also when /04-tech-plan records the frontend stack, when /07-build briefs a UI tarefa, and whenever the requester asks to change the product's colors.
+description: Let the requester choose the product's color palette before the first screen is built — propose palettes from the brief and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/03-palette.md, the one source of every color the React app uses.
+whenToUse: At the start of /03-plano, before any screen is built. Also when /03-plano records the frontend stack, when /04-construcao briefs a UI tarefa, and whenever the requester asks to change the product's colors.
 ---
 
 # UI palette
 
-The requester chooses the colors; the agent proposes, renders and checks them. Every color the product shows comes from `mds/epics/<epic>/03-palette.md`: in the prototype through `prototype/theme.js`, in the React app through the theme CSS variables. A color literal anywhere else, or a default Tailwind color (`bg-blue-600`) standing in for a palette role, is a defect.
+The requester chooses the colors; the agent proposes, renders and checks them. Every color the product shows comes from `mds/epics/<epic>/03-palette.md`, through the React app's theme CSS variables. A color literal anywhere else, or a default Tailwind color (`bg-blue-600`) standing in for a palette role, is a defect.
 
 ## 1. Propose options
 
@@ -51,7 +51,7 @@ Whatever the source, the answer defines five roles at most; section 1 needs ever
 
 1. **Keep what they chose.** Each role in `roles` keeps its exact hex; record `requester_words` as the palette name and source.
 2. **Fill the roles.** Derive every missing role from them: neutrals tinted toward `primary`, `destructive`/`success`/`warning` in conventional hues adjusted to sit with `primary`, and the dark mode from the light one. State which roles you derived.
-3. **Measure contrast** for every pair in section 1 with this function, run through `bash` (`node -e`) or `prototype_automation` `eval` on any page:
+3. **Measure contrast** for every pair in section 1 with this function, run through `bash` (`node -e`) or `browser` `eval` on any page:
 
    ```js
    const L = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -85,37 +85,9 @@ requester_words: "<their answer, verbatim>"
 <every pair with its light and dark ratio; any accepted failure and the requester's words>
 ```
 
-`03-prototype-validation.md` records the palette as its first approved line. After the prototype freeze, a palette change follows the freeze rule of `/03-prototype`: a recorded amendment (was, becomes, why, the requester's words), then `03-palette.md`, `theme.js` and the app CSS updated together.
+The palette is validated before the first screen. A change after that is the requester's call at a screen's validation: record it in `04-decisoes.md` with their words, then update `03-palette.md` and the app's theme CSS together.
 
-## 6. Apply in the prototype
-
-`prototype/theme.js` is the only prototype file with color literals, and it copies `03-palette.md` exactly. Every page loads it right after the Tailwind CDN:
-
-```html
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="theme.js"></script>
-```
-
-```js
-// Colors from mds/epics/<epic>/03-palette.md — edit there first.
-const PALETTE = {
-  light: { background: '#FFFFFF', foreground: '#0F172A', primary: '#0F766E', 'primary-foreground': '#FFFFFF' /* …every role… */ },
-  dark: { background: '#0B1120', foreground: '#E2E8F0', primary: '#2DD4BF', 'primary-foreground': '#042F2E' /* …every role… */ },
-};
-const channels = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(' ');
-const vars = m => Object.entries(m).map(([k, v]) => `--${k}: ${channels(v)};`).join('');
-document.head.insertAdjacentHTML('beforeend', `<style>:root{${vars(PALETTE.light)}}.dark{${vars(PALETTE.dark)}}</style>`);
-if (window.tailwind) {
-  tailwind.config = {
-    darkMode: 'class',
-    theme: { extend: { colors: Object.fromEntries(Object.keys(PALETTE.light).map(k => [k, `rgb(var(--${k}) / <alpha-value>)`])) } },
-  };
-}
-```
-
-Screens use only the role classes (`bg-primary`, `text-primary-foreground`, `border-border`, `bg-muted/50`) — opacity modifiers work because the variables hold RGB channels. Dark mode is the `dark` class on `<html>`. Check with `grep -nE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]' prototype/*.html`: no hit.
-
-## 7. Apply in the React app
+## 6. Apply in the React app
 
 A builder subagent does this, after the principal creates the frontend with `shadcn init` (`/shadcn-ui` step 1). The theme CSS is product code: the principal edits product code only to fast-fix what the live browser proof exposed, so applying the palette is the builder's tarefa work.
 
@@ -125,4 +97,4 @@ A builder subagent does this, after the principal creates the frontend with `sha
 
 ## Done
 
-`03-palette.md` is `validated` with every role in light and dark and its contrast table; `theme.js` and the app's theme CSS match it value for value; the grep above has no hit; and a real-browser screenshot shows the product in the chosen colors. A color literal outside the theme files is RED at evaluation.
+`03-palette.md` is `validated` with every role in light and dark and its contrast table; the app's theme CSS matches it value for value; a `grep -rnE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]'` over the components has no hit; and a real-browser screenshot shows the product in the chosen colors. A color literal outside the theme files is RED at evaluation.

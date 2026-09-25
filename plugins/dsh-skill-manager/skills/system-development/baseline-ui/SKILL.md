@@ -1,7 +1,7 @@
 ---
 name: baseline-ui
 description: Enforce the UI baseline that separates finished interfaces from AI-generated slop in Tailwind projects — stack, component, interaction, motion, typography, layout, performance and design constraints — and review a file against them with quoted violations and concrete fixes.
-whenToUse: Whenever UI code is written or reviewed in the /03-prototype HTML or a React + Tailwind app, when /07-build briefs a UI tarefa, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
+whenToUse: Whenever UI code is written or reviewed in a React + Tailwind app, when /04-construcao briefs a UI tarefa, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
 ---
 
 # Baseline UI
@@ -20,15 +20,15 @@ An opinionated floor for every interface. It does not choose the look — `/fron
 
 ## Stack
 
-- MUST build standard controls from shadcn/ui (`/shadcn-ui`) in the React app, and shadcn-style patterns on Tailwind in the CDN prototype.
+- MUST build standard controls from shadcn/ui (`/shadcn-ui`).
 - MUST take icons from the project's pack (`/ui-icons`) and every color from palette roles (`/ui-palette`).
 - MUST use the `cn` utility (`clsx` + `tailwind-merge`, created by `shadcn init`) for conditional classes.
-- MUST use `motion` (`motion/react`) for JavaScript-driven animation in React, and Motion's CDN build in the prototype. SHOULD use `tw-animate-css` classes (`animate-in fade-in slide-in-from-bottom-4`) for simple entrances and overlay transitions.
+- MUST use `motion` (`motion/react`) for JavaScript-driven animation. SHOULD use `tw-animate-css` classes (`animate-in fade-in slide-in-from-bottom-4`) for simple entrances and overlay transitions.
 - NEVER add a second component, animation or icon library beside the ones above.
 
 ## Components
 
-- MUST use accessible primitives for anything with keyboard or focus behavior — the Radix (or Base UI / React Aria, per the shadcn base in `04-tech-plan.md`) primitives behind shadcn. NEVER mix primitive systems within one interaction surface.
+- MUST use accessible primitives for anything with keyboard or focus behavior — the Radix (or Base UI / React Aria, per the shadcn base in `03-plano.md`) primitives behind shadcn. NEVER mix primitive systems within one interaction surface.
 - MUST use the project's existing components before adding new ones.
 - MUST give icon-only buttons an `aria-label`.
 - NEVER rebuild keyboard or focus behavior by hand unless explicitly requested.

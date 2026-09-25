@@ -1,6 +1,6 @@
 ---
 name: 01-epic-brief
-description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features — starting with the Authorization Layer, the user types and roles every feature is written for — and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /07-build onward the agent decides alone and reports. No solutions, no tech.
+description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features — starting with the Authorization Layer, the user types and roles every feature is written for — and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /04-construcao onward the agent decides alone and reports. No solutions, no tech.
 whenToUse: Starting any new initiative. First pipeline stage, after /00-start-here. Requires /00-start-here loaded earlier in this session.
 ---
 
@@ -59,7 +59,7 @@ Then:
 
 **E — The unasked (week-two wants they did not say)** — propose each as a question with a recommendation, never as an assumption: history/log; reports and who reads them; undo vs confirm; notifications and channel; export/backup; concurrent users; phone/offline/language; sensitive data; 10× scale; six-months-next. **Record rejections too** — a deliberate "no" outranks an unasked question.
 
-**F — Surface and delivery (six items, every one answered or refused out loud)** — nothing here is asked again later: once `/07-build` starts, the agent decides alone and reports. Batch the independent ones into one `ask_user_question` call, each option phrased as a consequence.
+**F — Surface and delivery (six items, every one answered or refused out loud)** — nothing here is asked again later: once `/04-construcao` starts, the agent asks only at each screen's validation. Batch the independent ones into one `ask_user_question` call, each option phrased as a consequence.
 
 1. **API** — will anything outside this system read or write its data? Their own app, a partner, a mobile client. A yes carries the documentation rule (`skill engineering-standards` rule 3: OpenAPI rendered with Swagger UI).
 2. **Webhooks** — must the system **receive** events from elsewhere (payment confirmed, message delivered), or **tell** another system when something happens here? Name the events in their words.
@@ -68,7 +68,7 @@ Then:
 5. **Docker delivery** — does the delivery include publishing as a container, with migrations and seed running on start (`skill engineering-standards` rule 7)? A no means the system is delivered running locally and no deploy file is ever written.
 6. **Reports and exports** — which reports and exports the system must produce, and who reads them. Confirms what E proposed.
 
-These are **scope**, not technology: whether another system talks to this one, whether the owner wants a container. Which OpenAPI generator, which queue, which hosting provider stay in `/04-tech-plan` and after acceptance.
+These are **scope**, not technology: whether another system talks to this one, whether the owner wants a container. Which OpenAPI generator, which queue, which hosting provider stay in `/03-plano` and after acceptance.
 
 ## Coverage check before writing
 
@@ -101,7 +101,7 @@ Set `status: validated` only after the requester reads it and says yes explicitl
 
 ## Rules
 
-- No solutions anywhere. "We will use X" is `/04-tech-plan` leaking. Stage F is the one exception, and only for scope: whether an API, webhooks, a login, an integration, a container or a report exists at all — never which library, generator, queue or provider serves it.
+- No solutions anywhere. "We will use X" is `/03-plano` leaking. Stage F is the one exception, and only for scope: whether an API, webhooks, a login, an integration, a container or a report exists at all — never which library, generator, queue or provider serves it.
 - Outcome must be observable ("a booking takes under a minute", not "better performance").
 - Do not invent constraints or answers — an unverified constraint narrows the design for nothing.
 - Ask in the requester's language and vocabulary. A vague answer is not an answer: re-ask from a different angle.

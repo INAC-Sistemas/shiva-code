@@ -91,7 +91,7 @@ function SkillFields({
             name="name"
             type="text"
             defaultValue={skill?.name}
-            placeholder="03-prototype"
+            placeholder="03-plano"
             className={inputClass}
           />
           <p className={hintClass}>{SKILL_NAME_HINT}</p>
@@ -237,7 +237,7 @@ export function NewSkillForm() {
                 id="skill-source"
                 name="source"
                 rows={18}
-                placeholder={"---\nname: 03-prototype\ndescription: ...\n---\n\n# Prototype\n..."}
+                placeholder={"---\nname: 03-plano\ndescription: ...\n---\n\n# Plano\n..."}
                 className={`${inputClass} font-mono text-xs leading-relaxed`}
               />
               <p className={hintClass}>

@@ -1,7 +1,7 @@
 ---
 name: shadcn-ui
 description: Build React UI from shadcn/ui components installed with the shadcn CLI — create or initialize the project, search the registry, read component docs, add components — instead of hand-writing buttons, dialogs, forms, tables, menus or other standard UI.
-whenToUse: Whenever work creates or changes UI in a React + Tailwind project (Vite, Next.js, React Router, TanStack Start, Astro, Laravel), and when /04-tech-plan chooses the frontend stack. Not for the CDN-only HTML prototype of /03-prototype.
+whenToUse: Whenever work creates or changes UI in a React + Tailwind project (Vite, Next.js, React Router, TanStack Start, Astro, Laravel), and when /03-plano chooses the frontend stack.
 ---
 
 # shadcn/ui
@@ -16,11 +16,11 @@ Standard UI comes from shadcn/ui. A hand-written button, dialog, form field, tab
 
 ## 1. Find or create the project
 
-The backend may be any language and framework; the frontend is always React + Tailwind from this CLI. The project lives at the workspace root, beside `mds/` and `prototype/`, and `04-tech-plan.md` records where the frontend sits: at the root, or in `frontend/` beside a backend in another language.
+The backend may be any language and framework; the frontend is always React + Tailwind from this CLI. The project lives at the workspace root, beside `mds/`, and `03-plano.md` records where the frontend sits: at the root, or in `frontend/` beside a backend in another language.
 
 `components.json` in the frontend folder means shadcn is already set up: go to step 2.
 
-**New frontend** — the principal agent creates it once, at the start of `/07-build`, before the first builder (the guard denies `pnpm install` to builders). `init -n <name>` always creates the new folder `<name>/` and installs its dependencies; `-n .` fails with `dest already exists` because the root already holds `mds/` and `prototype/`. Every template ships its own `.git`, which is dropped because git belongs to the human.
+**New frontend** — the principal agent creates it once, at the start of `/04-construcao`, before the first builder (the guard denies `pnpm install` to builders). `init -n <name>` always creates the new folder `<name>/` and installs its dependencies; `-n .` fails with `dest already exists` because the root already holds `mds/`. Every template ships its own `.git`, which is dropped because git belongs to the human.
 
 **Frontend in `frontend/`** (a backend in another language owns the root), from the workspace root:
 
@@ -38,7 +38,7 @@ for f in .scaffold/* .scaffold/.[!.]*; do [ -e "$f" ] || continue; b=$(basename 
 rmdir .scaffold && pnpm install && pnpm run build
 ```
 
-- `-t`: `next`, `vite`, `start`, `react-router`, `astro`, `laravel` — take it from `/04-tech-plan`; `next` when the requester named no framework, `vite` for the frontend in `frontend/`. The `next` template puts `app/`, `components/`, `lib/` and `hooks/` at the root, with no `src/`.
+- `-t`: `next`, `vite`, `start`, `react-router`, `astro`, `laravel` — take it from `/03-plano`; `next` when the requester named no framework, `vite` for the frontend in `frontend/`. The `next` template puts `app/`, `components/`, `lib/` and `hooks/` at the root, with no `src/`.
 - `-b`: component base, `radix` unless the plan says `base` or `aria`.
 - `-p`: preset (`nova`, `vega`, `maia`, `lyra`, `mira`, `luma`, `sera`, `rhea`), `nova` unless the plan names another. **Omitting it is the silent no-op above.**
 - The move never overwrites: a `CONFLICT <file>` line leaves that file in `.scaffold/` and `rmdir` fails. Stop and report the list; never delete or replace a workspace file to make room.
@@ -74,5 +74,5 @@ pnpm dlx shadcn@latest add -y dialog card form
 - Import through the project alias (`@/components/ui/dialog`), never from a package path.
 - Compose shadcn primitives. A custom component is allowed only when no shadcn item covers the need; say which need, in the tarefa report.
 - Style with the theme's CSS variables and Tailwind utilities created by `init`; no hard-coded colors, no second component library. The variable values come from `mds/epics/<epic>/03-palette.md` — see `/ui-palette`.
-- Keep the prototype's frozen UX: shadcn decides how a control is built, not which screens, fields or flows exist.
+- Keep the screen the tarefa describes: shadcn decides how a control is built, not which screens, fields or flows exist.
 - Done means the component is in the `ui` directory, used by the screen, `pnpm run build` passes, and a real-browser screenshot shows it.

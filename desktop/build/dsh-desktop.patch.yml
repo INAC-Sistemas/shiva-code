@@ -139,14 +139,14 @@
       name: dsh-mds
       disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? 'dsh-mds').split(',').includes('dsh-mds')"
 
-    # Kanban board over mds/epics/*/06-tickets/*.md: reads the ticket status
-    # frontmatter and moves cards active -> in_progress -> code_test ->
-    # human_test -> done. No VPS dependency, like dsh-mds itself.
+    # Kanban board over mds/epics/*/tarefas/*.md (and legacy 06-tickets/):
+    # reads the tarefa status frontmatter and moves cards active ->
+    # in_progress -> code_test -> human_test -> done. No VPS dependency, like dsh-mds itself.
     - id: kanban
       name: dsh-kanban
 
-    # Process laws at the tool seam: the principal agent writes only mds/ and
-    # prototype/ (code is a subagent's job), and no agent may set status: done.
+    # Process laws at the tool seam: the principal agent writes only mds/
+    # (code is a subagent's job), and only the principal may set status: done.
     # `tool-guard` is never gated: it restricts what agents may do, so a profile
     # that left it out would lift those restrictions instead of removing a tool.
     - id: tool-guard
@@ -182,7 +182,7 @@
           - tab: 'dsh-prototype:view'
             path: 'prototype/**'
 
-    # Color palette picker for /03-prototype: the "Paletas" tab and the
+    # Color palette picker for /03-plano: the "Paletas" tab and the
     # palette_pick tool, which opens the tab by itself and returns the
     # requester's choice to the model. Never gated: the palette step belongs to
     # the pipeline, and the tool is inert until the model calls it.

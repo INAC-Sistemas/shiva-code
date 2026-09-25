@@ -137,6 +137,69 @@ function skillFieldsChanged(
 }
 
 /**
+ * Skills do produto que mudaram de nome: `[antigo, novo]`. A linha antiga é
+ * renomeada no lugar, então o id — e com ele a seleção em `ProfileSkill` de
+ * todo perfil, não só do "Padrão" — sobrevive à troca de nome.
+ */
+const RENAMED_SKILLS: ReadonlyArray<readonly [string, string]> = [
+  ["04-tech-plan", "03-plano"],
+  ["07-build", "04-construcao"],
+  ["08-review", "05-revisao"],
+];
+
+/**
+ * Skills do produto retiradas do fluxo. A pasta sumiu de `prisma/skills/`, e
+ * sem esta lista o seed as deixaria publicadas, servindo um processo que não
+ * existe mais. O cascade remove as seleções de perfil.
+ */
+const RETIRED_SKILLS: readonly string[] = [
+  "03-prototype",
+  "05-debate",
+  "06-tickets",
+];
+
+/**
+ * Aplica {@link RENAMED_SKILLS} e {@link RETIRED_SKILLS} antes de
+ * {@link seedSkills}, que em seguida atualiza o corpo das renomeadas.
+ *
+ * Idempotente: um nome antigo que já não existe é ignorado, e uma renomeação
+ * cujo nome novo já existe não é aplicada — a linha antiga é então retirada,
+ * porque manter as duas publicaria o mesmo estágio duas vezes.
+ */
+async function migrateRenamedAndRetiredSkills(): Promise<void> {
+  for (const [from, to] of RENAMED_SKILLS) {
+    const old = await prisma.librarySkill.findUnique({
+      where: { name: from },
+      select: { id: true },
+    });
+    if (old === null) continue;
+
+    const taken = await prisma.librarySkill.findUnique({
+      where: { name: to },
+      select: { id: true },
+    });
+    if (taken !== null) {
+      await prisma.librarySkill.delete({ where: { id: old.id } });
+      console.log(`seed: skill ${from} retirada (${to} já existe)`);
+      continue;
+    }
+
+    await prisma.librarySkill.update({
+      where: { id: old.id },
+      data: { name: to },
+    });
+    console.log(`seed: skill ${from} renomeada para ${to}`);
+  }
+
+  const retired = await prisma.librarySkill.deleteMany({
+    where: { name: { in: [...RETIRED_SKILLS] } },
+  });
+  if (retired.count > 0) {
+    console.log(`seed: ${retired.count} skill(s) retirada(s) do fluxo`);
+  }
+}
+
+/**
  * Recria a biblioteca a partir dos SKILL.md versionados.
  *
  * Os arquivos em `prisma/skills/` são a fonte da verdade em todo deploy: o
@@ -326,6 +389,7 @@ async function seedDemoUsers(): Promise<void> {
 async function main() {
   // Antes do laço de usuários: o perfil padrão seleciona as skills publicadas,
   // então elas precisam existir quando ele é criado.
+  await migrateRenamedAndRetiredSkills();
   const createdSkillIds = await seedSkills();
   await attachNewSkillsToDefaultProfiles(createdSkillIds);
 

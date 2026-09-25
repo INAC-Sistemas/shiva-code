@@ -1,7 +1,7 @@
-// dsh-kanban host half: a read/move API over the project's implementation
-// tickets. Tickets live at `mds/epics/<epic>/06-tickets/NN-<slug>.md` and
-// carry the frontmatter contract the 06-tickets skill writes (`ticket`,
-// `epic`, `status`, `title`). The board reads that frontmatter; `move`
+// dsh-kanban host half: a read/move API over the project's tarefas. A tarefa
+// lives at `mds/epics/<epic>/tarefas/NN-<slug>.md` (older epics use
+// `06-tickets/`) and carries the frontmatter the 04-construcao skill writes
+// (`ticket`, `epic`, `status`, `title`). The board reads that frontmatter; `move`
 // rewrites only the `status:` line so every other byte of the ticket stays
 // untouched. Agents edit the same files directly, so the board is a view over
 // the filesystem, never a second source of truth.
@@ -15,12 +15,15 @@ export const inject = ['webServer', 'sessions']
 /** The folder this plugin reads, fixed by convention so agents can rely on it. */
 export const MDS_FOLDER = 'mds'
 
-/** The epic-relative path of a ticket file. */
-export const TICKETS_RE = /^epics\/[^/]+\/06-tickets\/[^/]+\.md$/
+/** Epic subfolders holding tarefas: the current one first, then the legacy one. */
+export const TAREFA_DIRS = ['tarefas', '06-tickets']
+
+/** The epic-relative path of a tarefa file. */
+export const TICKETS_RE = /^epics\/[^/]+\/(tarefas|06-tickets)\/[^/]+\.md$/
 
 /**
- * Canonical board columns. `done` is the human's move on the board; agents
- * stop at `human_test` (06-tickets: "Never write `status: done`").
+ * Canonical board columns. `human_test` waits for the requester's validation;
+ * `done` follows their approval, written by the principal agent or set here.
  */
 export const STATUSES = ['active', 'in_progress', 'code_test', 'human_test', 'done']
 
@@ -91,7 +94,7 @@ function sameOrigin(req) {
 
 /**
  * Parse one ticket's YAML frontmatter with a flat `key: value` reader. The
- * 06-tickets template writes only scalars, so a full YAML parser would be
+ * tarefa template writes only scalars, so a full YAML parser would be
  * unneeded surface; surrounding quotes are stripped and everything else is
  * kept verbatim.
  */
@@ -133,7 +136,7 @@ function ticketPath(root, rel) {
 }
 
 /**
- * Scan every epic's `06-tickets/` folder and return one card per ticket,
+ * Scan every epic's tarefa folders (`TAREFA_DIRS`) and return one card per tarefa,
  * ordered by epic then the ticket's numeric filename prefix. Unreadable files
  * are skipped rather than failing the whole board.
  */
@@ -145,33 +148,35 @@ async function scanTickets(root) {
   for (const epic of epics) {
     if (cards.length >= MAX_TICKETS) break
     if (!epic.isDirectory() || epic.name.startsWith('.')) continue
-    const ticketsDir = join(epicsDir, epic.name, '06-tickets')
-    let files = []
-    try { files = await readdir(ticketsDir, { withFileTypes: true }) } catch { continue }
-    for (const f of files) {
-      if (cards.length >= MAX_TICKETS) break
-      if (!f.isFile() || extname(f.name).toLowerCase() !== '.md') continue
-      let content = ''
-      let mtime = 0
-      try {
-        const abs = join(ticketsDir, f.name)
-        const st = await stat(abs)
-        if (st.size > MAX_FILE_BYTES) continue
-        mtime = st.mtimeMs
-        content = await readFile(abs, 'utf8')
-      } catch { continue }
-      const fm = parseFrontmatter(content)
-      const prefix = /^(\d+)/.exec(f.name)
-      cards.push({
-        file: `epics/${epic.name}/06-tickets/${f.name}`,
-        name: f.name,
-        epic: fm.data.epic || epic.name,
-        ticket: fm.data.ticket || f.name.replace(/\.md$/i, ''),
-        title: fm.data.title || '',
-        status: fm.data.status || '',
-        order: prefix ? Number(prefix[1]) : 9999,
-        mtime,
-      })
+    for (const dir of TAREFA_DIRS) {
+      const ticketsDir = join(epicsDir, epic.name, dir)
+      let files = []
+      try { files = await readdir(ticketsDir, { withFileTypes: true }) } catch { continue }
+      for (const f of files) {
+        if (cards.length >= MAX_TICKETS) break
+        if (!f.isFile() || extname(f.name).toLowerCase() !== '.md') continue
+        let content = ''
+        let mtime = 0
+        try {
+          const abs = join(ticketsDir, f.name)
+          const st = await stat(abs)
+          if (st.size > MAX_FILE_BYTES) continue
+          mtime = st.mtimeMs
+          content = await readFile(abs, 'utf8')
+        } catch { continue }
+        const fm = parseFrontmatter(content)
+        const prefix = /^(\d+)/.exec(f.name)
+        cards.push({
+          file: `epics/${epic.name}/${dir}/${f.name}`,
+          name: f.name,
+          epic: fm.data.epic || epic.name,
+          ticket: fm.data.ticket || f.name.replace(/\.md$/i, ''),
+          title: fm.data.title || '',
+          status: fm.data.status || '',
+          order: prefix ? Number(prefix[1]) : 9999,
+          mtime,
+        })
+      }
     }
   }
   cards.sort((a, b) => (a.epic.localeCompare(b.epic) || a.order - b.order || a.name.localeCompare(b.name)))

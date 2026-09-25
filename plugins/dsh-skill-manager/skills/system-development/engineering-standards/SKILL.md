@@ -1,12 +1,12 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /04-tech-plan records, what /06-tickets requires, and what the /07-build evaluator rejects.
-whenToUse: In /04-tech-plan before writing Decisions, in /06-tickets when writing each tarefa's Implementation contract and Done when, and in /07-build for every builder and evaluator briefing of a backend, API or UI tarefa.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — written only after the requester accepts the system — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /03-plano records, what /04-construcao requires, and what the /04-construcao evaluator rejects.
+whenToUse: In /03-plano before writing Decisions, in /04-construcao when writing each tarefa's Backend and Done when, and for every builder and evaluator briefing of a backend, API or UI tarefa.
 ---
 
 # Engineering standards
 
-These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/04-tech-plan` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/06-tickets` turns the rules into checks per tarefa, and the `/07-build` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment (rule 7), and the deploy files are written by the publication tarefa when the brief's Surface and delivery answer asked for a container.
+These rules are not options to weigh: they apply to every system unless the requester explicitly overrides one (record their words). The backend rules name roles, not frameworks, so they hold in any backend language: `/03-plano` maps each role to the chosen stack's concrete mechanism (see "Backend: mapping roles to a stack"), `/04-construcao` turns the rules into checks per tarefa, and the `/04-construcao` evaluator marks a violation RED. The frontend stack is fixed: React, Tailwind CSS and Recharts. When the requester names no framework, the system is **Next.js** (frontend and backend in one app); every system is designed for a Docker deployment (rule 7), and the deploy files are written by the publication tarefa when the brief's Surface and delivery answer asked for a container.
 
 ## The rules
 
@@ -130,7 +130,7 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 ### 7. Containerized deployment (when the brief asked for a container)
 
-Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target. Whether the files are written is answered once, in `/01-epic-brief` stage F, and never asked again: on a yes, **one publication tarefa** — the last of the build — creates `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` and `docker-compose.yml` at once and proves them from an empty database; no earlier tarefa creates or checks any of them. On a no, no deploy file is ever written and the delivery is complete without them. During `/04-tech-plan` this rule is a requirement on the image and the target; the provider, the account and the domain remain questions for after acceptance (`/08-review`).
+Every system is **designed** to deploy as Docker containers, whatever the stack and hosting target. Whether the files are written is answered once, in `/01-epic-brief` stage F, and never asked again: on a yes, **one publication tarefa** — the last of the build — creates `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` and `docker-compose.yml` at once and proves them from an empty database; no earlier tarefa creates or checks any of them. On a no, no deploy file is ever written and the delivery is complete without them. During `/03-plano` this rule is a requirement on the image and the target; the provider, the account and the domain remain questions for after acceptance (`/05-revisao`).
 
 **The image.**
 - `Dockerfile` (multi-stage: dependencies, build, runtime) and `.dockerignore` at the workspace root. The runtime stage carries only what serving, migrating and seeding need; build tools stay in the earlier stages.
@@ -157,7 +157,7 @@ A failed migration or seed stops the container instead of serving on an old sche
 **A system that needs a database uses SQLite in development** — a file in the workspace (`data/dev.db`, gitignored and in `.dockerignore`), created by the migrations themselves. No database server to install, start or provision, and a broken state is fixed by deleting the file and starting again.
 
 - The database URL comes from the environment (`DATABASE_URL=file:./data/dev.db`), never hardcoded, so only the variable changes between environments.
-- `/04-tech-plan` records the production database. When it is not SQLite, it also records **how one schema serves both**: an ORM whose migrations are generated for the production engine, the migration command for each environment, and what the plan does about anything SQLite cannot represent (native enums, concurrent writers, `jsonb` operators, strict types). Prisma is the case to watch: `migrate dev` generates SQL for the provider configured at that moment, so migrations generated against SQLite do not apply to Postgres.
+- `/03-plano` records the production database. When it is not SQLite, it also records **how one schema serves both**: an ORM whose migrations are generated for the production engine, the migration command for each environment, and what the plan does about anything SQLite cannot represent (native enums, concurrent writers, `jsonb` operators, strict types). Prisma is the case to watch: `migrate dev` generates SQL for the provider configured at that moment, so migrations generated against SQLite do not apply to Postgres.
 - When the plan cannot keep one schema honest on both, it says so and development runs the production engine in `docker-compose.yml` instead — recorded as a decision, not improvised in a tarefa.
 - The seed of rule 7 runs the same way on the development file and on the production database.
 
@@ -176,7 +176,7 @@ A webhook is an HTTP call the system did not ask for at that moment — someone 
 - **Each delivery is signed and carries a stable event id**, so the receiver can verify and de-duplicate the same way this system does inbound.
 - **What was sent, when, with which response, is recorded.** "The webhook was sent" without a record is a claim, not a fact.
 
-**Documentation.** An inbound endpoint is a public endpoint: it belongs in the OpenAPI of rule 3 with its payload, its signature header and every status it answers. Outbound events are documented as events — AsyncAPI, or a named section of `04-tech-plan.md` listing each event, when it fires, its payload and its retry policy.
+**Documentation.** An inbound endpoint is a public endpoint: it belongs in the OpenAPI of rule 3 with its payload, its signature header and every status it answers. Outbound events are documented as events — AsyncAPI, or a named section of `03-plano.md` listing each event, when it fires, its payload and its retry policy.
 
 ## Backend: mapping roles to a stack
 
@@ -200,10 +200,10 @@ The frontend is React. It implements the rules as follows.
 
 - **Rule 1**: UI components as described there; data loading in hooks or query functions (TanStack Query when the app fetches server state).
 - **Rule 4**: the design system is implemented with **Tailwind CSS** — utilities plus the theme CSS variables from `skill ui-palette` — and components from **shadcn/ui** (`skill shadcn-ui`). No CSS modules, CSS-in-JS, styled-components, or inline `style` except for a genuinely dynamic value (a computed width, a chart color variable); no default Tailwind color standing in for a palette role.
-- **Rule 5**: the standard chart library is **Recharts** (https://recharts.github.io/en-US/guide/), through the shadcn/ui `chart` component (`ChartContainer`, `ChartTooltip`) when shadcn is in use — it is built on Recharts. Series colors come from the `chart-1` … `chart-5` variables. No Chart.js, ECharts, Nivo, D3-rendered or hand-drawn SVG charts in the app. (The CDN-only prototype of `/03-prototype` may use a CDN chart library; the app does not inherit it.)
+- **Rule 5**: the standard chart library is **Recharts** (https://recharts.github.io/en-US/guide/), through the shadcn/ui `chart` component (`ChartContainer`, `ChartTooltip`) when shadcn is in use — it is built on Recharts. Series colors come from the `chart-1` … `chart-5` variables. No Chart.js, ECharts, Nivo, D3-rendered or hand-drawn SVG charts in the app.
 - **Rule 6**: a long operation's status is shown by polling its status resource (TanStack Query `refetchInterval`) or through server push (WebSocket or Server-Sent Events) when the plan records real-time needs; the screen shows the queued, running, progress, done and failed states (`skill react-ui-patterns`).
 
-## In /04-tech-plan
+## In /03-plano
 
 Record the backend language and framework, then add one **Decisions** row per rule naming how that stack realizes it (the mapping table above shows examples):
 
@@ -223,9 +223,9 @@ Record the backend language and framework, then add one **Decisions** row per ru
 
 The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary, and the handler and event-id store of each webhook in either direction. A rule the requester overrides is recorded with their words.
 
-## In /06-tickets
+## In each tarefa of /04-construcao
 
-Each tarefa's **Implementation contract** names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries **only the checks that apply to it**, with the symbols filled in — a tarefa that touches no endpoint copies no endpoint check, and no tarefa copies this list whole:
+Each tarefa's **Backend** section names its request validator, use case, response serializer, any data transfer object or repository with the reason it is needed, and the component split — with the stack's actual class or module names. Its **Done when** carries **only the checks that apply to it**, with the symbols filled in — a tarefa that touches no endpoint copies no endpoint check, and no tarefa copies this list whole:
 
 - [ ] Input validated by `<RequestValidator>`; invalid input answers 422 (or the plan's validation status) in the error envelope.
 - [ ] Controller only receives, delegates to `<UseCase>` and returns what `<ResponseSerializer>` produces.
@@ -240,7 +240,7 @@ Each tarefa's **Implementation contract** names its request validator, use case,
 
 The containerization — `Dockerfile`, `.dockerignore`, `docker/entrypoint.sh` running migrations and seed, `docker-compose.yml` — belongs to the publication tarefa, which exists only when the brief's Surface and delivery answer asked for a container, and is the last tarefa of the build.
 
-## In /07-build
+## In the /04-construcao briefings
 
 Builders of backend, API or UI tarefas load this skill with the others the tarefa needs. The evaluator's briefing loads it too and marks RED:
 

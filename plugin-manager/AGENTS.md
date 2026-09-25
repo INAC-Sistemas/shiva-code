@@ -54,3 +54,8 @@ corpo continua só sendo servido na interseção entre publicado e perfil seleci
 uma skill fora do perfil do usuário logado não existe para aquele token.
 
 Skills criadas só no painel, sem pasta em `prisma/skills/`, o seed não apaga.
+
+Renomear ou retirar uma skill do produto não basta apagar ou mover a pasta: registre
+a troca em `RENAMED_SKILLS` (a linha é renomeada no lugar e as seleções de perfil
+sobrevivem) ou o nome em `RETIRED_SKILLS` (a linha é apagada), ambos em
+[prisma/seed.ts](prisma/seed.ts). Sem isso a linha antiga continua publicada.

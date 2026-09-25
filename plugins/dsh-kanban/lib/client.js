@@ -5,7 +5,7 @@ window.__ModuleLoader__.load({ id: 'dsh-kanban', factory: (require) => {
   const React = require('react')
 
 // dsh-kanban client half: a better-sidebar board over the workspace's
-// implementation tickets (mds/epics/<epic>/06-tickets/NN-<slug>.md). Each
+// tarefas (mds/epics/<epic>/tarefas/NN-<slug>.md, or 06-tickets/ in older epics). Each
 // column is a status; moving a card rewrites that ticket's frontmatter through
 // the host API. The board polls the filesystem, so edits agents make directly
 // to the tickets show up without a reload.
@@ -16,8 +16,8 @@ const STATUSES = [
   { id: 'active', label: 'A fazer' },
   { id: 'in_progress', label: 'Iniciada' },
   { id: 'code_test', label: 'Testando' },
-  { id: 'human_test', label: 'Finalizada' },
-  { id: 'done', label: 'Aceita' },
+  { id: 'human_test', label: 'Em validação' },
+  { id: 'done', label: 'Finalizada' },
 ]
 const STATUS_LABEL = Object.fromEntries(STATUSES.map((s) => [s.id, s.label]))
 const ADVANCE = { active: 'in_progress', in_progress: 'code_test', code_test: 'human_test', human_test: 'done' }
@@ -117,7 +117,7 @@ function KanbanView(props) {
 
   const move = React.useCallback(async (card, next) => {
     if (!next || next === card.status || busy) return
-    if (next === 'done' && !window.confirm(`Marcar a tarefa "${card.title || card.ticket}" como Aceita?\n\nAceitar é decisão de quem pediu o sistema, nunca do agente.`)) return
+    if (next === 'done' && !window.confirm(`Marcar a tarefa "${card.title || card.ticket}" como Finalizada?\n\nIsto valida a tela: o agente passa para a próxima tarefa.`)) return
     setBusy(card.file)
     const r = await api('move', { file: card.file, status: next })
     setBusy(null)
@@ -177,7 +177,7 @@ function KanbanView(props) {
     return h('div', { className: 'kb-root' },
       h('div', { className: 'kb-hint' },
         h('div', null, 'Este workspace ainda não tem a pasta ', h('code', null, 'mds/'), '.',
-          h('br'), 'As tarefas aparecem aqui quando ', h('code', null, '06-tickets'), ' escreve ', h('code', null, 'mds/epics/<epic>/06-tickets/*.md'), '.')),
+          h('br'), 'As tarefas aparecem aqui quando ', h('code', null, '04-construcao'), ' escreve ', h('code', null, 'mds/epics/<epic>/tarefas/*.md'), '.')),
       toast && h('div', { className: 'kb-toast' + (toast.err ? ' err' : '') }, toast.msg))
   }
 
@@ -194,7 +194,7 @@ function KanbanView(props) {
       h('button', { className: 'kb-btn', title: 'Recarregar', onClick: loadList }, '⟳')),
     cards && cards.length === 0
       ? h('div', { className: 'kb-hint' },
-        h('div', null, 'Nenhuma tarefa ainda.', h('br'), 'Elas ficam em ', h('code', null, 'mds/epics/<epic>/06-tickets/'), ' (skill /06-tickets).'))
+        h('div', null, 'Nenhuma tarefa ainda.', h('br'), 'Elas ficam em ', h('code', null, 'mds/epics/<epic>/tarefas/'), ' (skill /04-construcao).'))
       : h('div', { className: 'kb-board' },
         columns.map((col) => h('div', { key: col.id, className: 'kb-col' },
           h('div', { className: 'kb-col-h' },

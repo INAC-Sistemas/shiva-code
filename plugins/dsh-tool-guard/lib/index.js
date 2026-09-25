@@ -3,34 +3,34 @@
 // and is monotonic — once it returns a reason the call is denied and no later
 // listener can turn it back into permission. The laws:
 //
-//   1. the principal agent (depth 0) writes the process artifacts (`mds/`,
-//      `prototype/`) and, as a fast-fix window, the product anywhere outside
+//   1. the principal agent (depth 0) writes the process artifacts (`mds/`)
+//      and, as a fast-fix window, the product anywhere outside
 //      the process surfaces — the same surface as the builder, since the
 //      project may use any language and framework layout. `testes/` stays
 //      qa-only and `.git/` and git commit/push stay with the human;
 //   2. role policies for role-bound subagents: `builder` (fast code) may write
 //      anywhere in the workspace except the process surfaces (`mds/`,
-//      `prototype/`, `testes/`, `.git/`) — the project may use any language and
+//      `testes/`, `.git/`) — the project may use any language and
 //      framework layout — and run build/typecheck; `qa` (post-human regression)
 //      may write only testes/ and run suites; `evaluator` (judges the diff
 //      against the artifacts) writes nothing at all. None may spawn subagents;
 //      none may git commit/push;
 //   3. mechanical hooks on every write/edit: encoding integrity (no U+FFFD may
-//      be introduced), the frozen prototype contract, UX-* traceability, and
-//      the single Kanban transition rule (`active` only becomes `in_progress`);
+//      be introduced) and the single Kanban transition rule on tarefa files
+//      (`active` only becomes `in_progress`);
 //   4. every agent is denied `git commit`/`git push` — including the principal;
 //   5. a subagent briefing over ~50 KB is rejected — point at the artifact,
 //      do not paste it;
-//   6. `status: done` is denied to every agent: Done is the human's move at the
-//      end of the flow.
+//   6. `status: done` is denied to every subagent: the principal writes it
+//      after the requester approves the screen in the chat.
 //
 // Role binding: the `subagent` tool takes `role` as free text (its schema names
 // `builder` and `qa`, and `evaluator` passes through the same way); the tool
 // forwards it as the child's `guardRole` agent option, which this guard reads
 // synchronously. No role → inherited behavior, unchanged.
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { basename, isAbsolute, relative, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute, relative, resolve } from 'node:path'
 
 export const inject = ['tools']
 
@@ -55,9 +55,9 @@ const NET_DENY_RE = /\b(curl|wget|ssh|scp|sftp|ftp|telnet|nc|npm\s+(install|i|pu
 
 /**
  * Process folders the principal writes and no builder may: the epic's
- * artifacts and the frozen prototype. Configurable as `allowedRoots`.
+ * artifacts. Configurable as `allowedRoots`.
  */
-const DEFAULT_ALLOWED_ROOTS = ['mds', 'prototype']
+const DEFAULT_ALLOWED_ROOTS = ['mds']
 
 /** Test-runner configs: qa owns the tests, so it owns how they run. */
 const TEST_RUNNER_FILES = ['vitest.config.*', 'playwright.config.*']
@@ -69,17 +69,17 @@ const TEST_RUNNER_FILES = ['vitest.config.*', 'playwright.config.*']
  * and framework use — the builder's surface and the principal's fast-fix
  * window (fix found in the browser → edit → re-test).
  */
-const NON_PRODUCT_ROOTS = ['mds', 'prototype', 'testes', '.git']
+const NON_PRODUCT_ROOTS = ['mds', 'testes', '.git']
 const QA_ALLOW_ROOTS = ['testes']
 
 /** A subagent briefing may point at artifacts, never paste them. */
 const BRIEFING_MAX_CHARS = 50_000
 
-const UX_REF_RE = /\bUX-[A-Za-z0-9_-]+/g
 const STATUS_RE = /^\s*status\s*:\s*([a-z_]+)\s*$/im
-/** The human-only terminal state: no agent writes it. */
+/** The terminal state: written only by the principal, after the requester approved the screen. */
 const DONE_RE = /^\s*status\s*:\s*done\b/im
-const FROZEN_AFTER = new Set(['code_test', 'human_test', 'done'])
+/** Tarefa files the Kanban boards: `tarefas/`, and `06-tickets/` of older epics. */
+const TAREFA_DIR_RE = /(^|[\\/])(tarefas|06-tickets)[\\/]/
 
 function log(msg) {
   console.log(`[dsh-tool-guard] ${msg}`)
@@ -150,27 +150,6 @@ function epicOf(cwd, file) {
   return parts[1]
 }
 
-/** Whether any ticket of the epic has moved past the build loop. */
-function epicIsFrozen(cwd, epic) {
-  const dir = resolve(cwd, 'mds', 'epics', epic, '06-tickets')
-  if (!existsSync(dir)) return false
-  for (const entry of readdirSync(dir)) {
-    if (!entry.endsWith('.md')) continue
-    const status = frontmatterStatus(readFileSync(resolve(dir, entry), 'utf8'))
-    if (status && FROZEN_AFTER.has(status)) return true
-  }
-  return false
-}
-
-/** The `UX-*` ids declared in the epic's frozen prototype contract. */
-function declaredUxIds(cwd, epic) {
-  const file = resolve(cwd, 'mds', 'epics', epic, 'prototype.md')
-  if (!existsSync(file)) return new Set()
-  const ids = new Set()
-  for (const m of readFileSync(file, 'utf8').matchAll(UX_REF_RE)) ids.add(m[0])
-  return ids
-}
-
 /** The denial reason for a write/edit, or undefined to allow. */
 function checkFs(exec, depth, role, allowedRoots, cwd) {
   const args = (typeof exec.arguments === 'object' && exec.arguments !== null) ? exec.arguments : {}
@@ -217,24 +196,8 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
 
   const epic = epicOf(cwd, file)
 
-  // The frozen prototype contract: once a ticket leaves the build loop, the
-  // contract stops changing — amendments go to their own artifact.
-  if (epic && basename(file).toLowerCase() === 'prototype.md' && epicIsFrozen(cwd, epic)) {
-    return `GUARD[prototype]: bloqueado — prototype.md do épico está congelado (tarefa em code_test ou além); emendas vão em arquivo próprio, nunca no congelado`
-  }
-
-  // Traceability: a ticket may only cite UX-* ids the prototype declares.
-  if (epic && /06-tickets/.test(file) && content) {
-    const cited = new Set(content.match(UX_REF_RE) ?? [])
-    const declared = declaredUxIds(cwd, epic)
-    const missing = [...cited].filter((id) => !declared.has(id))
-    if (missing.length > 0) {
-      return `GUARD[traceability]: bloqueado — tarefa cita UX-* inexistente em prototype.md: ${missing.join(', ')}`
-    }
-  }
-
   // Kanban: the one transition rule — active only becomes in_progress.
-  if (epic && /06-tickets/.test(file)) {
+  if (epic && TAREFA_DIR_RE.test(file)) {
     const abs = resolve(cwd, file)
     const oldStatus = existsSync(abs) ? frontmatterStatus(readFileSync(abs, 'utf8')) : null
     const finalText = exec.name === 'edit'
@@ -289,10 +252,11 @@ function check(exec, allowedRoots) {
   }
 
   if (GUARDED_FS.has(exec.name)) {
-    // Done is the human's move on the Kanban: no agent writes it, at any depth.
+    // Done follows the requester's approval, which only the principal hears:
+    // no subagent writes it.
     const text = exec.name === 'write' ? str(args.content) : str(args.new_string)
-    if (DONE_RE.test(text)) {
-      return 'Blocked: "status: done" is the human\'s move on the Kanban — never set it yourself'
+    if (depth >= 1 && DONE_RE.test(text)) {
+      return 'Blocked: "status: done" is written only by the principal agent, after the requester approves the screen'
     }
     return checkFs(exec, depth, role, allowedRoots, cwd)
   }

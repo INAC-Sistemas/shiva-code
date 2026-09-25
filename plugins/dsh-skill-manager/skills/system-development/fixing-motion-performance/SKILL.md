@@ -1,7 +1,7 @@
 ---
 name: fixing-motion-performance
 description: Keep the required page motion smooth — choose the cheapest rendering mechanism, avoid layout thrashing, drive scroll-linked motion without scroll listeners, limit paint and blur — and audit a file for animation jank with quoted violations and concrete fixes.
-whenToUse: Whenever an animation, transition, scroll reveal or parallax is added or changed in the prototype or the React app, when motion stutters, and when the /07-build evaluator checks a UI tarefa. Pass a file path to get a review.
+whenToUse: Whenever an animation, transition, scroll reveal or parallax is added or changed in the React app, when motion stutters, and when the /04-construcao evaluator checks a UI tarefa. Pass a file path to get a review.
 ---
 
 # Fixing motion performance
@@ -32,7 +32,7 @@ Every page animates (`/frontend-design` section 3). This skill keeps that motion
 
 ### 2. Choose the mechanism (critical)
 - Default to `transform` and `opacity`.
-- CSS transitions and `tw-animate-css` for simple state and entrance; `motion` (`motion/react`, or the Motion CDN build in the prototype) for sequences, stagger, presence, gestures and in-view reveals.
+- CSS transitions and `tw-animate-css` for simple state and entrance; `motion` (`motion/react`) for sequences, stagger, presence, gestures and in-view reveals.
 - Paint or layout animation only on small, isolated elements (a badge, an underline, an icon).
 - One-shot effects are acceptable more often than continuous motion.
 
@@ -42,7 +42,7 @@ Every page animates (`/frontend-design` section 3). This skill keeps that motion
 - Use FLIP for layout-like effects (reorder, expand, move between containers). In React, Motion's `layout` prop does FLIP — use it on small lists and cards, not on whole pages.
 
 ### 4. Scroll (high)
-- Reveal-on-scroll uses `IntersectionObserver`: Motion `inView` (prototype) or `whileInView` with `viewport={{ once: true }}` (React).
+- Reveal-on-scroll uses `IntersectionObserver`: `whileInView` with `viewport={{ once: true }}`.
 - Scroll-linked progress (parallax, progress bars) uses CSS scroll/view timelines with a fallback, or Motion `scroll()` / `useScroll`, which use native timelines where available:
 
   ```css
@@ -74,7 +74,7 @@ Every page animates (`/frontend-design` section 3). This skill keeps that motion
 - Treat size changes inside a view transition as layout-triggering.
 
 ### 9. Reduced motion and input (critical)
-- `prefers-reduced-motion: reduce` swaps movement for short opacity fades (`MotionConfig reducedMotion="user"` in React; `matchMedia` check in the prototype). Never hide content under it.
+- `prefers-reduced-motion: reduce` swaps movement for short opacity fades (`MotionConfig reducedMotion="user"`). Never hide content under it.
 - Animations never block input: no `pointer-events: none` on entering content, no awaiting a sequence before handlers work.
 
 ### 10. Tool boundaries (critical)
@@ -90,7 +90,7 @@ Every page animates (`/frontend-design` section 3). This skill keeps that motion
 ```
 
 ```html
-<!-- hover shadow → pseudo-element opacity (palette role color, works on Tailwind v3 CDN and v4) -->
+<!-- hover shadow → pseudo-element opacity (palette role color) -->
 <div class="relative after:content-[''] after:absolute after:inset-0 after:rounded-[inherit]
             after:shadow-xl after:shadow-foreground/15 after:opacity-0
             after:transition-opacity after:duration-[var(--duration-fast)] hover:after:opacity-100">

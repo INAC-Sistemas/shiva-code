@@ -2,17 +2,17 @@
 //
 // Drives the REAL guard registered by apply() (same code path the harness
 // uses) and asserts what passes and what does not, so the rule cannot regress:
-//   - the principal writes mds/, prototype/ and the whole product surface as its
+//   - the principal writes mds/ and the whole product surface as its
 //     fast-fix window, in any language or framework layout;
 //   - testes/ stays qa-only and .git/ stays the human's;
-//   - `status: done` is denied to every agent;
+//   - `status: done` is written only by the principal, never by a subagent;
 //   - qa owns only the ROOT test-runner configs.
 //
 // Run: node --test test/   (or: npm test)
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../lib/index.js'
@@ -88,17 +88,27 @@ test('principal: paths outside the workspace are denied', () => {
   if (process.platform === 'win32') assert.ok(write('C:/outro/lugar/tsconfig.json'))
 })
 
-test('done is denied to every agent, even on an allowed path', () => {
-  const ticket = 'status: done'
-  assert.match(write('.scripts/x.js', ticket), /human's move/)
+test('done is written only by the principal, never by a subagent', () => {
+  const done = 'status: done'
+  assert.equal(write('mds/epics/e/tarefas/01-login.md', done), ALLOW)
   assert.match(
-    guard(exec('write', { file_path: 'src/x.js', content: ticket }, { depth: 1, role: 'builder' })),
-    /human's move/,
+    guard(exec('write', { file_path: 'src/x.js', content: done }, { depth: 1, role: 'builder' })),
+    /only by the principal/,
   )
   assert.match(
-    guard(exec('edit', { file_path: 'testes/x.js', old_string: 'a', new_string: ticket }, { depth: 1, role: 'qa' })),
-    /human's move/,
+    guard(exec('edit', { file_path: 'testes/x.js', old_string: 'a', new_string: done }, { depth: 1, role: 'qa' })),
+    /only by the principal/,
   )
+})
+
+test('a tarefa in active only moves to in_progress', () => {
+  mkdirSync(join(ws, 'mds/epics/e/tarefas'), { recursive: true })
+  writeFileSync(join(ws, 'mds/epics/e/tarefas/02-clientes.md'), '---\nstatus: active\n---\n')
+  const move = (to) => guard(exec('edit', {
+    file_path: 'mds/epics/e/tarefas/02-clientes.md', old_string: 'status: active', new_string: `status: ${to}`,
+  }))
+  assert.match(move('code_test'), /GUARD\[kanban\]/)
+  assert.equal(move('in_progress'), ALLOW)
 })
 
 test('builder writes any language or framework layout inside the workspace', () => {
@@ -115,7 +125,7 @@ test('builder writes any language or framework layout inside the workspace', () 
 
 test('builder never writes the process surfaces, tests, git or outside the workspace', () => {
   const builder = { depth: 1, role: 'builder' }
-  for (const file of ['mds/epics/e/01-brief.md', 'prototype/index.html', 'testes/x.test.js', '.git/config', '../fora.js', '/etc/hosts']) {
+  for (const file of ['mds/epics/e/01-brief.md', 'testes/x.test.js', '.git/config', '../fora.js', '/etc/hosts']) {
     assert.ok(write(file, 'x', builder), `builder must not write ${file}`)
   }
 })
@@ -156,7 +166,7 @@ test('qa owns the test-runner configs, and nothing else at the root', () => {
 
 test('a denial names the rule and the allowed surface', () => {
   const reason = write('testes/qualquer.test.js')
-  assert.match(reason, /Blocked: the principal agent writes mds\/, prototype\//)
+  assert.match(reason, /Blocked: the principal agent writes mds\/ and the product/)
   assert.match(reason, /testes\/ is qa-only/)
 })
 

@@ -1,7 +1,7 @@
 ---
 name: ui-icons
 description: Take every application icon from Lucide, or from Tabler when Lucide has no glyph — install the package with pnpm, import by name, and never hand-write an SVG, ship an emoji as an icon, or add a third icon pack.
-whenToUse: Whenever work adds or changes an icon in a UI — buttons, navigation, empty states, menus, status, form fields — in the React app or in the /03-prototype HTML. Also when /04-tech-plan records the frontend stack and when /07-build briefs a UI tarefa.
+whenToUse: Whenever work adds or changes an icon in a UI — buttons, navigation, empty states, menus, status, form fields — in the React app. Also when /03-plano records the frontend stack and when /04-construcao briefs a UI tarefa.
 ---
 
 # UI icons
@@ -18,7 +18,7 @@ Never search for a glyph by guessing an export name. Read the pack's catalog: [l
 
 ## Install (React project)
 
-The principal installs the pack in the frontend folder while creating the project (`/07-build`, Project root), because `dsh-tool-guard` denies `pnpm add` to builders. A builder that needs a package the project lacks reports it; the principal installs it.
+The principal installs the pack in the frontend folder while creating the project (`/04-construcao`, Project root), because `dsh-tool-guard` denies `pnpm add` to builders. A builder that needs a package the project lacks reports it; the principal installs it.
 
 ```sh
 pnpm add lucide-react        # default
@@ -45,23 +45,6 @@ import { IconBrandGithub } from "@tabler/icons-react"; // Tabler: every export i
 - Size with the project's Tailwind scale (`size-4`, `size-5`) rather than hard-coded pixels, so an icon tracks its control. Color with `currentColor` through the text color — never a literal hex.
 - Stroke width follows the pack default (Lucide `2`, Tabler `2`); change it only for a whole surface, never per icon.
 - An icon that only decorates a labelled control is `aria-hidden`. An icon-only control carries `aria-label` — an unlabelled icon button is inaccessible and is a defect.
-
-## Use (the /03-prototype HTML)
-
-The prototype is CDN-only: **no install, no `package.json`**.
-
-```html
-<script src="https://unpkg.com/lucide@latest"></script>
-<i data-lucide="search"></i>
-<script>
-  if (window.lucide) lucide.createIcons();
-</script>
-```
-
-- `data-lucide` takes the kebab-case name (`trash-2`), not the React export.
-- Call `lucide.createIcons()` again after any render that injects markup, or the new nodes stay empty.
-- Guard the global like every other prototype CDN (`if (window.lucide)`), with visible text as the fallback.
-- Tabler in the prototype is the webfont, under the same rule 3: `<link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">` then `<i class="ti ti-brand-github"></i>`.
 - Illustrations, avatars and hero art are not icons: those come from `generate_image` into `assets/`.
 
 ## Done

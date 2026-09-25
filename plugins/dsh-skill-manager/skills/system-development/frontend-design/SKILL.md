@@ -1,7 +1,7 @@
 ---
 name: frontend-design
 description: Give every interface a deliberate visual direction — named aesthetic, font pairing, composition, depth and a motion language where every page animates — record it as mds/epics/<epic>/03-design.md, and build screens that could not be mistaken for a template.
-whenToUse: Before the first screen of /03-prototype (right after /ui-palette), whenever a page, landing, dashboard or component is created or restyled in the prototype or the React app, when /04-tech-plan records fonts and motion, and when /07-build briefs a UI tarefa.
+whenToUse: In /03-plano right after /ui-palette, before the first screen is built; whenever a page, landing, dashboard or component is created or restyled in the React app, when /03-plano records fonts and motion, and when /04-construcao briefs a UI tarefa.
 ---
 
 # Frontend design
@@ -15,7 +15,7 @@ You are a designer-engineer, not a layout generator. Every screen expresses one 
 | Aesthetic direction, differentiation anchor | Colors — `03-palette.md` via `/ui-palette` |
 | Font pairing and type scale | Controls — shadcn/ui via `/shadcn-ui` |
 | Composition, spacing rhythm, depth, texture | Icons — Lucide/Tabler via `/ui-icons` |
-| Motion language and motion tokens | Screens, fields, flows — the frozen `prototype.md` |
+| Motion language and motion tokens | Screens, fields, flows — `02-flows.md` and each screen's tarefa |
 
 "Commit to a color story" means choosing how the palette's roles dominate (one dominant surface tone, `primary` for action, `accent` sparingly), never adding colors. Gradients, glows, grain and meshes are built from palette roles (`from-primary/20 via-background to-accent/10`), never from literals or default Tailwind colors.
 
@@ -78,37 +78,14 @@ The direction tunes values inside the ranges in the comments (luxury: slower, so
 
 **Limits** — motion must never cost usability:
 - Animate `transform` and `opacity`; paint or layout properties only on small, isolated elements (`/fixing-motion-performance`).
-- Content is visible without JavaScript: the hidden initial state is applied by script (a `js` class on `<html>`), so a failed CDN never leaves a blank section.
+- Content is visible without JavaScript: the hidden initial state is applied by script (a `js` class on `<html>`), so a failed script never leaves a blank section.
 - Animations never block input: no disabled pointer events while entering, no waiting for a sequence before a click works.
 - `prefers-reduced-motion: reduce` keeps short opacity fades and drops translate, scale, parallax and auto-playing sequences. Content and state changes remain; only the movement goes.
 - No infinite decorative loops except a subtle ambient background that pauses off-screen and under reduced motion. Loaders loop only while loading.
 
 ## 4. Implementation
 
-**Prototype (`/03-prototype`, CDN-only).** Tokens and keyframes in a `<style>` block; Motion's CDN build for sequences and reveals, guarded like every CDN:
-
-```html
-<script src="https://cdn.jsdelivr.net/npm/motion@13/dist/motion.js"></script>
-<style>.motion [data-enter], .motion [data-reveal] > * { opacity: 0 }</style>
-<script>
-  const M = window.Motion;
-  if (M) document.documentElement.classList.add('motion'); // no CDN → no hidden state
-  const ease = [0.22, 1, 0.36, 1];
-  function enter(root) {
-    if (!M) return;
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const from = reduce ? { opacity: [0, 1] } : { opacity: [0, 1], y: [16, 0] };
-    M.animate([...root.querySelectorAll('[data-enter]')], from, { duration: 0.55, delay: M.stagger(0.06), ease });
-    root.querySelectorAll('[data-reveal]').forEach(el => M.inView(el, () => {
-      M.animate([...el.children], from, { duration: 0.55, delay: M.stagger(0.06), ease });
-    }, { amount: 0.2 })); // callback returns nothing → fires once
-  }
-</script>
-```
-
-Mark entering elements with `data-enter` and revealed groups with `data-reveal` (their children animate). Call `enter(section)` whenever the JS router shows a screen, so every screen switch replays its entrance. Feedback states use Tailwind transitions with the tokens (`transition-[transform,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:-translate-y-0.5 active:scale-[0.98]`). Before a `prototype_automation` `screenshot`, wait longer than the entrance sequence (`wait_for` the last `[data-enter]` element, then about one second).
-
-**React app (`/07-build`).**
+**React app (`/04-construcao`).** Before a `browser` `screenshot`, wait longer than the entrance sequence (`wait_for` the last entering element, then about one second).
 - `pnpm add motion`; import from `motion/react` (`motion`, `AnimatePresence`, `MotionConfig`, `stagger`). In Next.js App Router, animated components are client components.
 - Wrap the app once in `<MotionConfig reducedMotion="user">`.
 - Entrance: a parent `motion.div` with `variants` and `transition={{ delayChildren: stagger(0.06) }}`; children with `initial="hidden" animate="show"`.
@@ -118,7 +95,7 @@ Mark entering elements with `data-enter` and revealed groups with `data-reveal` 
 
 ## 5. Record `mds/epics/<epic>/03-design.md`
 
-Inside a build process, write it before the first prototype screen, after `03-palette.md`:
+Inside a build process, write it in `/03-plano`, after `03-palette.md` and before the first screen:
 
 ```markdown
 ---
@@ -141,7 +118,7 @@ entrance: <what enters, how> · reveal: <…> · feedback: <…> · state: <…>
 signature: <the signature moment and where it appears>
 ```
 
-Announce the direction to the requester in one or two plain sentences in their language ("elegant and calm, with large serif headings and smooth reveals as you scroll"), not in design jargon. The screens they approve validate it: set `status: validated` when the requester approves the first screen. `prototype.md` cites `03-design.md` under Global decisions, the React app copies its fonts and tokens, and a later change is an amendment under the `/03-prototype` freeze rule.
+Announce the direction to the requester in one or two plain sentences in their language ("elegant and calm, with large serif headings and smooth reveals as you scroll"), not in design jargon. The screens they approve validate it: set `status: validated` when the requester approves the first screen. The React app copies its fonts and tokens into the theme CSS; a later change is the requester's call at a screen's validation, recorded in `04-decisoes.md` and applied to `03-design.md` and the theme CSS together.
 
 Outside a build process, state the same direction in a few lines of the reply before the code.
 

@@ -1,7 +1,7 @@
 ---
 name: ui-ux-pro-max
 description: Choose a product's design system from a built-in catalog — style, landing pattern, color mood, signature effects and font pairing for 96 product types, 57 styles, 57 font pairings and 27 landing patterns — and check UI against prioritized UX rules and a pre-delivery checklist.
-whenToUse: When /frontend-design decides a direction (start of /03-prototype), when /ui-palette needs the color mood of the product type, when a landing page, dashboard or new product UI is designed, and when UI is reviewed for UX quality.
+whenToUse: When /frontend-design decides a direction (in /03-plano), when /ui-palette needs the color mood of the product type, when a landing page, dashboard or new product UI is designed, and when UI is reviewed for UX quality.
 ---
 
 # UI/UX Pro Max
@@ -10,7 +10,7 @@ A design-intelligence catalog. It recommends; `/frontend-design` commits the dir
 
 ## Workflow
 
-1. **Classify** from `01-brief.md` or the request: product type, audience, industry, tone keywords, stack (prototype HTML + Tailwind CDN, or React + shadcn).
+1. **Classify** from `01-brief.md` or the request: product type, audience, industry, tone keywords, stack (React + Tailwind + shadcn).
 2. **Product row** — find the closest row in [Products](#products): style, landing pattern, color mood, signature effects. Two close rows: combine, keeping one dominant style.
 3. **Style row** — read the chosen style in [Styles](#styles): its effects become motion and depth decisions, "Not for" is a veto, the accessibility column is a warning to act on.
 4. **Font pairing** — pick from [Typography](#typography) by mood and "best for". Match the script of the requester's language (the Noto rows cover CJK, Arabic, Thai, Hebrew; Vietnamese needs Be Vietnam Pro or Noto).
