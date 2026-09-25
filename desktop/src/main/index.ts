@@ -18,7 +18,12 @@ import {
 } from 'electron'
 import { appendHarnessLog } from './harness-log'
 import { registerWebAgent } from './web-agent'
-import { extractFailureCause, HarnessRuntime } from './runtime/harness-runtime'
+import {
+  extractFailureCause,
+  HarnessRuntime,
+  LOCAL_VPS_URL,
+  PRODUCTION_VPS_URL
+} from './runtime/harness-runtime'
 import { launchDisclaimedUtilityProcess } from './runtime/disclaimed-utility-process'
 import {
   installProfileDependenciesWithDsh,
@@ -2429,6 +2434,10 @@ async function bootstrap(): Promise<void> {
     logPath: join(app.getPath('logs'), 'harness.log'),
     pythonPath: bundledPythonPath(),
     agentPresetRoot: desktopResourcePath('agent-presets'),
+    // An unpackaged `npm run dev` signs in to and loads its skills from the
+    // local plugin-manager-dev container; a packaged build, whatever its
+    // channel, uses production.
+    vpsUrl: app.isPackaged ? PRODUCTION_VPS_URL : LOCAL_VPS_URL,
     launchProcess: (executablePath, args, options) =>
       process.platform === 'darwin'
         ? launchDisclaimedUtilityProcess(utilityProcess, args, options, {

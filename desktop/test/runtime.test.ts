@@ -17,6 +17,7 @@ import {
   extractSlotConflictName,
   formatExitCode,
   isHarnessStartupProbeHealthy,
+  LOCAL_VPS_URL,
   readActiveProfilePlugins,
   resolveEnvironmentPath,
   reservePort,
@@ -166,6 +167,32 @@ describe('Harness launch contract', () => {
     )
 
     expect(options.env).toMatchObject({ DSH_PROFILE_PLUGINS: '' })
+  })
+
+  it('points VPS_URL at the caller default unless the environment sets one', () => {
+    const local = buildHarnessSpawnOptions(
+      '/launch-root',
+      '/harness',
+      'linux',
+      { PATH: '/usr/bin' },
+      undefined,
+      undefined,
+      undefined,
+      LOCAL_VPS_URL
+    )
+    const exported = buildHarnessSpawnOptions(
+      '/launch-root',
+      '/harness',
+      'linux',
+      { PATH: '/usr/bin', VPS_URL: 'https://staging.example' },
+      undefined,
+      undefined,
+      undefined,
+      LOCAL_VPS_URL
+    )
+
+    expect(local.env).toMatchObject({ VPS_URL: 'http://localhost:3000' })
+    expect(exported.env).toMatchObject({ VPS_URL: 'https://staging.example' })
   })
 
   it('does not detach the Harness on macOS or Linux', () => {

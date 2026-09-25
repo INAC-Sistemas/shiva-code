@@ -6,6 +6,11 @@ import { createServer } from 'node:net'
 import { dirname, join } from 'node:path'
 import type { RuntimePhase, RuntimeSnapshot } from '../../shared/contracts'
 
+/** The production plugin-manager a packaged build signs in to and loads skills from. */
+export const PRODUCTION_VPS_URL = 'https://shivaplugins.grupoinac.com.br'
+/** The local `plugin-manager-dev` container an unpackaged `npm run dev` build uses. */
+export const LOCAL_VPS_URL = 'http://localhost:3000'
+
 export interface HarnessRuntimeOptions {
   dshEntryPath: string
   nodeExecutablePath: string
@@ -17,6 +22,8 @@ export interface HarnessRuntimeOptions {
   pythonPath?: string
   /** Absolute path to the desktop's own agent-preset root (holds the `profile` preset). */
   agentPresetRoot?: string
+  /** The plugin-manager URL the Harness receives as `VPS_URL` when the desktop's own environment sets none. */
+  vpsUrl: string
   launchProcess(
     executablePath: string,
     args: string[],
@@ -280,7 +287,8 @@ export function buildHarnessSpawnOptions(
   environment: NodeJS.ProcessEnv = process.env,
   pythonPath?: string,
   profilePlugins?: string[],
-  agentPresetRoot?: string
+  agentPresetRoot?: string,
+  defaultVpsUrl: string = PRODUCTION_VPS_URL
 ): SpawnOptionsWithoutStdio {
   const { ELECTRON_RUN_AS_NODE: _runAsNode, ...parentEnvironment } = environment
   const pathKey = platform === 'win32' ? 'Path' : 'PATH'
@@ -306,11 +314,12 @@ export function buildHarnessSpawnOptions(
       // dsh-login's cordis.patch.yml composes its auth endpoints as
       // `new URL('/api/auth/...', process.env.VPS_URL)` — an unset VPS_URL
       // throws at profile composition, before the Harness even reaches
-      // "pending" state. This shipped build points at the production
-      // plugin-manager by default; a developer's own shell export still
-      // wins, matching the "environment overrides config" contract
-      // dsh-login itself documents for DSH_LOGIN_ENDPOINT.
-      VPS_URL: parentEnvironment.VPS_URL ?? 'https://shivaplugins.grupoinac.com.br',
+      // "pending" state. The caller picks the default (production for a
+      // packaged build, the local plugin-manager for `npm run dev`); a
+      // developer's own shell export still wins, matching the "environment
+      // overrides config" contract dsh-login itself documents for
+      // DSH_LOGIN_ENDPOINT.
+      VPS_URL: parentEnvironment.VPS_URL ?? defaultVpsUrl,
       // The active profile's plugin list, read by every `disabled` expression
       // in dsh-desktop.patch.yml and in the `profile` agent preset. Unset means
       // "no profile chosen", and those expressions fall back to enabled — the
@@ -494,7 +503,8 @@ export class HarnessRuntime {
           resolveShellEnvironment(),
           this.options.pythonPath,
           profilePlugins,
-          this.options.agentPresetRoot
+          this.options.agentPresetRoot,
+          this.options.vpsUrl
         )
       )
     } catch (error) {
