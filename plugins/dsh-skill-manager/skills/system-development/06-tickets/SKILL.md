@@ -19,6 +19,7 @@ Requires, all readable by path: `01-brief.md`, `02-flows.md`, `03-prototype-vali
 - **A tarefa is a functionality of the system**: something a user (or a system that calls it) can do once it is finished — "Cadastrar cliente", "Entrar no sistema", "Exportar relatório de vendas", "Receber webhook de pagamento". Its title names that functionality in the requester's language, with a verb, as they would say it.
 - **It carries every layer the functionality needs.** When it has a screen and a server side, the backend (route, request validator, use case, response serializer, migration) and the frontend (screen, components, loading/error/empty states) are the **same** tarefa. When it has only one side — an endpoint other systems consume, a screen over data that already exists — the tarefa has only that side. Never split one functionality into a "backend tarefa" and a "frontend tarefa".
 - **Every functionality of the system is a tarefa, and every tarefa is a functionality.** The list comes from the brief's Must do, every flow in `02-flows.md`, every screen of `prototype.md`, and every **yes** in the brief's Surface and delivery topics (an API with its documented endpoints and `/docs`, a webhook in each declared direction, a role with its permission checks, an integration, a report with its screen and export, a container delivery). No functionality without a tarefa; no tarefa that is only plumbing — a shared foundation (the schema, the app layout, the auth middleware) is built inside the first tarefa whose functionality needs it.
+- **The Authorization Layer comes first.** The list starts from the brief's `## Authorization layer` table. When anyone signs in, tarefa `01` is "Autorização: entrar e respeitar os papéis". It covers sign-in, sign-out, the user types and roles in that table, the permission check every later route and screen uses, and the screen that grants and revokes roles when the brief names someone who does that. Every later tarefa states which roles use it, and its "Done when" includes the check that a role outside that list is refused. When the brief records "nobody signs in", there is no authorization tarefa, and the list starts with the first functionality.
 - **Short and objective.** A tarefa that does not fit its budget (below) is two functionalities: split it by what the user can do ("Cadastrar produto", "Editar produto"), never by layer.
 
 ## Tarefa conventions
@@ -50,6 +51,7 @@ title: <the functionality, with a verb>
 ---
 # Tarefa NN — <the functionality>
 ## Functionality (one sentence: what the user can do when this tarefa is finalizada)
+## Roles (the brief's roles that use it; the rest are refused)
 ## Context manifest
 - epic folder: mds/epics/<epic>/ — only the artifacts this tarefa uses, by path and section
 - UX ids covered: UX-…
@@ -75,7 +77,7 @@ The implementer prompt is the default one — "read this tarefa and its manifest
 
 1. `read` the plan and all upstream artifacts — never break down from conversation memory.
 2. Verify the entry gate (statuses). A missing artifact is a blocker, not an invitation to guess.
-3. **List the functionalities** (see "One tarefa = one functionality"): one line each, with the brief, flow, screen or Surface topic it comes from. Show that list to the requester in plain language as the list of tarefas before writing any file — it is the list of what the system will do. Order it by dependency, the functionalities others build on first. Track the breakdown with `todo_write` when it spans several tarefas.
+3. **List the functionalities** (see "One tarefa = one functionality"), starting with the Authorization Layer: one line each, with the roles that use it and the brief, flow, screen or Surface topic it comes from. Show that list to the requester in plain language as the list of tarefas before writing any file — it is the list of what the system will do. Order it by dependency, the functionalities others build on first. Track the breakdown with `todo_write` when it spans several tarefas.
 4. `write` every tarefa with the body contract above.
 5. Verify the tree: every tarefa inside `06-tickets/`, frontmatter complete, deps point at existing files, every functionality on the list has exactly one tarefa and every tarefa is on the list.
 6. **Analyse the real dependency graph** (below) — declared dependencies are not enough; find the tarefas that touch the same files or symbols.

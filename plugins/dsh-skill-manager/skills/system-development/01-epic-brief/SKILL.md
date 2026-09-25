@@ -1,6 +1,6 @@
 ---
 name: 01-epic-brief
-description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /07-build onward the agent decides alone and reports. No solutions, no tech.
+description: Capture a new initiative as an epic with a brief that establishes business viability, desirability, shape, features — starting with the Authorization Layer, the user types and roles every feature is written for — and the system's outer surface (API, webhooks, authentication and roles, external integrations, Docker delivery, reports) through staged questioning — stored as mds/epics/<epic>/01-brief.md. Every doubt is raised here, because from /07-build onward the agent decides alone and reports. No solutions, no tech.
 whenToUse: Starting any new initiative. First pipeline stage, after /00-start-here. Requires /00-start-here loaded earlier in this session.
 ---
 
@@ -41,9 +41,20 @@ Research before you ask: use `web_search`/`web_fetch` to check competitors, adja
 Before leaving C, count answers: fewer than twenty means you skipped some. Go back.
 
 **D — Features, screens, behaviour (only now, and everything must trace up)**
-- List what it must do; each item names the answer above that forces it. No ancestor = a feature nobody asked for → propose cutting it.
+
+**D0 — Authorization Layer, always first.** Before any feature is listed, ask who uses the system, because every feature after it is written for someone:
+1. Does anyone sign in, or is everything open to whoever opens it?
+2. Which **types of user** exist? Name each in their words — "dono da barbearia", "barbeiro", "cliente" — including people outside the company.
+3. Which **roles** does each type hold, and can one person hold more than one role?
+4. What may each role see, create, change and delete, and what must it never reach?
+5. Who creates an account of each type, and who can grant, change or revoke a role?
+
+Put the independent questions in one `ask_user_question` call, with a recommendation built from stages A–C. Read the result back as a table (type → role → may do → may never do) and get a yes before moving on. When the answer is "nobody signs in", record that as a decision, not as a skipped question.
+
+Then:
+- List what it must do; each item names the answer above that forces it **and the roles that use it**. No ancestor = a feature nobody asked for → propose cutting it. A feature no role from D0 uses is a sign that a role is missing, or that nobody needs the feature.
 - Screens/steps in the order the person meets them; the empty state first.
-- Who can do what (kinds of user); where data comes from, lives, and who may delete it.
+- Where data comes from, where it lives, and which role may delete it.
 - Happy scenarios as Given/When/Then, read back for confirmation; then every unhappy scenario: missing info, two people at once, mistake, connection drop.
 
 **E — The unasked (week-two wants they did not say)** — propose each as a question with a recommendation, never as an assumption: history/log; reports and who reads them; undo vs confirm; notifications and channel; export/backup; concurrent users; phone/offline/language; sensitive data; 10× scale; six-months-next. **Record rejections too** — a deliberate "no" outranks an unasked question.
@@ -52,7 +63,7 @@ Before leaving C, count answers: fewer than twenty means you skipped some. Go ba
 
 1. **API** — will anything outside this system read or write its data? Their own app, a partner, a mobile client. A yes carries the documentation rule (`skill engineering-standards` rule 3: OpenAPI rendered with Swagger UI).
 2. **Webhooks** — must the system **receive** events from elsewhere (payment confirmed, message delivered), or **tell** another system when something happens here? Name the events in their words.
-3. **Authentication and roles** — is there a login, which kinds of user exist, and what may each one do? Confirms and sharpens what D listed.
+3. **Authentication and roles** — confirms the D0 table against the features D listed: every feature has a role, and every role can do something. Ask only what D0 left open. Do not ask again what it already settled.
 4. **External integrations** — payment, e-mail, WhatsApp, ERP, storage: which are real on day one, and which are wishes for later.
 5. **Docker delivery** — does the delivery include publishing as a container, with migrations and seed running on start (`skill engineering-standards` rule 7)? A no means the system is delivered running locally and no deploy file is ever written.
 6. **Reports and exports** — which reports and exports the system must produce, and who reads them. Confirms what E proposed.
@@ -61,7 +72,7 @@ These are **scope**, not technology: whether another system talks to this one, w
 
 ## Coverage check before writing
 
-Count: A=10, B=9 blocks, C=20 across four modes, D=capabilities+scenarios complete, E=list presented and answered, F=6 answered or refused. A stage short of its count is a stage to go back and finish — not to summarise. F short of six is worse than the others: what it does not ask, nobody asks — the build decides it alone.
+Count: A=10, B=9 blocks, C=20 across four modes, D=the D0 table confirmed (or "nobody signs in" recorded) + capabilities with their roles + scenarios complete, E=list presented and answered, F=6 answered or refused. A stage short of its count is a stage to go back and finish — not to summarise. F short of six is worse than the others: what it does not ask, nobody asks — the build decides it alone.
 
 ## Write the artifact
 
@@ -78,7 +89,8 @@ status: draft
 ## Business model (9-row table) / ## The person / ## The moment that matters
 ## Smallest useful version (q32) / ## How we will know it is working (q39)
 ## What we would show a real person tomorrow (q36–37)
-## Must do (table: capability → traces back to)
+## Authorization layer (table: user type → roles → may do → may never do; who creates accounts and grants roles — or "nobody signs in", recorded as a decision)
+## Must do (table: capability → roles that use it → traces back to)
 ## Behaviour (Given/When/Then, happy + unhappy)
 ## Surface and delivery (API, webhooks, auth and roles, integrations, Docker, reports — each in their words, a refusal recorded as a refusal)
 ## In scope / Out of scope (with why) / ## Constraints (constraint → source → consequence)
