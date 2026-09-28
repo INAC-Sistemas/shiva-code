@@ -132,7 +132,7 @@ function createTool(ctx) {
     name: 'browser',
     description:
       'Drive the sidebar Browser tab and the system browser. ops: open (open the Browser tab, optionally at url) · ' +
-      'navigate (open the Browser tab at url) · focus (bring an open Browser tab to the front) · screenshot (capture the app ' +
+      'navigate (open the Browser tab at url; an http(s) url without scope loads the real page, full scope) · focus (bring an open Browser tab to the front) · screenshot (capture the app ' +
       'window showing the Browser tab; saved under the workspace and returned as a path) · open_external (open url in the ' +
       'machine\'s default browser, e.g. an OAuth or dashboard link) · plus FULL-SCOPE page automation: click, fill, read, ' +
       'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these run in scope:"full" (implied ' +
@@ -179,7 +179,16 @@ function createTool(ctx) {
       const op = String(args.op)
       // A full-scope op without an explicit scope runs in full scope: full access is granted by
       // default, so omitting the scope never reads as a revocation.
-      const scope = args.scope === 'full' || (args.scope === undefined && FULL_OPS.includes(op)) ? 'full' : 'workspace'
+      let scope = args.scope === 'full' || (args.scope === undefined && FULL_OPS.includes(op)) ? 'full' : 'workspace'
+      // open/navigate to an http(s) URL without a scope shows the real page: the sandboxed iframe
+      // of the workspace scope has an opaque origin, where a dev server's app (service worker,
+      // storage) renders blank. Revoked full access keeps the old iframe behavior.
+      if (
+        args.scope === undefined && (op === 'open' || op === 'navigate') &&
+        /^https?:\/\//i.test(String(args.url ?? '')) && (await fullAccessEnabled())
+      ) {
+        scope = 'full'
+      }
       if (op === 'open_external') {
         const url = String(args.url ?? '')
         if (!url) throw new Error('url obrigatória')

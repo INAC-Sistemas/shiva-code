@@ -29,6 +29,8 @@ let fullUrl = null
 let frameHostEl = null
 let resizeObserver = null
 let openOurTabRef = null
+// The real page hidden when the Browser tab stopped being the active tab; shown again on return.
+let parkedUrl = null
 
 function api(method, payload) {
   return fetch('/browser/api/' + method, {
@@ -102,6 +104,20 @@ async function detachFull() {
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null }
   fullUrl = null
   try { await wa()?.detach() } catch { /* bridge ausente */ }
+}
+
+/** Load `url` in the real page view and put it over the tab's frame area. */
+async function showFull(url) {
+  const bridge = wa()
+  if (!bridge) throw new Error('full scope requer o app DSH Desktop (bridge ausente)')
+  parkedUrl = null
+  const r = await bridge.navigate(url)
+  if (!r || !r.ok) throw new Error((r && r.error) || 'navigate falhou')
+  fullUrl = url
+  desiredUrl = url
+  if (setUrlFromAgent) setUrlFromAgent(url)
+  await attachFull()
+  return r
 }
 
 // Capture the app window through the desktop bridge: no gesture, no picker.
@@ -185,7 +201,12 @@ function BrowserTab(props) {
   // Tab not the active one → drop the embedded view (agent full ops then fail
   // with the explicit "tab not visible" contract, same as the prototype tab).
   React.useEffect(() => {
-    if (!visible && fullUrl) detachFull()
+    if (!visible && fullUrl) {
+      parkedUrl = fullUrl
+      detachFull()
+    } else if (visible && parkedUrl && !fullUrl) {
+      showFull(parkedUrl).catch(() => {})
+    }
   }, [visible])
 
   React.useEffect(() => () => { detachFull() }, [])
@@ -195,6 +216,11 @@ function BrowserTab(props) {
     if (!next) { setBad(true); return }
     setBad(false)
     desiredUrl = next
+    if (wa()) {
+      // In the desktop the address bar loads the real page, as the agent's navigate does.
+      showFull(next).then(() => setFull(next)).catch(() => {})
+      return
+    }
     if (fullUrl) detachFull()
     show(next)
   }
@@ -207,7 +233,7 @@ function BrowserTab(props) {
         onKeyDown: (e) => { if (e.key === 'Enter') go() },
       }),
       h('button', { className: 'db-btn', onClick: go }, 'Ir'),
-      h('button', { className: 'db-btn', onClick: () => { if (fullUrl) detachFull(); setKey((k) => k + 1) }, title: 'Recarregar' }, '⟳'),
+      h('button', { className: 'db-btn', onClick: () => { if (fullUrl) { wa()?.run({ op: 'reload' }).catch(() => {}); return } setKey((k) => k + 1) }, title: 'Recarregar' }, '⟳'),
       full ? h('span', { className: 'db-full-badge', title: 'página real controlada pelo agente (scope full)' }, 'FULL') : null),
     bad ? h('div', { className: 'db-hint' }, 'Endereço inválido — use http(s).') : null,
     h('div', { ref: hostRef, style: { flex: 1, minHeight: 0, display: 'flex', position: 'relative' } },
@@ -232,17 +258,16 @@ function Icon(size) {
 async function runFullCommand(cmd) {
   const bridge = wa()
   if (!bridge) throw new Error('full scope requer o app DSH Desktop (bridge ausente)')
-  if (cmd.op === 'navigate') {
+  if (cmd.op === 'navigate' || (cmd.op === 'open' && cmd.url)) {
     const next = normalize(cmd.url)
     if (!next) throw new Error('url inválida: ' + cmd.url)
     if (typeof openOurTabRef === 'function') openOurTabRef()
-    const r = await bridge.navigate(next)
-    if (!r || !r.ok) throw new Error((r && r.error) || 'navigate falhou')
-    fullUrl = next
-    desiredUrl = next
-    if (setUrlFromAgent) setUrlFromAgent(next)
-    await attachFull()
+    const r = await showFull(next)
     return { ok: true, data: r.data ?? { url: next } }
+  }
+  if (cmd.op === 'open' || cmd.op === 'focus') {
+    if (typeof openOurTabRef === 'function') openOurTabRef()
+    return { ok: true, data: { url: fullUrl ?? parkedUrl } }
   }
   if (!fullUrl) throw new Error('scope "full": nenhuma página carregada — rode navigate com scope:"full" antes')
   if (cmd.op === 'screenshot') {
@@ -353,7 +378,10 @@ function apply(ctx) {
                 openOurTab()
                 await new Promise((res) => setTimeout(res, 600))
                 try {
-                  const dataUrl = await captureWindow()
+                  // The real page is a separate view the window capture does not include.
+                  const dataUrl = fullUrl
+                    ? (await withDeadline(runFullCommand({ op: 'screenshot' }), 40000, 'screenshot')).dataUrl
+                    : await captureWindow()
                   await api('result', { id: cmd.id, ok: true, dataUrl })
                 } catch (e) {
                   await api('result', { id: cmd.id, ok: false, error: String((e && e.message) || e) })

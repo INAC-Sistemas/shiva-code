@@ -17,10 +17,10 @@ prototype — served same-origin by `dsh-prototype` — use the
 
 | `op` | Args | Effect |
 | --- | --- | --- |
-| `open` | `url?` | Open the Browser tab (at `url` when given) |
-| `navigate` | `url` | Open the Browser tab at `url` |
+| `open` | `url?` | Open the Browser tab (at `url` when given; an http(s) `url` without `scope` loads the real page in scope `full`) |
+| `navigate` | `url` | Open the Browser tab at `url` (an http(s) `url` without `scope` loads the real page in scope `full`) |
 | `focus` | — | Bring an open Browser tab to the front |
-| `screenshot` | `full?`, `settle?`, `quietMs?` | Capture the tab; saved under `<workspace>/.browser-shots/` and returned as a path. In scope `full` it captures the page itself, and `full: true` goes beyond the viewport |
+| `screenshot` | `full?`, `settle?`, `quietMs?` | Capture the tab; saved under `<workspace>/.browser-shots/` and returned as a path. While a real page is shown it captures the page itself, and `full: true` goes beyond the viewport |
 | `open_external` | `url` | Open `url` in the machine's default browser (OAuth / dashboard links) |
 | `click`, `fill`, `read`, `eval`, `console`, `wait_for`, `wait`, `reconnect`, `reload`, `scroll`, `wait_stable`, `upload` | the op's arguments; `scope` defaults to `"full"` | Script the real page. `fill` never echoes the value |
 
@@ -36,6 +36,10 @@ is no per-session approval.
 
 The Browser tab must be visible and large enough to host the page; otherwise a
 full-scope call fails with "aba Browser não está visível".
+
+In the desktop the real page is a view laid over the tab. Switching to another
+sidebar tab hides it, and returning to the Browser tab loads the same URL again.
+The address bar and the reload button drive the same real page.
 
 ## How it works
 
