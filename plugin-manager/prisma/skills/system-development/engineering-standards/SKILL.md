@@ -124,7 +124,7 @@ Typical candidates: sending emails or notifications; processing uploaded files; 
 
 **Scheduled and recurring tasks** run on a single instance and never overlap with a previous run still in progress; a missed run is either caught up or recorded as skipped, deliberately.
 
-**Testing.** A task's handler is testable by running it directly; tests assert that the request dispatches the right task with the right payload, and exercise the task's retry, idempotency and failure paths.
+**Testability.** A task's handler can be run directly, so a test battery — written only when the requester asks for one after the delivery — can assert that the request dispatches the right task with the right payload and exercise the task's retry, idempotency and failure paths.
 
 **Do not go asynchronous by default.** Do not move an operation to asynchronous execution solely for architectural purposes. Synchronous execution is preferred when the operation is short-lived and the caller requires its result immediately.
 
@@ -234,7 +234,7 @@ Each API tarefa's **Endpoints** and **Persistence** sections name its request va
 - [ ] Endpoint documented in the API specification with its input, output, errors, authentication and every HTTP status it answers, matching its behavior.
 - [ ] Inbound webhook (when the tarefa has one): signature and timestamp verified against the raw body before anything is parsed or acted on; an unsigned, mis-signed or stale call rejected with no side effect; the provider's event id processed twice changes nothing; the endpoint answers 2xx inside the provider's timeout and the work runs in the background; the endpoint, its headers and every status it answers are in the API specification.
 - [ ] Outbound webhook (when the tarefa has one): dispatched from the queue after commit, signed, with a timeout, retried with the recorded backoff up to the recorded maximum; an exhausted delivery lands in the dead-letter store with its error and can be retried by hand; the event is in the event catalog with a real payload example.
-- [ ] Background work (when the tarefa has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it; tests assert the dispatch and run the task.
+- [ ] Background work (when the tarefa has any): dispatched after commit with ids only; timeout, attempts and backoff set; idempotent where repeatable; failure handled and reported; status visible to the caller when they wait on it.
 - [ ] Schema or seed changes (when the tarefa has any): from an empty database, the app's own migrate and seed commands bring it up and the flow works; running them again applies nothing and duplicates no row.
 
 Each page tarefa of `/02-frontend` carries the frontend check instead: UI built from the design system's tokens and components (Tailwind utilities and theme variables only); any chart uses the project's standard library (Recharts); every payload a Zod contract.

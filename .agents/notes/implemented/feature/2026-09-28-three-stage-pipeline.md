@@ -55,6 +55,7 @@ No deploy stage.
 
 ## Consequences
 
+- Superseded in part by [no tests before delivery](2026-09-28-no-tests-before-delivery.md). `/03-backend` no longer has qa write unit and contract tests or asks to run them; it asks after the delivery whether to implement a test battery for audit. `/02-frontend` asks the requester for a visual approval, and the principal's pre-handover walk is a visual check.
 - The requester sees the final UI before any backend exists. A backend constraint that forces a visible change is announced before it ships.
 - A contract that proves wrong in `/03-backend` is changed in the contract, the mock, the page and the backend together, and recorded in `decisoes.md`.
 - Page validation no longer overlaps the build of the next page, so an epic waits on the requester once per page. The owner accepted this in exchange for validating each page before the next.
