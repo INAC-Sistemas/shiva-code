@@ -22,11 +22,11 @@ prototype — served same-origin by `dsh-prototype` — use the
 | `focus` | — | Bring an open Browser tab to the front |
 | `screenshot` | `full?`, `settle?`, `quietMs?` | Capture the tab; saved under `<workspace>/.browser-shots/` and returned as a path. In scope `full` it captures the page itself, and `full: true` goes beyond the viewport |
 | `open_external` | `url` | Open `url` in the machine's default browser (OAuth / dashboard links) |
-| `click`, `fill`, `read`, `eval`, `console`, `wait_for`, `wait`, `reconnect`, `reload`, `scroll`, `wait_stable`, `upload` | `scope: "full"` plus the op's arguments | Script the real page. `fill` never echoes the value |
+| `click`, `fill`, `read`, `eval`, `console`, `wait_for`, `wait`, `reconnect`, `reload`, `scroll`, `wait_stable`, `upload` | the op's arguments; `scope` defaults to `"full"` | Script the real page. `fill` never echoes the value |
 
 ## Full-scope access
 
-Full scope is granted by default: the agent can drive any URL, including pages
+Full scope is granted by default, and a page-automation op without a `scope` runs in it: the agent can drive any URL, including pages
 where the desktop's browser session is signed in. A top-level
 `browserFullAccess: false` in the harness `settings.yaml` (`$DSH_HOME`, on the
 desktop `<userData>/harness`) revokes it, and every full-scope call then fails

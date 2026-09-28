@@ -10,7 +10,7 @@ Status: implemented
 
 `dsh-browser` 0.3.0 inverts the gate: full scope is granted unless `settings.yaml` carries a top-level `browserFullAccess: false`. A missing `DSH_HOME` or an absent or unreadable `settings.yaml` keeps the grant. The file is still read on every call, so revoking applies without a restart, and there is still no per-session approval. The tool description, the `scope` parameter text and the refusal message state the new default and the way to revoke it. The README documents both scopes and the full-scope ops; `/00-start-here` tells the model that full scope is how `/07-build` walks the app, and `/08-review` names the revocation line as the only thing that disables it.
 
-The desktop tarball moved to `dsh-browser-0.3.0.tgz`, with its lockfile integrity computed from the packed bytes.
+Since 0.3.1 a page-automation op called without `scope` runs in full scope, and the error for an explicit `scope:"workspace"` no longer quotes the revocation message: in 0.3.0 an omitted scope was refused with the `browserFullAccess: false` text, and the model read that as access being off and stopped walking the app. The desktop tarball is `dsh-browser-0.3.1.tgz`, with its lockfile integrity computed from the packed bytes.
 
 ## Alternatives considered
 

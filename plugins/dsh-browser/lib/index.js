@@ -135,8 +135,8 @@ function createTool(ctx) {
       'navigate (open the Browser tab at url) · focus (bring an open Browser tab to the front) · screenshot (capture the app ' +
       'window showing the Browser tab; saved under the workspace and returned as a path) · open_external (open url in the ' +
       'machine\'s default browser, e.g. an OAuth or dashboard link) · plus FULL-SCOPE page automation: click, fill, read, ' +
-      'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these require scope:"full", which is ' +
-      'available unless the owner turned it off (browserFullAccess: false); with it you drive ANY real URL like a user ' +
+      'eval, console, wait_for, wait, reconnect, reload, scroll, wait_stable, upload — these run in scope:"full" (implied ' +
+      'when scope is omitted), which is on unless the owner turned it off (browserFullAccess: false); with it you drive ANY real URL like a user ' +
       '(logins included: read credentials from a project file or env var, never from chat). fill never echoes the value. ' +
       'Prefer click/fill by role+name (accessibility) over text: text matching can hit a container. Never reload through ' +
       'eval — use op "reload". Use wait_stable (or screenshot settle, default on) before a print so a page that mounts ' +
@@ -149,7 +149,7 @@ function createTool(ctx) {
     parameters: {
       op: { type: 'string', required: true, enum: BROWSER_OPS, description: 'Operation to run.' },
       url: { type: 'string', description: 'Target URL (open/navigate/open_external).' },
-      scope: { type: 'string', enum: ['workspace', 'full'], description: 'workspace (default) = tab sandbox as today; full = drive any real URL (on by default; browserFullAccess: false in settings.yaml turns it off).' },
+      scope: { type: 'string', enum: ['workspace', 'full'], description: 'workspace (default for tab ops) = tab sandbox as today; full (default for page-automation ops) = drive any real URL (on by default; browserFullAccess: false in settings.yaml turns it off).' },
       selector: { type: 'string', description: 'CSS selector (click/fill/read/wait_for/scroll/upload).' },
       text: { type: 'string', description: 'Visible text to match instead of a selector (click/wait_for).' },
       role: { type: 'string', description: 'ARIA role for an accessible lookup (click/fill), e.g. "button", "link", "textbox".' },
@@ -177,7 +177,9 @@ function createTool(ctx) {
         sessionId: exec?.agent?.session?.header?.id,
       })
       const op = String(args.op)
-      const scope = args.scope === 'full' ? 'full' : 'workspace'
+      // A full-scope op without an explicit scope runs in full scope: full access is granted by
+      // default, so omitting the scope never reads as a revocation.
+      const scope = args.scope === 'full' || (args.scope === undefined && FULL_OPS.includes(op)) ? 'full' : 'workspace'
       if (op === 'open_external') {
         const url = String(args.url ?? '')
         if (!url) throw new Error('url obrigatória')
@@ -185,7 +187,7 @@ function createTool(ctx) {
         return { ok: true, url }
       }
       if (FULL_OPS.includes(op) && scope !== 'full') {
-        throw new Error(`op "${op}" scripts a real page — pass scope:"full". ${FULL_ACCESS_HINT}`)
+        throw new Error(`op "${op}" scripts a real page and cannot run in scope "workspace" — pass scope:"full" or omit scope.`)
       }
       if (scope === 'full' && !(await fullAccessEnabled())) {
         throw new Error(FULL_ACCESS_HINT)
