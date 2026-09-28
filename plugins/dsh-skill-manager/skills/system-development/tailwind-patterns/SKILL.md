@@ -1,7 +1,7 @@
 ---
 name: tailwind-patterns
 description: Write Tailwind the way this flow ships it — v4 CSS-first @theme in the React app — with palette role colors, design-direction fonts, motion tokens and keyframes, container queries, responsive and dark-mode patterns, and no arbitrary-value sprawl.
-whenToUse: Whenever Tailwind classes, theme CSS, tokens, keyframes or responsive layout are written or reviewed in a React + Tailwind app, and when /04-construcao briefs a UI tarefa that touches styling or the theme file.
+whenToUse: Whenever Tailwind classes, theme CSS, tokens, keyframes or responsive layout are written or reviewed in a React + Tailwind app, and when /02-frontend briefs a UI tarefa that touches styling or the theme file.
 ---
 
 # Tailwind patterns
@@ -12,7 +12,7 @@ The app uses Tailwind v4, installed by `shadcn init`: CSS-first `@theme` / `@the
 
 ## 1. Tokens
 
-Colors come only from `03-palette.md` (`/ui-palette` section 6). Fonts, radii, motion come from `03-design.md` (`/frontend-design`). Put them in the theme CSS once:
+Colors come only from `02-palette.md` (`/ui-palette` section 6). Fonts, radii, motion come from `02-design.md` (`/frontend-design`). Put them in the theme CSS once:
 
 ```css
 @import "tailwindcss";
@@ -27,7 +27,7 @@ Colors come only from `03-palette.md` (`/ui-palette` section 6). Fonts, radii, m
 
 @theme inline {
   --color-primary: var(--primary);          /* …every palette role… */
-  --font-display: "Fraunces", serif;        /* from 03-design.md */
+  --font-display: "Fraunces", serif;        /* from 02-design.md */
   --font-sans: "Manrope", sans-serif;
 }
 

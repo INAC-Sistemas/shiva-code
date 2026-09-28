@@ -1,12 +1,12 @@
 ---
 name: react-best-practices
 description: Write fast React and Next.js code by Vercel's 45 performance rules ranked by impact — eliminate async waterfalls, cut bundle size, server-side caching and serialization (Next.js), cached client fetching, fewer re-renders, cheaper rendering and JavaScript hot paths — each with the incorrect and correct pattern.
-whenToUse: Whenever React components, hooks, data fetching, routes or Server Components are written, reviewed or refactored, when a screen is slow or the bundle is large, and when /04-construcao briefs or evaluates a tarefa that touches React code.
+whenToUse: Whenever React components, hooks, data fetching, routes or Server Components are written, reviewed or refactored, when a screen is slow or the bundle is large, and when /02-frontend briefs or evaluates a tarefa that touches React code.
 ---
 
 # React best practices
 
-Rules in impact order. Apply CRITICAL and HIGH by default; apply the rest where the code is hot (lists, frequent events, large data). Sections marked **Next.js** apply only when `03-plano.md` chose a server-rendering template (`next`, `start`); the default Vite SPA skips them.
+Rules in impact order. Apply CRITICAL and HIGH by default; apply the rest where the code is hot (lists, frequent events, large data). Sections marked **Next.js** apply only when `01-arquitetura.md` chose a server-rendering template (`next`, `start`); the default Vite SPA skips them.
 
 If the project enables React Compiler, manual `memo`, `useMemo`, `useCallback` and JSX hoisting are unnecessary; the correctness rules (functional setState, `toSorted`, conditional rendering) still apply.
 
@@ -68,7 +68,7 @@ Split routes too (`lazy` route components in React Router / TanStack Router; aut
 
 ## 4. Client data fetching — MEDIUM-HIGH
 
-**4.1 Use a query cache** (TanStack Query or SWR, per `03-plano.md`) for deduplication, caching, retries and revalidation. Never `useEffect(() => { fetch().then(setState) }, [])`.
+**4.1 Use a query cache** (TanStack Query or SWR, per `01-arquitetura.md`) for deduplication, caching, retries and revalidation. Never `useEffect(() => { fetch().then(setState) }, [])`.
 
 **4.2 One global listener, many subscribers.** Register `keydown`, `resize` or `storage` once at module level and fan out to a `Set` of callbacks, instead of one listener per component instance.
 

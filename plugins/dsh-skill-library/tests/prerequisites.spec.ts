@@ -7,8 +7,8 @@ import {
 } from '../src/prerequisites.ts'
 
 const RULES = {
-  '01-epic-brief': ['00-start-here'],
-  '02-core-flows': ['00-start-here', '01-epic-brief'],
+  '01-arquitetura': ['00-start-here'],
+  '02-frontend': ['00-start-here', '01-arquitetura'],
 }
 
 /** A logged `skill` call and its result, as the session log stores them. */
@@ -28,7 +28,7 @@ describe('which skills a session has loaded', () => {
   })
 
   it('does not count a call that failed, such as one refused for load order', () => {
-    expect(loadedSkills({ events: load('c1', '01-epic-brief', true) }, 'skill').size).toBe(0)
+    expect(loadedSkills({ events: load('c1', '01-arquitetura', true) }, 'skill').size).toBe(0)
   })
 
   it('reads the packaged harness session through snapshotEvents()', () => {
@@ -48,9 +48,9 @@ describe('which skills a session has loaded', () => {
 
 describe('the load-order rule', () => {
   it('requires 00 and the previous stage, reporting what is missing in order', () => {
-    expect(missingPrerequisites(RULES, '02-core-flows', new Set())).toEqual(['00-start-here', '01-epic-brief'])
-    expect(missingPrerequisites(RULES, '02-core-flows', new Set(['00-start-here']))).toEqual(['01-epic-brief'])
-    expect(missingPrerequisites(RULES, '02-core-flows', new Set(['00-start-here', '01-epic-brief']))).toEqual([])
+    expect(missingPrerequisites(RULES, '02-frontend', new Set())).toEqual(['00-start-here', '01-arquitetura'])
+    expect(missingPrerequisites(RULES, '02-frontend', new Set(['00-start-here']))).toEqual(['01-arquitetura'])
+    expect(missingPrerequisites(RULES, '02-frontend', new Set(['00-start-here', '01-arquitetura']))).toEqual([])
   })
 
   it('leaves a skill without a rule free', () => {
@@ -58,8 +58,8 @@ describe('the load-order rule', () => {
   })
 
   it('tells the model what to load first', () => {
-    expect(prerequisiteText('02-core-flows', ['00-start-here', '01-epic-brief']))
-      .toMatch(/requires "00-start-here", then "01-epic-brief" to be loaded earlier in this session/)
+    expect(prerequisiteText('02-frontend', ['00-start-here', '01-arquitetura']))
+      .toMatch(/requires "00-start-here", then "01-arquitetura" to be loaded earlier in this session/)
   })
 
   it('refuses malformed rules at load', () => {

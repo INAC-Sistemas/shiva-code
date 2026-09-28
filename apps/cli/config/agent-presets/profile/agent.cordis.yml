@@ -299,11 +299,9 @@
     # stage loads only after /00-start-here and the previous stage were loaded
     # earlier in the same session. 10 and 11 are helpers that need only 00.
     prerequisites:
-      01-epic-brief: [00-start-here]
-      02-core-flows: [00-start-here, 01-epic-brief]
-      03-plano: [00-start-here, 02-core-flows]
-      04-construcao: [00-start-here, 03-plano]
-      05-revisao: [00-start-here, 04-construcao]
+      01-arquitetura: [00-start-here]
+      02-frontend: [00-start-here, 01-arquitetura]
+      03-backend: [00-start-here, 02-frontend]
       10-profiles: [00-start-here]
       11-connections: [00-start-here]
 

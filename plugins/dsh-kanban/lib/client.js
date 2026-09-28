@@ -177,7 +177,7 @@ function KanbanView(props) {
     return h('div', { className: 'kb-root' },
       h('div', { className: 'kb-hint' },
         h('div', null, 'Este workspace ainda não tem a pasta ', h('code', null, 'mds/'), '.',
-          h('br'), 'As tarefas aparecem aqui quando ', h('code', null, '04-construcao'), ' escreve ', h('code', null, 'mds/epics/<epic>/tarefas/*.md'), '.')),
+          h('br'), 'As tarefas aparecem aqui quando ', h('code', null, '02-frontend'), ' e ', h('code', null, '03-backend'), ' escrevem ', h('code', null, 'mds/epics/<epic>/tarefas/*.md'), '.')),
       toast && h('div', { className: 'kb-toast' + (toast.err ? ' err' : '') }, toast.msg))
   }
 
@@ -194,7 +194,7 @@ function KanbanView(props) {
       h('button', { className: 'kb-btn', title: 'Recarregar', onClick: loadList }, '⟳')),
     cards && cards.length === 0
       ? h('div', { className: 'kb-hint' },
-        h('div', null, 'Nenhuma tarefa ainda.', h('br'), 'Elas ficam em ', h('code', null, 'mds/epics/<epic>/tarefas/'), ' (skill /04-construcao).'))
+        h('div', null, 'Nenhuma tarefa ainda.', h('br'), 'Elas ficam em ', h('code', null, 'mds/epics/<epic>/tarefas/'), ' (skills /02-frontend e /03-backend).'))
       : h('div', { className: 'kb-board' },
         columns.map((col) => h('div', { key: col.id, className: 'kb-col' },
           h('div', { className: 'kb-col-h' },

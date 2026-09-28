@@ -1,18 +1,18 @@
 ---
 name: ui-palette
-description: Let the requester choose the product's color palette before the first screen is built — propose palettes from the brief and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/03-palette.md, the one source of every color the React app uses.
-whenToUse: At the start of /03-plano, before any screen is built. Also when /03-plano records the frontend stack, when /04-construcao briefs a UI tarefa, and whenever the requester asks to change the product's colors.
+description: Let the requester choose the product's color palette before the first screen is built — propose palettes from the architecture and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/02-palette.md, the one source of every color the React app uses.
+whenToUse: At the start of /02-frontend, before any page is built. Also when /01-arquitetura records the frontend stack, when /02-frontend briefs a UI tarefa, and whenever the requester asks to change the product's colors.
 ---
 
 # UI palette
 
-The requester chooses the colors; the agent proposes, renders and checks them. Every color the product shows comes from `mds/epics/<epic>/03-palette.md`, through the React app's theme CSS variables. A color literal anywhere else, or a default Tailwind color (`bg-blue-600`) standing in for a palette role, is a defect.
+The requester chooses the colors; the agent proposes, renders and checks them. Every color the product shows comes from `mds/epics/<epic>/02-palette.md`, through the React app's theme CSS variables. A color literal anywhere else, or a default Tailwind color (`bg-blue-600`) standing in for a palette role, is a defect.
 
 ## 1. Propose options
 
-Read `01-brief.md` (tone, audience, sector, brand) and the project's `AGENTS.md` before proposing; the Products table of `skill ui-ux-pro-max` gives the usual color mood of the product type. Then prepare **3 or 4 palettes**:
+Read `01-arquitetura.md` (tone, audience, sector, brand) and the project's `AGENTS.md` before proposing; the Products table of `skill ui-ux-pro-max` gives the usual color mood of the product type. Then prepare **3 or 4 palettes**:
 
-- Brand colors already named by the requester (brief, AGENTS.md, an existing CSS file, a logo in the workspace) become the first option, built around them. Otherwise the palette that best fits the brief's tone is first and is the recommendation.
+- Brand colors already named by the requester (brief, AGENTS.md, an existing CSS file, a logo in the workspace) become the first option, built around them. Otherwise the palette that best fits the tone of the architecture is first and is the recommendation.
 - Each palette has a short name and one sentence of consequence the requester can feel ("sober, reads as financial trust"; "warm, approachable for a family audience"), never color theory.
 - Each palette defines every role below in **light and dark**, as 6-digit hex (`#0F766E`, never `#0F7`):
 
@@ -60,9 +60,9 @@ Whatever the source, the answer defines five roles at most; section 1 needs ever
    ```
 
    For each failing pair, compute the smallest lightness change of the **derived** color (or of the requester's color when both sides are theirs) that passes.
-4. **Confirm a fix.** When a pair fails, call `palette_pick` again with two `suggestions` — "Como enviada" and "Com ajuste de contraste (recomendada)" — and a `question` naming the pair, its ratio and the adjusted hex. The requester's decision stands: a palette kept below AA is recorded with the failing pairs listed in `03-palette.md`.
+4. **Confirm a fix.** When a pair fails, call `palette_pick` again with two `suggestions` — "Como enviada" and "Com ajuste de contraste (recomendada)" — and a `question` naming the pair, its ratio and the adjusted hex. The requester's decision stands: a palette kept below AA is recorded with the failing pairs listed in `02-palette.md`.
 
-## 5. Record `mds/epics/<epic>/03-palette.md`
+## 5. Record `mds/epics/<epic>/02-palette.md`
 
 ```markdown
 ---
@@ -85,7 +85,7 @@ requester_words: "<their answer, verbatim>"
 <every pair with its light and dark ratio; any accepted failure and the requester's words>
 ```
 
-The palette is validated before the first screen. A change after that is the requester's call at a screen's validation: record it in `04-decisoes.md` with their words, then update `03-palette.md` and the app's theme CSS together.
+The palette is validated before the first screen. A change after that is the requester's call at a screen's validation: record it in `decisoes.md` with their words, then update `02-palette.md` and the app's theme CSS together.
 
 ## 6. Apply in the React app
 
@@ -97,4 +97,4 @@ A builder subagent does this, after the principal creates the frontend with `sha
 
 ## Done
 
-`03-palette.md` is `validated` with every role in light and dark and its contrast table; the app's theme CSS matches it value for value; a `grep -rnE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]'` over the components has no hit; and a real-browser screenshot shows the product in the chosen colors. A color literal outside the theme files is RED at evaluation.
+`02-palette.md` is `validated` with every role in light and dark and its contrast table; the app's theme CSS matches it value for value; a `grep -rnE '#[0-9a-fA-F]{3,8}\b|(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]'` over the components has no hit; and a real-browser screenshot shows the product in the chosen colors. A color literal outside the theme files is RED at evaluation.

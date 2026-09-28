@@ -1,7 +1,7 @@
 ---
 name: frontend-design
-description: Give every interface a deliberate visual direction — named aesthetic, font pairing, composition, depth and a motion language where every page animates — record it as mds/epics/<epic>/03-design.md, and build screens that could not be mistaken for a template.
-whenToUse: In /03-plano right after /ui-palette, before the first screen is built; whenever a page, landing, dashboard or component is created or restyled in the React app, when /03-plano records fonts and motion, and when /04-construcao briefs a UI tarefa.
+description: Give every interface a deliberate visual direction — named aesthetic, font pairing, composition, depth and a motion language where every page animates — record it as mds/epics/<epic>/02-design.md, and build screens that could not be mistaken for a template.
+whenToUse: At the start of /02-frontend right after /ui-palette, before the first screen is built; whenever a page, landing, dashboard or component is created or restyled in the React app, and when /02-frontend briefs a UI tarefa.
 ---
 
 # Frontend design
@@ -12,16 +12,16 @@ You are a designer-engineer, not a layout generator. Every screen expresses one 
 
 | Decided here | Decided elsewhere |
 |---|---|
-| Aesthetic direction, differentiation anchor | Colors — `03-palette.md` via `/ui-palette` |
+| Aesthetic direction, differentiation anchor | Colors — `02-palette.md` via `/ui-palette` |
 | Font pairing and type scale | Controls — shadcn/ui via `/shadcn-ui` |
 | Composition, spacing rhythm, depth, texture | Icons — Lucide/Tabler via `/ui-icons` |
-| Motion language and motion tokens | Screens, fields, flows — `02-flows.md` and each screen's tarefa |
+| Motion language and motion tokens | Screens, fields, flows — `01-arquitetura.md` and each screen's tarefa |
 
 "Commit to a color story" means choosing how the palette's roles dominate (one dominant surface tone, `primary` for action, `accent` sparingly), never adding colors. Gradients, glows, grain and meshes are built from palette roles (`from-primary/20 via-background to-accent/10`), never from literals or default Tailwind colors.
 
 ## 1. Decide the direction
 
-Read `01-brief.md` (audience, tone, sector) and `03-palette.md` first. `skill ui-ux-pro-max` gives, for the product type, the recommended style, landing pattern, font pairings and signature effects; start there, then commit.
+Read `01-arquitetura.md` (audience, tone, sector) and `02-palette.md` first. `skill ui-ux-pro-max` gives, for the product type, the recommended style, landing pattern, font pairings and signature effects; start there, then commit.
 
 1. **Purpose** — persuasive (landing), functional (app, dashboard), exploratory (catalog), expressive (portfolio, brand).
 2. **Tone** — one dominant direction, at most two blended: editorial, luxury minimal, industrial utilitarian, playful, organic, retro-futurist, brutalist, Swiss, data-dense precise, soft/rounded.
@@ -85,7 +85,7 @@ The direction tunes values inside the ranges in the comments (luxury: slower, so
 
 ## 4. Implementation
 
-**React app (`/04-construcao`).** Before a `browser` `screenshot`, wait longer than the entrance sequence (`wait_for` the last entering element, then about one second).
+**React app (`/02-frontend`).** Before a `browser` `screenshot`, wait longer than the entrance sequence (`wait_for` the last entering element, then about one second).
 - `pnpm add motion`; import from `motion/react` (`motion`, `AnimatePresence`, `MotionConfig`, `stagger`). In Next.js App Router, animated components are client components.
 - Wrap the app once in `<MotionConfig reducedMotion="user">`.
 - Entrance: a parent `motion.div` with `variants` and `transition={{ delayChildren: stagger(0.06) }}`; children with `initial="hidden" animate="show"`.
@@ -93,9 +93,9 @@ The direction tunes values inside the ranges in the comments (luxury: slower, so
 - State changes: `AnimatePresence` for conditional content and list items (`layout` only on small lists); shadcn overlays already animate through `tw-animate-css` (`data-[state=open]:animate-in`) — tune their durations to the tokens, do not replace them.
 - Tokens live in the theme CSS: the `:root` variables above plus Tailwind v4 `@theme` entries (`/tailwind-patterns`).
 
-## 5. Record `mds/epics/<epic>/03-design.md`
+## 5. Record `mds/epics/<epic>/02-design.md`
 
-Inside a build process, write it in `/03-plano`, after `03-palette.md` and before the first screen:
+Inside a build process, write it at the start of `/02-frontend`, after `02-palette.md` and before the first screen:
 
 ```markdown
 ---
@@ -118,13 +118,13 @@ entrance: <what enters, how> · reveal: <…> · feedback: <…> · state: <…>
 signature: <the signature moment and where it appears>
 ```
 
-Announce the direction to the requester in one or two plain sentences in their language ("elegant and calm, with large serif headings and smooth reveals as you scroll"), not in design jargon. The screens they approve validate it: set `status: validated` when the requester approves the first screen. The React app copies its fonts and tokens into the theme CSS; a later change is the requester's call at a screen's validation, recorded in `04-decisoes.md` and applied to `03-design.md` and the theme CSS together.
+Announce the direction to the requester in one or two plain sentences in their language ("elegant and calm, with large serif headings and smooth reveals as you scroll"), not in design jargon. The screens they approve validate it: set `status: validated` when the requester approves the first screen. The React app copies its fonts and tokens into the theme CSS; a later change is the requester's call at a screen's validation, recorded in `decisoes.md` and applied to `02-design.md` and the theme CSS together.
 
 Outside a build process, state the same direction in a few lines of the reply before the code.
 
 ## Done
 
-- The direction, anchor and DFII (8 or more) are stated, and `03-design.md` exists inside a build process.
+- The direction, anchor and DFII (8 or more) are stated, and `02-design.md` exists inside a build process.
 - Fonts load, the scale is used, and no color appears outside the palette roles.
 - Every screen has entrance, reveal (when it scrolls), feedback, state-change and loading motion, driven by the tokens, plus the signature moment somewhere in the product.
 - Reduced motion checked: nothing disappears, nothing blocks input.

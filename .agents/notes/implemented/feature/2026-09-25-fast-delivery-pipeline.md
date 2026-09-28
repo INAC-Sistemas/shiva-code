@@ -37,6 +37,7 @@ No plugin code changes: `dsh-tool-guard` already allows several open tarefas and
 
 ## Consequences
 
+- Superseded in part by [three-stage pipeline: architecture, frontend, backend](2026-09-28-three-stage-pipeline.md). `rapido`/`completo` discovery remains current inside `/01-arquitetura`; the one-screen conveyor was replaced by strictly sequential pages in `/02-frontend`.
 - Up to two tarefas are open at once (one in `human_test`, one in `in_progress` or `code_test`).
 - An adjustment that changes shared code can force rework on the screen already ahead; the one-screen limit bounds it to one screen.
 - A `rapido` brief records the skipped Lean Startup, Canvas and Design Thinking stages under `## Unknowns`.

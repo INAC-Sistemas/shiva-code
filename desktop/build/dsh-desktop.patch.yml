@@ -195,7 +195,7 @@
           - tab: 'dsh-prototype:view'
             path: 'prototype/**'
 
-    # Color palette picker for /03-plano: the "Paletas" tab and the
+    # Color palette picker for /02-frontend: the "Paletas" tab and the
     # palette_pick tool, which opens the tab by itself and returns the
     # requester's choice to the model. Never gated: the palette step belongs to
     # the pipeline, and the tool is inert until the model calls it.

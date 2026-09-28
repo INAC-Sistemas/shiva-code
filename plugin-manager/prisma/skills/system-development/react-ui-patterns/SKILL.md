@@ -1,12 +1,12 @@
 ---
 name: react-ui-patterns
 description: Build every async React screen with complete, animated UI states — loading only without data, skeletons shaped like the content, errors always surfaced with retry, empty states with one next action, disabled triggers with progress, optimistic updates with rollback — using shadcn/ui, sonner toasts and motion.
-whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /04-construcao briefs or evaluates a UI tarefa that touches data.
+whenToUse: Whenever a React component fetches or mutates data, renders a list or collection, submits a form, or shows loading, error or empty states, and when /02-frontend briefs or evaluates a UI tarefa that touches data.
 ---
 
 # React UI patterns
 
-Every screen that touches data has five states: loading, error, empty, success and in-flight action. Each is designed, reachable and animated. Standard controls come from shadcn/ui (`/shadcn-ui`), colors from palette roles (`/ui-palette`), icons from `/ui-icons`, motion from the tokens in `03-design.md` (`/frontend-design`).
+Every screen that touches data has five states: loading, error, empty, success and in-flight action. Each is designed, reachable and animated. Standard controls come from shadcn/ui (`/shadcn-ui`), colors from palette roles (`/ui-palette`), icons from `/ui-icons`, motion from the tokens in `02-design.md` (`/frontend-design`).
 
 ## Principles
 
@@ -19,7 +19,7 @@ Every screen that touches data has five states: loading, error, empty, success a
 
 ## Data layer
 
-Use the query library recorded in `03-plano.md` (TanStack Query below; SWR is equivalent). Never fetch in a raw `useEffect` + `useState` pair: it has no cache, deduplication, retry or cancellation.
+Use the query library recorded in `01-arquitetura.md` (TanStack Query below; SWR is equivalent). Never fetch in a raw `useEffect` + `useState` pair: it has no cache, deduplication, retry or cancellation.
 
 ## Loading
 
@@ -170,6 +170,6 @@ The empty state enters with the same fade + translate as content.
 - [ ] Reduced motion keeps every state visible.
 
 **Validation by the requester**
-- [ ] Each state the requester cannot reach with real data (error, empty) is described in the validation message with how to see it — seed data, a role, or a step that triggers it — so they validate it on the real screen (`/04-construcao`).
+- [ ] Each state the requester cannot reach with real data (error, empty) is described in the validation message with how to see it — a mock fixture, a role, or a step that triggers it — so they validate it on the real screen (`/02-frontend`).
 
 _Adapted from the community `react-ui-patterns` skill._

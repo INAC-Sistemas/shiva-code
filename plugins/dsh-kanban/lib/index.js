@@ -1,7 +1,7 @@
 // dsh-kanban host half: a read/move API over the project's tarefas. A tarefa
 // lives at `mds/epics/<epic>/tarefas/NN-<slug>.md` (older epics use
-// `06-tickets/`) and carries the frontmatter the 04-construcao skill writes
-// (`ticket`, `epic`, `status`, `title`). The board reads that frontmatter; `move`
+// `06-tickets/`) and carries the frontmatter the 02-frontend and 03-backend
+// skills write (`ticket`, `epic`, `status`, `title`). The board reads that frontmatter; `move`
 // rewrites only the `status:` line so every other byte of the ticket stays
 // untouched. Agents edit the same files directly, so the board is a view over
 // the filesystem, never a second source of truth.

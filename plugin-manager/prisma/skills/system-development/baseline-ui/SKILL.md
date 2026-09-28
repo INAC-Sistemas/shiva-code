@@ -1,7 +1,7 @@
 ---
 name: baseline-ui
 description: Enforce the UI baseline that separates finished interfaces from AI-generated slop in Tailwind projects — stack, component, interaction, motion, typography, layout, performance and design constraints — and review a file against them with quoted violations and concrete fixes.
-whenToUse: Whenever UI code is written or reviewed in a React + Tailwind app, when /04-construcao briefs a UI tarefa, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
+whenToUse: Whenever UI code is written or reviewed in a React + Tailwind app, when /02-frontend briefs a UI tarefa, and when the evaluator checks one. Pass a file path to get a review instead of applying the constraints.
 ---
 
 # Baseline UI
@@ -28,7 +28,7 @@ An opinionated floor for every interface. It does not choose the look — `/fron
 
 ## Components
 
-- MUST use accessible primitives for anything with keyboard or focus behavior — the Radix (or Base UI / React Aria, per the shadcn base in `03-plano.md`) primitives behind shadcn. NEVER mix primitive systems within one interaction surface.
+- MUST use accessible primitives for anything with keyboard or focus behavior — the Radix (or Base UI / React Aria, per the shadcn base in `01-arquitetura.md`) primitives behind shadcn. NEVER mix primitive systems within one interaction surface.
 - MUST use the project's existing components before adding new ones.
 - MUST give icon-only buttons an `aria-label`.
 - NEVER rebuild keyboard or focus behavior by hand unless explicitly requested.
@@ -45,7 +45,7 @@ An opinionated floor for every interface. It does not choose the look — `/fron
 
 ## Motion
 
-Pages animate. The motion language and tokens come from `03-design.md` (`/frontend-design` section 3).
+Pages animate. The motion language and tokens come from `02-design.md` (`/frontend-design` section 3).
 
 - MUST give every screen an entrance sequence on first view and a scroll reveal for sections below the fold.
 - MUST give every interactive element hover/press feedback within `--duration-fast` (100–200ms). NEVER exceed 200ms for interaction feedback.
@@ -62,7 +62,7 @@ Pages animate. The motion language and tokens come from `03-design.md` (`/fronte
 - MUST use `text-balance` on headings and `text-pretty` on body paragraphs.
 - MUST use `tabular-nums` for numbers in tables, counters and KPIs.
 - SHOULD use `truncate` or `line-clamp-*` in dense UI.
-- MUST take fonts, the type scale and tracking from `03-design.md`. Letter-spacing (`tracking-*`) changes only through those rules (display headings, uppercase labels), NEVER ad hoc.
+- MUST take fonts, the type scale and tracking from `02-design.md`. Letter-spacing (`tracking-*`) changes only through those rules (display headings, uppercase labels), NEVER ad hoc.
 
 ## Layout
 
@@ -80,7 +80,7 @@ Pages animate. The motion language and tokens come from `03-design.md` (`/fronte
 ## Design
 
 - NEVER use a color outside the palette roles — no hex, `rgb()`, `oklch()` literal or default Tailwind color in components.
-- SHOULD use gradients, glows and textures only as the direction in `03-design.md` defines them, built from palette roles (`from-primary/15 to-accent/10`). NEVER use rainbow or multi-hue gradients the palette does not contain, and NEVER make a glow the only affordance of a control.
+- SHOULD use gradients, glows and textures only as the direction in `02-design.md` defines them, built from palette roles (`from-primary/15 to-accent/10`). NEVER use rainbow or multi-hue gradients the palette does not contain, and NEVER make a glow the only affordance of a control.
 - SHOULD limit accent color to one purpose per view.
 - SHOULD use a consistent shadow scale with a single light direction.
 - MUST give every empty state one clear next action.

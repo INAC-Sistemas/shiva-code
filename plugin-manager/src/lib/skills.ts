@@ -10,7 +10,7 @@ export const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Texto do erro de nome, repetido no cliente e no servidor. */
 export const SKILL_NAME_HINT =
-  "Use apenas minúsculas, números e hífen — por exemplo, 03-plano.";
+  "Use apenas minúsculas, números e hífen — por exemplo, 01-arquitetura.";
 
 /**
  * Teto do corpo de uma skill. O corpo inteiro entra no contexto do modelo

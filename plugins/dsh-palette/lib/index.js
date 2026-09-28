@@ -18,8 +18,8 @@ function log(msg) {
 
 /** What the model is told to do with the answer, next to the colors. */
 const NEXT_STEP = 'Follow skill ui-palette from section 4: map these colors to every role in light and dark '
-  + '(derive the missing ones), measure contrast and record mds/epics/<epic>/03-palette.md; '
-  + '/04-construcao applies it to the app theme CSS (skill ui-palette section 6).'
+  + '(derive the missing ones), measure contrast and record mds/epics/<epic>/02-palette.md; '
+  + '/02-frontend applies it to the app theme CSS (skill ui-palette section 6).'
 
 function createTool(requests) {
   return defineTool({
@@ -28,7 +28,7 @@ function createTool(requests) {
       'Let the requester choose the product color palette in the Paletas tab, which this tool opens by itself. ' +
       'The tab shows preset palettes filterable by color and style, a generator, fields for custom hex colors, and ' +
       'your own suggestions first. The call waits until the requester confirms a palette and returns it ' +
-      '({source, name, colors, roles}), or {cancelled:true}. Use it at the start of /03-plano, before any screen, ' +
+      '({source, name, colors, roles}), or {cancelled:true}. Use it at the start of /02-frontend, before any page, ' +
       'instead of writing a palettes page yourself.',
     parameters: {
       question: { type: 'string', description: 'What to ask, in the requester\'s language (shown above the picker).' },

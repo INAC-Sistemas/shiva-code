@@ -145,6 +145,9 @@ const RENAMED_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["04-tech-plan", "03-plano"],
   ["07-build", "04-construcao"],
   ["08-review", "05-revisao"],
+  ["01-epic-brief", "01-arquitetura"],
+  ["04-construcao", "02-frontend"],
+  ["05-revisao", "03-backend"],
 ];
 
 /**
@@ -156,6 +159,8 @@ const RETIRED_SKILLS: readonly string[] = [
   "03-prototype",
   "05-debate",
   "06-tickets",
+  "02-core-flows",
+  "03-plano",
 ];
 
 /**

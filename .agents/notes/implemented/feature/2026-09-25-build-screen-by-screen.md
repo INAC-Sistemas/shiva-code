@@ -68,6 +68,7 @@ The product owner asked for three changes. The system is built right away. The p
 
 ## Consequences
 
+- Superseded by [three-stage pipeline: architecture, frontend, backend](2026-09-28-three-stage-pipeline.md). Pages are now built frontend-first on typed Zod contracts and a mock API, one page at a time with the requester's approval, and the backend follows in its own stage; `/03-plano`, `/04-construcao` and `/05-revisao` became `/01-arquitetura`, `/02-frontend` and `/03-backend`, and nothing is deployed.
 - The requester is asked something at every screen, which reverses [the build never stops](2026-09-24-build-never-stops-and-shows-its-preview.md) for everything that changes what they receive. The questions asked before the build (brief stage F, the flows, the palette, the plan) are unchanged. The ledger, now `04-decisoes.md`, still holds the technical decisions the agent takes alone between validations.
 - An epic takes as many requester round trips as it has screens, at least. In exchange, nothing reaches them twice, and what they approve is what ships.
 - `dsh-prototype` and its Prototype tab stay installed but no skill uses them. The requester's preview is the Browser tab on `localhost`.

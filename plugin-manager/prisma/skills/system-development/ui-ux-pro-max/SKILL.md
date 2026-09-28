@@ -1,23 +1,23 @@
 ---
 name: ui-ux-pro-max
 description: Choose a product's design system from a built-in catalog — style, landing pattern, color mood, signature effects and font pairing for 96 product types, 57 styles, 57 font pairings and 27 landing patterns — and check UI against prioritized UX rules and a pre-delivery checklist.
-whenToUse: When /frontend-design decides a direction (in /03-plano), when /ui-palette needs the color mood of the product type, when a landing page, dashboard or new product UI is designed, and when UI is reviewed for UX quality.
+whenToUse: When /frontend-design decides a direction (at the start of /02-frontend), when /ui-palette needs the color mood of the product type, when a landing page, dashboard or new product UI is designed, and when UI is reviewed for UX quality.
 ---
 
 # UI/UX Pro Max
 
-A design-intelligence catalog. It recommends; `/frontend-design` commits the direction and records it in `03-design.md`, `/ui-palette` turns the color mood into the requester's palette, and icons stay with `/ui-icons`. Everything needed is in this file — there is no script or data directory to run.
+A design-intelligence catalog. It recommends; `/frontend-design` commits the direction and records it in `02-design.md`, `/ui-palette` turns the color mood into the requester's palette, and icons stay with `/ui-icons`. Everything needed is in this file — there is no script or data directory to run.
 
 ## Workflow
 
-1. **Classify** from `01-brief.md` or the request: product type, audience, industry, tone keywords, stack (React + Tailwind + shadcn).
+1. **Classify** from `01-arquitetura.md` or the request: product type, audience, industry, tone keywords, stack (React + Tailwind + shadcn).
 2. **Product row** — find the closest row in [Products](#products): style, landing pattern, color mood, signature effects. Two close rows: combine, keeping one dominant style.
 3. **Style row** — read the chosen style in [Styles](#styles): its effects become motion and depth decisions, "Not for" is a veto, the accessibility column is a warning to act on.
 4. **Font pairing** — pick from [Typography](#typography) by mood and "best for". Match the script of the requester's language (the Noto rows cover CJK, Arabic, Thai, Hebrew; Vietnamese needs Be Vietnam Pro or Noto).
 5. **Landing pattern** — for marketing pages, follow the section order and CTA placement in [Landing patterns](#landing-patterns).
 6. **Hand over** — the style, pairing, pattern and effects go to `/frontend-design` (section 1), the color mood to `/ui-palette` (section 1). Apply the [UX rules](#ux-rules) while building and run the [checklist](#pre-delivery-checklist) before delivery.
 
-Recommendations are starting points. When the brief contradicts a row (a playful bank, a sober game), the brief wins; say which row you departed from and why.
+Recommendations are starting points. When the architecture contradicts a row (a playful bank, a sober game), the architecture wins; say which row you departed from and why.
 
 ## UX rules
 
@@ -78,7 +78,7 @@ Full rules: `/fixing-accessibility`.
 
 **Visual quality**
 - [ ] No emoji as icons; one icon pack; correct brand logos.
-- [ ] Every color from palette roles; fonts and scale from `03-design.md`.
+- [ ] Every color from palette roles; fonts and scale from `02-design.md`.
 - [ ] Hover states give clear feedback without layout shift.
 
 **Motion**
