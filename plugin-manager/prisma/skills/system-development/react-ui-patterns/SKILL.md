@@ -170,6 +170,6 @@ The empty state enters with the same fade + translate as content.
 - [ ] Reduced motion keeps every state visible.
 
 **Validation by the requester**
-- [ ] Each state the requester cannot reach with real data (error, empty) is described in the validation message with how to see it — a mock fixture, a role, or a step that triggers it — so they validate it on the real screen (`/02-frontend`).
+- [ ] Each state the requester cannot reach with real data (error, empty) is described in the validation message with how to see it — a seed row, a role, or a step that triggers it — so they validate it on the real screen (`/02-frontend`).
 
 _Adapted from the community `react-ui-patterns` skill._

@@ -13,8 +13,10 @@
 //      `testes/`, `.git/`) — the project may use any language and
 //      framework layout — and run build/typecheck; `qa` (post-human regression)
 //      may write only testes/ and run suites; `evaluator` (judges the diff
-//      against the artifacts) writes nothing at all. None may spawn subagents;
-//      none may git commit/push;
+//      against the artifacts) writes nothing at all. Builder and evaluator may
+//      not drive the browser. None may spawn subagents; none may git
+//      commit/push. In a workspace with `mds/epics/` the principal must name a
+//      role on every spawn;
 //   3. mechanical hooks on every write/edit: encoding integrity (no U+FFFD may
 //      be introduced) and the single Kanban transition rule on tarefa files
 //      (`active` only becomes `in_progress`);
@@ -223,14 +225,21 @@ function check(exec, allowedRoots) {
   const role = depth >= 1 && typeof agent?.options?.guardRole === 'string' ? agent.options.guardRole : undefined
   const cwd = str(agent?.session?.header?.cwd) || process.cwd()
 
-  // Role-scoped tool denylist.
-  if (role === 'builder' && (exec.name === 'browser' || exec.name === 'prototype_automation')) {
-    return 'GUARD[builder]: bloqueado — tool de browser/prototype não é do builder; permitido só código — o teste é do principal'
+  // Role-scoped tool denylist. The page in the browser is the principal's
+  // visual check; a builder or evaluator driving it spends model steps on a
+  // functional walk the pipeline forbids before delivery.
+  if ((role === 'builder' || role === 'evaluator') && (exec.name === 'browser' || exec.name === 'prototype_automation')) {
+    return `GUARD[${role}]: bloqueado — tool de browser/prototype não é do ${role}; a conferência visual da página é do principal`
   }
   if ((role === 'builder' || role === 'qa' || role === 'evaluator') && exec.name === 'subagent') {
     return `GUARD[${role}]: bloqueado — subagente não delega (spawn é do principal)`
   }
 
+  // In a pipeline workspace every spawn names its role, so the role policies
+  // above bind: a builder spawned without one inherits the browser.
+  if (depth === 0 && exec.name === 'subagent' && str(args.role) === '' && existsSync(resolve(cwd, 'mds', 'epics'))) {
+    return 'GUARD[principal]: bloqueado — neste workspace (mds/epics/) todo subagente declara `role`: "builder" para escrever código, "evaluator" para revisar; outro nome para trabalho que não toca código'
+  }
   // Shell policy: git for every agent (commits belong to the human); the rest
   // only for the fast builder.
   if (SHELL_TOOLS.has(exec.name)) {

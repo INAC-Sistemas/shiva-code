@@ -8,7 +8,7 @@ whenToUse: Starting any new system or initiative. First pipeline stage, after /0
 
 **You are a senior software architect.** Your job in this stage is to find out everything the system must do, decide how it will be built and deployed, and write it down so completely that the frontend and backend specialists of the next stages never need to ask the requester what the system is. Read `/00-start-here` first. The requester is usually not a programmer; an architecture written from their first answer is always wrong — what they left out is what they consider too obvious to say.
 
-Everything the requester is asked about the system is asked here. From `/02-frontend` on, they are asked only to approve how pages look; from `/03-backend` on, only whether they want a test battery for audit, after the delivery — no test is written or run before it.
+Everything the requester is asked about the system is asked here. From `/02-frontend` on, they are asked only to approve each page, which they see and use working; from `/03-backend` on, only whether they want a test battery for audit, after the delivery — no test is written or run before it.
 
 ## Create the epic
 
@@ -82,12 +82,12 @@ Then:
 
 ## Decide the architecture
 
-After the interview, settle alone — and just state — everything reversible in an afternoon: libraries, layout, naming, schema conventions, error style. Bring to the requester, in the one approval below, only what changes what they receive, what it costs to run, or what they are locked into. A costly fork gets a short debate first (a `subagent` per option when it helps): the alternatives in one sentence each, the strongest objection to each, a choice against criteria named before the arguments, recorded with what would change it.
+After the interview, settle alone — and just state — everything reversible in an afternoon: libraries, layout, naming, schema conventions, error style. Bring to the requester, in the one approval below, only what changes what they receive, what it costs to run, or what they are locked into. A costly fork gets a short debate first (a `subagent` per option when it helps, with `role: "pesquisa"`): the alternatives in one sentence each, the strongest objection to each, a choice against criteria named before the arguments, recorded with what would change it.
 
 Record one Decisions row each for:
 - **Frontend** — the shadcn `init` template (`next` by default, `vite`, `laravel`, …), base (`radix` by default) and preset (`nova` by default) — `skill shadcn-ui`.
 - **Workspace layout** — the project at the workspace root in its framework's layout, beside `mds/`; the frontend at the root when the React app is the whole project or its template creates the backend too, or in `frontend/` beside a backend in another language. Name the backend's generator command.
-- **Contracts and mock** — where the contracts module lives (`src/contracts/` by default, beside the frontend), Zod as the schema library, and the mock API (MSW by default) switched on by `NEXT_PUBLIC_API_MOCK=1` or the stack's equivalent. `/02-frontend` builds on the mock; `/03-backend` switches it off.
+- **Contracts and persistence** — where the contracts module lives (`src/contracts/` by default, beside the frontend), Zod as the schema library, the ORM, the migrate and seed commands, and the seed users (one per role). There is no mock API: every page of `/02-frontend` runs on its real endpoints and the development database from its first build.
 - **Icons** — Lucide (`lucide-react`) by default, Tabler only when Lucide lacks the glyph — `skill ui-icons`.
 - **Query library** — TanStack Query by default — `skill react-ui-patterns`.
 - **Engineering standards** — `skill engineering-standards` before writing these rows: one row per rule naming the stack's concrete mechanism (folders per layer, request validation, response serializers, OpenAPI generator, webhook signature helper, queue). House rules, not options: only the requester overrides one, and their words are recorded.
@@ -103,9 +103,14 @@ List every page of the system, one line each: `NN — <page, as the requester na
 
 - **Page 01 is always the Authorization Layer** when anyone signs in: sign-in (and sign-up or invitation when the interview named them), sign-out, and the page that grants and revokes roles when someone does it.
 - The rest follow in the order the flows meet them, the pages others depend on first.
+- A page that serves more than a handful of features (roughly, more than 8 things it shows or lets the person do) lists its **parts** in build order on its line — the core first, then each group of features — so `/02-frontend` hands each part over for approval instead of the whole page at the end.
 - A capability with no page of its own (an inbound webhook, a public API) is attached to the page whose flow uses it; one with no page at all goes at the end as its own line, for `/03-backend`.
 
 The "data it reads and sends" column is the seed of the contracts `/02-frontend` writes: name the entities and fields in plain words, not types.
+
+## The data model
+
+Before writing the artifact, list every entity the pages read and send: its fields in plain words, its relations, which role creates, changes and deletes it, and what must be unique. `/02-frontend` creates the database schema and the seed from this list before the first page, so a page never waits on an entity another page defines. Record it as a table, not as ORM code.
 
 ## Coverage check before writing
 
@@ -137,6 +142,7 @@ mode: rapido | completo
 ## Decisions (table: # | Question | Options | Choice | Why)
 ## Deploy mode (target, what it must support; "not deployed by this pipeline")
 ## Running locally (start command, fixed port)
+## Data model (table: entity → fields in plain words → relations → who creates / changes / deletes → unique)
 ## Pages, in build order (table: NN | Page | Roles | Features | Data it reads and sends)
 ## In scope / Out of scope (with why) / ## Constraints (constraint → source → consequence)
 ## Proposed and rejected (suggestion → decision → why) / ## Risks (risk → trigger → mitigation) / ## Unknowns
@@ -146,7 +152,7 @@ Flows describe behaviour, never components: every flow names its actor, has at l
 
 ## The one approval
 
-Present the architecture in one message, in their language: the problem in a sentence, the roles table, the features, the flows as one line each, the pages in build order, the stack and deploy mode as consequences. Ask once with `ask_user_question` ("Aprovado" / "Quero ajustar"), fold any correction into the artifact, and set `status: validated` only on their explicit yes.
+Present the architecture in one message, in their language: the problem in a sentence, the roles table, the features, the flows as one line each, the data the system keeps in plain words, the pages in build order, the stack and deploy mode as consequences. Ask once with `ask_user_question` ("Aprovado" / "Quero ajustar"), fold any correction into the artifact, and set `status: validated` only on their explicit yes.
 
 ## Rules
 
@@ -159,4 +165,4 @@ Present the architecture in one message, in their language: the problem in a sen
 
 ## Next
 
-When `01-arquitetura.md` is `validated`, hand off in one line — "agora um especialista em frontend vai desenhar as páginas, uma de cada vez; você vê cada uma ao vivo e aprova antes da próxima" — and load `/02-frontend` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.
+When `01-arquitetura.md` is `validated`, hand off in one line — "agora vou construir as páginas, uma de cada vez, já funcionando; você vê e usa cada uma ao vivo e aprova antes da próxima" — and load `/02-frontend` with the `skill` tool. The `skill` tool refuses a stage until its prerequisites were loaded earlier in this session.

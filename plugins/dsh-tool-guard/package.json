@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-guard",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Tool-seam guard for dsh: each role writes only its own surface (the product is everything outside mds/, prototype/, testes/ and .git/), and no agent may set a ticket's status to done",
   "type": "module",
   "license": "MIT",

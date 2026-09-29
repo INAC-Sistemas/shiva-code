@@ -141,6 +141,27 @@ test('the evaluator writes nothing at all, and delegates nothing', () => {
   )
 })
 
+test('builder and evaluator never drive the browser; the principal does', () => {
+  for (const role of ['builder', 'evaluator']) {
+    for (const tool of ['browser', 'prototype_automation']) {
+      assert.match(guard(exec(tool, { op: 'click' }, { depth: 1, role })), new RegExp(`GUARD\\[${role}\\]`))
+    }
+  }
+  assert.equal(guard(exec('browser', { op: 'screenshot' })), ALLOW)
+})
+
+test('in a pipeline workspace every spawn names its role', () => {
+  const plain = mkdtempSync(join(tmpdir(), 'guard-plain-'))
+  const plainExec = { ...exec('subagent', { prompt: 'x' }), agent: { options: { subagentDepth: 0 }, session: { header: { cwd: plain, delegationDepth: 0 } } } }
+  assert.equal(guard(plainExec), ALLOW, 'outside a pipeline workspace a role stays optional')
+  rmSync(plain, { recursive: true, force: true })
+
+  mkdirSync(join(ws, 'mds/epics/e'), { recursive: true })
+  assert.match(guard(exec('subagent', { prompt: 'x' })), /todo subagente declara `role`/)
+  assert.equal(guard(exec('subagent', { prompt: 'x', role: 'builder' })), ALLOW)
+  assert.equal(guard(exec('subagent', { prompt: 'x', role: 'pesquisa' })), ALLOW)
+})
+
 test('qa surface is unchanged (regression)', () => {
   const qa = { depth: 1, role: 'qa' }
   assert.equal(write('testes/x.test.js', 'x', qa), ALLOW)

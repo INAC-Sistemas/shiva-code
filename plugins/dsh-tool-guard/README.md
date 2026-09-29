@@ -24,6 +24,14 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
    host-side, not through a tool call.
 3. **A tarefa in `active` only moves to `in_progress`.** Applies to tarefa files
    under `mds/epics/<epic>/tarefas/` and the legacy `06-tickets/`.
+4. **Only the principal drives the browser.** `browser` and
+   `prototype_automation` are denied to **builder** and **evaluator**: looking
+   at the page is the principal's visual check, and no subagent walks a flow
+   before delivery.
+5. **In a pipeline workspace every spawn names its role.** When the workspace
+   has `mds/epics/`, a principal `subagent` call without `role` is denied, so
+   the role rules above always bind. Any role name is accepted; only
+   `builder`, `evaluator` and `qa` carry restrictions.
 
 ## Mechanics
 
