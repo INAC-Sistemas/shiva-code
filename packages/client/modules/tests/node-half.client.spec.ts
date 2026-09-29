@@ -1,6 +1,6 @@
 /** Node-half composition diagnostics for package metadata and built client bundles. */
 
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -271,6 +271,28 @@ describe('client bundle activation', () => {
       expect(service.graph().entries.map(entry => entry.id)).toEqual([packageName])
     },
   )
+
+  it('serves a package whose manifest starts with a UTF-8 byte order mark', () => {
+    const packageName = '@fixture/bom-manifest'
+    const clientPath = writePackage(packageName)
+    const manifestPath = join(dirname(dirname(clientPath)), 'package.json')
+    // Windows tooling writes manifests with a byte order mark; Node's own
+    // module loader ignores it, and plain JSON.parse does not.
+    writeFileSync(manifestPath, `﻿${readFileSync(manifestPath, 'utf8')}`)
+    const hostPath = join(dirname(clientPath), 'index.js')
+    mkdirSync(dirname(hostPath), { recursive: true })
+    writeFileSync(hostPath, 'export default {}\n')
+    writeFileSync(clientPath, 'module.exports = {}\n')
+    const resolveSync = () => ({ format: 'module' as const, url: pathToFileURL(hostPath).href })
+    const internal = { version: 'v1' as const, resolveSync }
+
+    const { service } = constructWithRoute([packageName], {
+      internal: internal as NonNullable<Context['loader']['internal']>,
+    })
+
+    expect(service.clientPath(packageName)).toBe(clientPath)
+    expect(service.graph().entries.map(entry => entry.id)).toEqual([packageName])
+  })
 
   it('derives the browser module id from a file entry owning manifest', () => {
     const packageName = '@fixture/file-entry'

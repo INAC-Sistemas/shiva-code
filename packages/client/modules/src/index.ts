@@ -172,6 +172,18 @@ const SOURCE_MAP_TRAILER = /(?:\r?\n)?\/\/# sourceMappingURL=[^\r\n]*(?:\r?\n)?$
 /** Debugger source name appended to page bundles in the WebWorker image. */
 const SOURCE_URL_TRAILER = /(?:\r?\n)?\/\/# sourceURL=([^\r\n]+)(?:\r?\n)?$/
 
+/**
+ * Parse a manifest the way Node's own module loader does: a leading UTF-8 byte
+ * order mark is ignored. Windows tooling writes manifests with one, and plain
+ * `JSON.parse` rejects it, which dropped the package's browser module from the
+ * roster while its host half loaded normally.
+ * @param path - absolute path of the manifest.
+ * @returns the parsed manifest.
+ */
+function readManifest(path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path, 'utf8').replace(/^﻿/, '')) as Record<string, unknown>
+}
+
 /** Resolve `exports["./client"]` to a relative path, accepting the string and one-level conditional forms. */
 function clientExportOf(pkgName: string, exportsField: unknown): string | undefined {
   if (typeof exportsField !== 'object' || exportsField === null) return undefined
@@ -719,7 +731,7 @@ export class ClientModuleRegistry extends Service {
       return null
     }
     const { packageName, path: pkgPath } = located
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, unknown>
+    const pkg = readManifest(pkgPath)
     const dsh = pkg.dsh
     const decl = parseDshClient(
       packageName,
@@ -802,7 +814,7 @@ export class ClientModuleRegistry extends Service {
       const candidate = join(dir, 'package.json')
       if (existsSync(candidate)) {
         try {
-          const name = (JSON.parse(readFileSync(candidate, 'utf8')) as { name?: unknown }).name
+          const name = readManifest(candidate).name
           if (typeof name === 'string' && (expectedPackageName === undefined || name === expectedPackageName)) {
             return { path: candidate, packageName: name }
           }

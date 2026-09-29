@@ -1,7 +1,34 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js b/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
 --- a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
 +++ b/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
-@@ -684,7 +684,15 @@ var ClientModuleRegistry = class extends Service {
+@@ -152,6 +152,17 @@ function parseDshClient(pkgName, value) {
+ 		...decl.immediately !== void 0 ? { immediately: decl.immediately } : {}
+ 	};
+ }
++/**
++* Parse a manifest the way Node's own module loader does: a leading UTF-8 byte
++* order mark is ignored. Windows tooling writes manifests with one, and plain
++* `JSON.parse` rejects it, which dropped the package's browser module from the
++* roster while its host half loaded normally.
++* @param path - absolute path of the manifest.
++* @returns the parsed manifest.
++*/
++function readManifest(path) {
++	return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
++}
+ /** Resolve `exports["./client"]` to a relative path, accepting the string and one-level conditional forms. */
+ function clientExportOf(pkgName, exportsField) {
+ 	if (typeof exportsField !== "object" || exportsField === null) return void 0;
+@@ -625,7 +636,7 @@ var ClientModuleRegistry = class extends Service {
+ 			return null;
+ 		}
+ 		const { packageName, path: pkgPath } = located;
+-		const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
++		const pkg = readManifest(pkgPath);
+ 		const dsh = pkg.dsh;
+ 		const decl = parseDshClient(packageName, dsh !== null && typeof dsh === "object" ? dsh.client : void 0);
+ 		if (decl === void 0 || decl.platform !== "web") {
+@@ -684,7 +695,15 @@ var ClientModuleRegistry = class extends Service {
  				attributes: {}
  			}).url : internal.resolveSync(loaderName, baseUrl, {}).url;
  		} catch {
@@ -18,3 +45,12 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js b/node_mo
  		}
  		return this.nearestPackage(moduleUrl, expectedPackageName);
  	}
+@@ -694,7 +713,7 @@ var ClientModuleRegistry = class extends Service {
+ 		while (true) {
+ 			const candidate = join(dir, "package.json");
+ 			if (existsSync(candidate)) try {
+-				const name = JSON.parse(readFileSync(candidate, "utf8")).name;
++				const name = readManifest(candidate).name;
+ 				if (typeof name === "string" && (expectedPackageName === void 0 || name === expectedPackageName)) return {
+ 					path: candidate,
+ 					packageName: name
