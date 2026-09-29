@@ -51,6 +51,9 @@ Load the subagent service, an in-process or remote backend, and this tool; then 
 | `persona` | — | Per-child persona; requires the provider's `persona` capability |
 | `toolFilter` | — | Per-child global-tool restriction; requires the `toolFilter` capability |
 | `maxDepth` | `3` | Absolute delegation-depth cap (`0` forbids delegation); `'provider-managed'` sends no cap to an out-of-process provider |
+| `agentPreset` | — | Agent preset every child mounts instead of the caller's composition, so its tools, prompt sections, and skills are that preset's alone; requires the provider's `agentPreset` capability (spawn only) |
+| `outputSchema` | — | Object-rooted JSON Schema for the child's final answer, returned as `structured`; requires `backgroundMode: one-shot`, `enableRunInBackground: false`, and the provider's `outputSchema` capability |
+| `toolDescription` | — | Replaces the provider-derived tool description so several instances describe distinct roles; background guidance is still appended |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-subagent) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -177,7 +180,7 @@ Prefix-stable while the section text and tool presence are unchanged; removing t
 
 #### What the model sees
 
-The call retains the description and prompt. Success contains only the child's final text; other outcomes become `Error: <stop reason>`, followed by a safe provider diagnostic when present and then any partial assistant text. Intermediate child steps stay out of the parent.
+The call retains the description and prompt. Success contains only the child's final text, or the pretty-printed JSON `structured` value when the instance configures `outputSchema`; other outcomes become `Error: <stop reason>`, followed by a safe provider diagnostic when present and then any partial assistant text. Intermediate child steps stay out of the parent.
 
 #### Token effect
 

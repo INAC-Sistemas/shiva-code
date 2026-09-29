@@ -26,6 +26,7 @@ import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-se
 import {
   childSessionMeta,
   captureDelegatedPolicyOverrides,
+  prepareChildComposition,
   resolveChildAgentOptions,
   resolveChildDepth,
 } from './child-agent.ts'
@@ -123,6 +124,7 @@ export class SubagentContinuationManager {
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
+      ...request.agentPreset !== undefined ? { agentPreset: request.agentPreset } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.
@@ -137,6 +139,12 @@ export class SubagentContinuationManager {
         sessionId: childId,
         parent,
         signal: spec.signal,
+      })
+      spec.signal.throwIfAborted()
+      const composition = await prepareChildComposition(parent, {
+        persona: request.persona,
+        toolFilter: request.toolFilter,
+        agentPreset: request.agentPreset,
       })
       spec.signal.throwIfAborted()
       this.activations.assertAdmitting(parent)
@@ -162,13 +170,13 @@ export class SubagentContinuationManager {
           parent,
           create: {
             seed,
-            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined),
+            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined, composition),
             inheritedEventCount,
             delegatedPolicies,
             descriptor,
           },
           agentOptions,
-          composition: { persona: request.persona, toolFilter: request.toolFilter },
+          composition,
           signal: spec.signal,
         })
         const childHeader = activation.handle.agent.session.header
@@ -431,6 +439,12 @@ export class SubagentContinuationManager {
     }
     let activation: Activation
     try {
+      const composition = await prepareChildComposition(parent, {
+        persona: descriptor.persona,
+        toolFilter: descriptor.toolFilter,
+        agentPreset: descriptor.agentPreset,
+      })
+      options.signal.throwIfAborted()
       activation = await this.activations.materialize({
         childId,
         provider: descriptor.provider,
@@ -442,7 +456,7 @@ export class SubagentContinuationManager {
             ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
             : {},
         },
-        composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        composition,
         signal: options.signal,
       })
     } catch (error: unknown) {

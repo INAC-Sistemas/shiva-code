@@ -146,6 +146,25 @@ describe('the roster a client reads', () => {
     expect(roster.presets.find(row => row.id === 'damaged')?.broken).toEqual(expect.any(String))
   })
 
+  it('omits a hidden preset from the roster while it still resolves by id', async () => {
+    const userRoot = await mkdtemp(join(tmpdir(), 'dsh-preset-remote-'))
+    roots.push(userRoot)
+    await mkdir(join(userRoot, 'role'), { recursive: true })
+    await writeFile(join(userRoot, 'role', COMPOSITION_FILE), VALID)
+    await writeFile(join(userRoot, 'role', METADATA_FILE), 'hidden: true\n')
+    const ctx = await harness({
+      default: 'standard',
+      roots: [{ path: join(FIXTURES, 'system'), trust: 'system' }, { path: userRoot, trust: 'user' }],
+      includeShippedRoot: false,
+      includeUserRoot: false,
+    })
+
+    const roster = await ctx.agentPresets.remoteExportList()
+
+    expect(roster.presets.map(row => row.id)).not.toContain('role')
+    expect((await ctx.agentPresets.resolve('role')).hidden).toBe(true)
+  })
+
   it('answers an empty roster with nothing authorable', async () => {
     const ctx = await harness({ default: 'standard', roots: [], includeShippedRoot: false, includeUserRoot: false })
 

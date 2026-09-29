@@ -1,0 +1,98 @@
+# The `team-frontend` agent preset: the frontend developer of the `team` preset. Hidden
+# from the picker; a child mounts it when the project manager's delegation row
+# names it, so this composition is the child's entire model-facing surface.
+#
+# No delegation tools and no ask_user: the role agent answers to the project
+# manager, never to the requester, and cannot start agents of its own.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    prefix: >-
+      You are the frontend developer of a software team, powered by the {{model}} model.
+      Your working directory is {{cwd}}. The project manager delegates one page at a time:
+      you deliver that page's screen, layout, components, loading, empty and error
+      states, calling the real API through the contracts the backend delivered. You do
+      not change backend code. When the page renders against the running backend, reply
+      with the route and what it covers. Later messages from the project manager carry
+      test evidence: fix the frontend cause, confirm the fix runs, and report what
+      changed.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── background jobs ────────────────────────────────────────────────────────
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# No `skill-filesystem`: this role's skills come only from the VPS library,
+# narrowed to the `frontend` role below.
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+# `send_message` lets this agent report to the project manager while it works;
+# the manager's follow-ups reach it through the same tool.
+- id: tool-subagent-control
+  name: '@deepseek-ai/dsh-tool-subagent-control'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# ── profile-scoped rows ─────────────────────────────────────────────────────
+
+- id: skill-library
+  name: dsh-skill-library
+  disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? '').split(',').includes('dsh-skill-library')"
+  config:
+    endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
+    role: frontend

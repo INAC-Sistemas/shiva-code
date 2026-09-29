@@ -8,6 +8,26 @@
  */
 export const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Papéis de agente que uma skill pode servir. Cada papel é um preset do `dsh`
+ * (`team`, `team-backend`, `team-frontend`, `team-tester`) cuja linha
+ * `skill-library` declara o papel; o servidor serve a esse agente só as skills
+ * do perfil marcadas com ele.
+ */
+export const KNOWN_AGENT_ROLES = ["pm", "backend", "frontend", "tester"] as const;
+
+/** Um papel de {@link KNOWN_AGENT_ROLES}. */
+export type AgentRole = (typeof KNOWN_AGENT_ROLES)[number];
+
+/**
+ * Se um valor é um papel conhecido.
+ * @param value - valor vindo de wire, formulário ou frontmatter.
+ * @returns verdadeiro quando é um de {@link KNOWN_AGENT_ROLES}.
+ */
+export function isAgentRole(value: unknown): value is AgentRole {
+  return typeof value === "string" && (KNOWN_AGENT_ROLES as readonly string[]).includes(value);
+}
+
 /** Texto do erro de nome, repetido no cliente e no servidor. */
 export const SKILL_NAME_HINT =
   "Use apenas minúsculas, números e hífen — por exemplo, 01-arquitetura.";

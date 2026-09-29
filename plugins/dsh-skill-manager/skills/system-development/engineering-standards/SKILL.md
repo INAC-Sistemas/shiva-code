@@ -2,6 +2,7 @@
 name: engineering-standards
 description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — its files written only when the requester asks for them — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /01-arquitetura records, what /02-frontend and /03-backend require, and what their evaluators reject.
 whenToUse: In /01-arquitetura before writing Decisions, in /02-frontend and /03-backend when writing each tarefa's Done when, and for every builder and evaluator briefing of a backend, API or UI tarefa.
+roles: [pm, backend, frontend]
 ---
 
 # Engineering standards

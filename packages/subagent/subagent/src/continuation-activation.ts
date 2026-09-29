@@ -24,12 +24,11 @@ import type {
   SessionLogOffset as SessionLogOffsetType,
   UserMessage,
 } from '@deepseek-ai/dsh-session'
-import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 import {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
 } from './child-agent.ts'
-import type { DelegatedPolicyOverrides } from './child-agent.ts'
+import type { DelegatedPolicyOverrides, PreparedChildComposition } from './child-agent.ts'
 import { createSettlementMessage } from './continuation-messages.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
 import { SubagentError } from './error.ts'
@@ -103,7 +102,8 @@ export interface MaterializeInputs {
     descriptor: SubagentDescriptorData
   }
   agentOptions: AgentOptions
-  composition: { persona?: string | undefined; toolFilter?: ToolRestriction | undefined }
+  /** Per-child composition, its role preset already prepared by the caller. */
+  composition: PreparedChildComposition
   signal: AbortSignal
 }
 

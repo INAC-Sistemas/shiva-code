@@ -32,6 +32,13 @@ export interface PluginReference {
 
 const root = resolve(import.meta.dirname, '..')
 
+/** Preset roots whose compositions may delegate to sibling role presets. */
+const PRESET_ROOTS = [
+  'packages/preset/agent-presets/presets',
+  'apps/cli/config/agent-presets',
+  'desktop/build/agent-presets',
+]
+
 /** The desktop shell's composition patch, where the shiva-code plugins are mounted. */
 const DESKTOP_PATCH_FILE = 'desktop/build/dsh-desktop.patch.yml'
 
@@ -126,6 +133,7 @@ if (import.meta.main) {
   errors.push(...validateSourcePlaneResolution())
   errors.push(...validatePresetPlaneSeparation())
   errors.push(...validateProfilePlaneDeclared())
+  errors.push(...validateDelegationPresetReferents())
   errors.push(...validateClientHalvesDeclared())
 
   if (errors.length > 0) {
@@ -218,6 +226,56 @@ function validatePresetPlaneSeparation(): string[] {
     }
   }
   return problems
+}
+
+/**
+ * Every delegation row's `agentPreset` names a preset beside the composition
+ * that declares it.
+ *
+ * A misspelled or undeployed role preset would otherwise surface only when the
+ * model first delegates, as an `AGENT_PRESET_UNAVAILABLE` tool error.
+ * @returns one diagnostic per delegation row naming a missing sibling preset.
+ */
+function validateDelegationPresetReferents(): string[] {
+  return PRESET_ROOTS.flatMap(presetRoot =>
+    globSync(`${presetRoot}/*/agent.cordis.yml`, { cwd: root }).flatMap(file =>
+      missingDelegationPresets(loadEntries(file), dirname(dirname(resolve(root, file))))
+        .map(({ id, agentPreset }) =>
+          `${file}: row "${id}" delegates to agentPreset "${agentPreset}", which is not a preset in ${presetRoot}`),
+    ),
+  )
+}
+
+/**
+ * The delegation rows of one composition whose `agentPreset` has no composition
+ * file in `presetRoot`.
+ *
+ * Exported for the spec, which proves a missing referent is rejected.
+ * @param entries - the parsed composition rows.
+ * @param presetRoot - absolute directory holding one subdirectory per preset.
+ * @returns the id and named preset of each row whose referent is missing.
+ */
+export function missingDelegationPresets(
+  entries: unknown[],
+  presetRoot: string,
+): { id: string; agentPreset: string }[] {
+  const missing: { id: string; agentPreset: string }[] = []
+  const walk = (value: unknown): void => {
+    if (isUnknownArray(value)) {
+      for (const item of value) walk(item)
+      return
+    }
+    if (!isRecord(value)) return
+    const config = value.config
+    if (value.name === '@deepseek-ai/dsh-tool-subagent' && isRecord(config)
+      && typeof config.agentPreset === 'string' && typeof value.id === 'string'
+      && globSync(`${config.agentPreset}/agent.cordis.yml`, { cwd: presetRoot }).length === 0) {
+      missing.push({ id: value.id, agentPreset: config.agentPreset })
+    }
+    if (isUnknownArray(config)) walk(config)
+  }
+  walk(entries)
+  return missing
 }
 
 /**

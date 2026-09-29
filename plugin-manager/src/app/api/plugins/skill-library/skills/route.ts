@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { authenticatePluginRequest } from "@/lib/plugin-auth";
-import { listSkills } from "@plugins/skill-library";
+import {
+  SkillLibraryRequestError,
+  assertOptionalAgentRole,
+  listSkills,
+} from "@plugins/skill-library";
 
 /**
  * GET /api/plugins/skill-library/skills
+ * Query:  role?=pm|backend|frontend|tester — serve só as skills com esse papel
  * Header: Authorization: Bearer <token>
  * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
  *         selecionado não inclui `dsh-skill-library`
+ * 400:    { error } — papel desconhecido
  * 200:    { revision, skills: [{ name, description, whenToUse?, invocation, revision }] }
  *
  * O catálogo, sem corpo — o corpo sai por `/skills/<name>`.
@@ -28,9 +34,11 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   try {
-    const { revision, skills, profileId } = await listSkills({
-      userId: auth.session.userId,
-    });
+    const role = assertOptionalAgentRole(new URL(request.url).searchParams.get("role"));
+    const { revision, skills, profileId } = await listSkills(
+      { userId: auth.session.userId },
+      role,
+    );
 
     return NextResponse.json(
       { revision, skills },
@@ -45,6 +53,13 @@ export async function GET(request: Request) {
       },
     );
   } catch (error) {
+    if (error instanceof SkillLibraryRequestError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
+
     console.error("Falha ao listar a biblioteca de skills:", error);
 
     return NextResponse.json(

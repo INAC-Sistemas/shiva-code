@@ -26,6 +26,7 @@ import {
   captureDelegatedPolicyOverrides,
   childSessionMeta,
   finalAssistantOutput,
+  prepareChildComposition,
   resolveChildAgentOptions,
   resolveChildDepth,
 } from '@deepseek-ai/dsh-subagent'
@@ -117,14 +118,18 @@ export async function startInProcessRun(
   // Capture before the first await: a later parent switch belongs to the
   // parent's future.
   const inherited = captureDelegatedPolicyOverrides(parent)
+  const composition = await prepareChildComposition(parent, {
+    persona: request.persona,
+    toolFilter: request.toolFilter,
+    agentPreset: request.agentPreset,
+  })
+  // The creation transaction below observes `request.signal`, so a cancel
+  // that landed while the preset mounted still publishes no child.
 
   let structured: StructuredAttachment | undefined
   const setup = (childCtx: Context, child: Agent): void => {
     appendDelegatedPolicyOverrides(child.session, inherited)
-    applyChildComposition(childCtx, parent, {
-      persona: request.persona,
-      toolFilter: request.toolFilter,
-    })
+    applyChildComposition(childCtx, parent, composition)
     if (request.outputSchema !== undefined) {
       structured = attachStructuredRuntime(childCtx, request.outputSchema)
     }
@@ -134,7 +139,7 @@ export async function startInProcessRun(
   const handle = await parent.ctx.agents.create({
     sessionId: childId,
     parentAgent: parent,
-    meta: childSessionMeta(parent, childDepth, seed !== undefined),
+    meta: childSessionMeta(parent, childDepth, seed !== undefined, composition),
     ...seed !== undefined ? { seed } : {},
     ...seed === undefined ? {} : { inheritedEventCount: activationBoundary },
     agentOptions: resolveChildAgentOptions(parent, request.agentOptions, childDepth),

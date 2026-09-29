@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Include from '@deepseek-ai/cordis-plugin-include'
+import AgentPresets from '@deepseek-ai/dsh-agent-presets'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -20,6 +24,7 @@ import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '
 import SubagentRuntime, {
   SubagentError,
   SUBAGENT_DESCRIPTOR_VERSION,
+  SUBAGENT_PRESET_DESCRIPTOR_VERSION,
 } from '../src/index.ts'
 import type { SubagentRunEndInfo, SubagentRunInfo } from '../src/index.ts'
 import type { SubagentPromptRequestId } from '../src/control-types.ts'
@@ -311,7 +316,7 @@ describe('SubagentRuntime.startContinuable', () => {
     const start = vi.fn(async () => { throw new Error('must not dispatch') })
     ctx.subagents.registerProvider({
       name: 'one-shot',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false, agentPreset: false },
       inheritsParentContext: false,
       start,
     })
@@ -657,6 +662,70 @@ describe('SubagentRuntime.startContinuable', () => {
   })
 })
 
+describe('continuable children composed from their own agent preset', () => {
+  // Shared with the in-process driver: `coding` and `reviewing` each mount one tool.
+  const PRESET_FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../../subagent-in-process-driver/tests/fixtures')
+
+  async function setupWithRoster(script: Script) {
+    const booted = await setup(script)
+    booted.ctx.baseUrl = pathToFileURL(PRESET_FIXTURES).href + '/'
+    await booted.ctx.plugin(Loader)
+    booted.ctx.loader.builtins.include = Include
+    await booted.ctx.plugin(AgentPresets, {
+      default: 'coding',
+      roots: [{ path: join(PRESET_FIXTURES, 'presets'), trust: 'system' }],
+      includeShippedRoot: false,
+      includeUserRoot: false,
+    })
+    return booted
+  }
+
+  it('mounts the role preset, records it, and remounts it on cold resume', async () => {
+    // Child turn, parent settlement-notice turn, resumed child turn, second notice.
+    const { ctx, parent, adapter } = await setupWithRoster([
+      textResponse('built'), textResponse('noted'), textResponse('fixed'), textResponse('noted again'),
+    ])
+    const started = await ctx.subagents.startContinuable({
+      ...startSpec(parent),
+      request: { prompt: message('build the page'), parent, agentPreset: 'reviewing' },
+    })
+    await waitNoActivation(ctx, started.childId)
+
+    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['reviewing_only'])
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.meta.agentPreset).toBe('reviewing')
+    expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data).toMatchObject({
+      version: SUBAGENT_PRESET_DESCRIPTOR_VERSION,
+      agentPreset: 'reviewing',
+    })
+
+    await queuePrompt(ctx, parent, started.childId, message('fix the failing test'))
+    await waitNoActivation(ctx, started.childId)
+    // The parent joined no preset, so only the child's requests carry tools.
+    expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
+      .toEqual([['reviewing_only'], undefined, ['reviewing_only'], undefined])
+  })
+
+  it('rejects an unknown role preset without leaving a child', async () => {
+    const { ctx, parent } = await setupWithRoster([])
+
+    await expect(ctx.subagents.startContinuable({
+      ...startSpec(parent),
+      request: { prompt: message('work'), parent, agentPreset: 'ghost' },
+    })).rejects.toMatchObject({ code: 'AGENT_PRESET_UNAVAILABLE' })
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
+  })
+
+  it('rejects a role preset for a fork child, whose seed needs the parent composition', async () => {
+    const { ctx, parent } = await setupWithRoster([])
+
+    await expect(ctx.subagents.startContinuable({
+      ...startSpec(parent, 'fork'),
+      request: { prompt: message('work'), parent, agentPreset: 'reviewing' },
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
+  })
+})
+
 describe('continuable image Queue prompts', () => {
   const imageBlock = {
     type: 'image' as const,
@@ -846,7 +915,7 @@ describe('direct-child Queue residency routing', () => {
     await ctx.plugin(SubagentInvariant)
     const disposeProvider = ctx.subagents.registerProvider({
       name: 'retired',
-      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      capabilities: { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false, agentPreset: false },
       inheritsParentContext: false,
       start: async () => { throw new Error('one-shot start is not used') },
       prepareContinuable: () => Promise.resolve({}),

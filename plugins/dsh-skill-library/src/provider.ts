@@ -34,6 +34,8 @@ export interface ProviderOptions {
   readonly maxBodyBytes: number
   /** Static headers added to every request. */
   readonly headers: Readonly<Record<string, string>>
+  /** Agent role sent as `?role=` on every request, narrowing the catalog to that role's skills. */
+  readonly role?: string
   /** Resolves the signed-in session, per call. */
   readonly authorize: (store: LoginCredentialStore | undefined) => Promise<LoginAuthorization>
   /** The credential store, read fresh each call because the seam may mount late. */
@@ -68,6 +70,18 @@ export function notInProfileText(name: string): string {
     + 'so access was denied (403). Tell the user, in their language, that their current profile does not '
     + 'cover this tool, and that they can switch to a profile that includes it (the profile row at the foot '
     + 'of the sidebar) or ask the profile\'s owner to add it. Do not retry and do not try to reproduce the skill.'
+}
+
+/**
+ * What the model is told when the library refuses a skill of the selected
+ * profile that is not tagged for this agent's role.
+ * @param name - the skill that was refused.
+ * @returns the model-facing text.
+ */
+export function notInRoleText(name: string): string {
+  return `The skill "${name}" belongs to another agent role on this team, so the skill library denied it (403). `
+    + 'Work from the skills in your own catalog, and if the task needs that skill, say so in your reply so the '
+    + 'agent that delegated to you can handle it. Do not retry.'
 }
 
 /** What the model is told when the selected profile does not include the skill library at all. */
@@ -171,6 +185,7 @@ export class LibrarySkillProvider implements SkillProvider {
       if (options.signal?.aborted) throw error
       if (error instanceof SkillNotFound) return undefined
       if (error instanceof SkillNotInProfile) throw new Error(notInProfileText(locator.name))
+      if (error instanceof SkillNotInRole) throw new Error(notInRoleText(locator.name))
       if (error instanceof PluginNotInProfile) throw new Error(LIBRARY_NOT_IN_PROFILE_TEXT)
       throw error
     }
@@ -221,19 +236,21 @@ export class LibrarySkillProvider implements SkillProvider {
    * the name unknown.
    * @param name - the skill name the model asked for.
    * @param signal - the caller's signal.
-   * @returns true only when the library answered 403 `skill-not-in-profile`.
+   * @returns `profile` when the library answered 403 `skill-not-in-profile`,
+   *   `role` for 403 `skill-not-in-role`, and undefined for every other answer.
    */
-  async refusedByProfile(name: string, signal: AbortSignal | undefined): Promise<boolean> {
+  async refusal(name: string, signal: AbortSignal | undefined): Promise<'profile' | 'role' | undefined> {
     const authorization = await this.options.authorize(this.options.store())
-    if (!authorization.ok) return false
+    if (!authorization.ok) return undefined
     try {
       await this.request(`skills/${encodeURIComponent(name)}`, authorization.authorization, signal, this.options.getTimeoutMs)
     } catch (error) {
       // Every other answer — found, not found, unreachable, rejected session —
       // leaves the tool's own error standing.
-      return error instanceof SkillNotInProfile
+      if (error instanceof SkillNotInProfile) return 'profile'
+      if (error instanceof SkillNotInRole) return 'role'
     }
-    return false
+    return undefined
   }
 
   /** Project one catalog entry into a registry candidate. */
@@ -262,8 +279,9 @@ export class LibrarySkillProvider implements SkillProvider {
    * @param signal - the caller's signal, raced against this plugin's deadline.
    * @param timeoutMs - this plugin's own deadline.
    * @returns the decoded JSON body.
-   * @throws SkillNotFound on 404; SkillNotInProfile or PluginNotInProfile on a
-   *   403 carrying `skill-not-in-profile` or `plugin-not-in-profile`; Error with
+   * @throws SkillNotFound on 404; SkillNotInProfile, SkillNotInRole, or
+   *   PluginNotInProfile on a 403 carrying `skill-not-in-profile`,
+   *   `skill-not-in-role`, or `plugin-not-in-profile`; Error with
    *   model-facing text otherwise.
    */
   private async request(
@@ -281,7 +299,9 @@ export class LibrarySkillProvider implements SkillProvider {
 
     let response: Response
     try {
-      response = await call(new URL(path, this.options.endpoint), {
+      const url = new URL(path, this.options.endpoint)
+      if (this.options.role !== undefined) url.searchParams.set('role', this.options.role)
+      response = await call(url, {
         signal: combined,
         headers: {
           // Config first, the session credential next, this plugin's `accept`
@@ -303,6 +323,7 @@ export class LibrarySkillProvider implements SkillProvider {
     if (response.status === 403) {
       const code = await refusalCode(response)
       if (code === 'skill-not-in-profile') throw new SkillNotInProfile()
+      if (code === 'skill-not-in-role') throw new SkillNotInRole()
       if (code === 'plugin-not-in-profile') throw new PluginNotInProfile()
     }
     if (response.status === 401 || response.status === 403) {
@@ -369,6 +390,14 @@ class SkillNotInProfile extends Error {
   constructor() {
     super('skill not in the selected profile')
     this.name = 'SkillNotInProfile'
+  }
+}
+
+/** The skill is in the selected profile but not tagged for this agent's role. */
+class SkillNotInRole extends Error {
+  constructor() {
+    super('skill not tagged for this agent role')
+    this.name = 'SkillNotInRole'
   }
 }
 

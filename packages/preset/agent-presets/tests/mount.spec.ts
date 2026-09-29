@@ -241,6 +241,42 @@ describe('composing a child agent from its parent', () => {
   })
 })
 
+describe('composing a child agent from a prepared preset', () => {
+  it('gives the child the prepared preset\'s tools instead of its parent\'s', async () => {
+    const parent = await agentOn(ctx, 'sess-role-parent', 'standard')
+    const prepared = await ctx.agentPresets.prepareJoin('minimal')
+
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('sess-role-child'),
+      setup: (childCtx: Context) => void ctx.agentPresets.joinPrepared(childCtx, prepared),
+    })).agent
+
+    expect(toolNames(ctx, parent)).toEqual(['alpha'])
+    expect(toolNames(ctx, child)).toEqual(['beta'])
+    expect(ctx.agentPresets.composedPreset(child.ctx)).toBe('minimal')
+  })
+
+  it('rejects an unknown preset before any agent exists', async () => {
+    await expect(ctx.agentPresets.prepareJoin('ghost')).rejects.toThrow(/preset "ghost" not found/)
+  })
+
+  it('refuses a handle another roster issued', async () => {
+    const other = await harness()
+    const foreign = await other.agentPresets.prepareJoin('minimal')
+
+    await expect(ctx.agents.create({
+      sessionId: SessionId('sess-foreign'),
+      setup: (childCtx: Context) => void ctx.agentPresets.joinPrepared(childCtx, foreign),
+    })).rejects.toThrow(/was not prepared by this roster/)
+  })
+
+  it('refuses to join an unscoped context', async () => {
+    const prepared = await ctx.agentPresets.prepareJoin('minimal')
+
+    expect(() => ctx.agentPresets.joinPrepared(ctx, prepared)).toThrow(/unscoped context/)
+  })
+})
+
 describe('rejecting a composition that cannot be used', () => {
   it('refuses to mount into a context that carries no agent scope', async () => {
     await expect(ctx.agentPresets.mount(ctx, 'standard'))

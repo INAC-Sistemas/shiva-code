@@ -11,7 +11,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { assertObjectJsonSchema, defineTool } from '@deepseek-ai/dsh-tools'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -100,6 +101,25 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Agent preset every child mounts instead of joining the calling agent's
+   * composition, so the child's tools, prompt sections, and skills come from
+   * that preset alone. Requires the provider's `agentPreset` capability.
+   */
+  agentPreset?: string
+  /**
+   * Object-rooted JSON Schema the child's final answer must satisfy; the
+   * validated value is returned as the call's `structured` result. Requires
+   * the provider's `outputSchema` capability, `backgroundMode: one-shot`, and
+   * `enableRunInBackground: false`, because only a foreground call returns it.
+   */
+  outputSchema?: ObjectJsonSchema
+  /**
+   * Model-facing description that replaces the provider-derived delegation
+   * wording, so several instances can describe distinct roles. Background and
+   * model-selection guidance is still appended.
+   */
+  toolDescription?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -127,6 +147,10 @@ export const Config: z<Config> = z.object({
     deny: z.array(z.string()).default(undefined as unknown as string[]),
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
+  agentPreset: z.string(),
+  // Validated structurally by assertObjectJsonSchema at apply().
+  outputSchema: z.any(),
+  toolDescription: z.string(),
 })
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
@@ -198,6 +222,8 @@ type ForegroundToolResult = {
   readonly kind: 'foreground'
   readonly runId: SubagentRun['id']
   readonly output: JsonValue[]
+  /** The validated `outputSchema` value, present when the instance requested one. */
+  readonly structured?: JsonValue
 }
 
 /**
@@ -219,6 +245,9 @@ async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResu
         // Content blocks already cross durable JSON boundaries elsewhere;
         // the registry performs the authoritative lossless snapshot here.
         output: result.output as unknown as JsonValue[],
+        // The provider validated it against the configured schema; the
+        // registry snapshots the whole result losslessly.
+        ...result.structured !== undefined ? { structured: result.structured as JsonValue } : {},
       }
     }),
   ])
@@ -321,6 +350,12 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   const backgroundEnabled = config.enableRunInBackground !== false
   const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
+  if (config.outputSchema !== undefined) {
+    if (continuable || backgroundEnabled) {
+      throw new Error('tool-subagent: `outputSchema` requires `backgroundMode: one-shot` and `enableRunInBackground: false` — only a foreground call returns the structured value')
+    }
+    assertObjectJsonSchema(config.outputSchema)
+  }
 
   const modelSelectionCapable = config.modelSelectionSettings === true
   ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
@@ -340,6 +375,16 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
     if (modelSelectionCapable && !subagentProvider.capabilities.agentOptions) {
       throw new Error(
         `tool-subagent: provider "${subagentProvider.name}" does not support child model selection`,
+      )
+    }
+    if (config.agentPreset !== undefined && !subagentProvider.capabilities.agentPreset) {
+      throw new Error(
+        `tool-subagent: provider "${subagentProvider.name}" does not support a child agentPreset`,
+      )
+    }
+    if (config.outputSchema !== undefined && !subagentProvider.capabilities.outputSchema) {
+      throw new Error(
+        `tool-subagent: provider "${subagentProvider.name}" does not support a child outputSchema`,
       )
     }
     if (continuable && subagentProvider.prepareContinuable === undefined) {
@@ -378,7 +423,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             : '')
       const disposeTool = runtimeCtx.tools.register(defineTool({
         name: toolName,
-        description: wording.description + (backgroundEnabled
+        description: (config.toolDescription ?? wording.description) + (backgroundEnabled
           // The completion notice is the continuation service's own behavior, not
           // a separately installed capability, so this promise holds whenever the
           // continuable background path is reachable at all.
@@ -452,6 +497,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
                   kind: { type: 'string', required: true, const: 'foreground' },
                   runId: { type: 'string', required: true },
                   output: { type: 'array', required: true, items: { type: 'json' } },
+                  structured: { type: 'json' },
                 },
               },
             ],
@@ -462,7 +508,9 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
               ? `started background subagent job ${value.jobId}`
               : value.kind === 'continuable'
                 ? `started subagent ${value.subagentId}`
-                : outputValueText(value.output),
+                : value.structured === undefined
+                  ? outputValueText(value.output)
+                  : JSON.stringify(value.structured, null, 2),
           }],
         },
         // Children never mutate the parent session; the one parent-owned write
@@ -519,6 +567,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
             ...config.persona !== undefined ? { persona: config.persona } : {},
             ...config.toolFilter !== undefined ? { toolFilter: config.toolFilter } : {},
+            ...config.agentPreset !== undefined ? { agentPreset: config.agentPreset } : {},
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 
@@ -562,6 +611,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
 
           const run: SubagentRun = await runtimeCtx.subagents.start(config.provider, {
             ...request,
+            ...config.outputSchema !== undefined ? { outputSchema: config.outputSchema } : {},
             signal: exec.signal,
           })
           return settleForegroundRun(run)

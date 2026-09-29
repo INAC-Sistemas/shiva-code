@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import { Role } from "@/generated/prisma/enums";
 import {
+  type AgentRole,
+  isAgentRole,
   MAX_CONTENT_BYTES,
   MAX_DESCRIPTION_LENGTH,
   SKILL_NAME_HINT,
@@ -28,6 +30,7 @@ type SkillInput = {
   modelInvocable: boolean;
   userInvocable: boolean;
   published: boolean;
+  roles: AgentRole[];
 };
 
 /**
@@ -120,6 +123,9 @@ function readSkillInput(
       modelInvocable: checkbox(formData, "modelInvocable"),
       userInvocable: checkbox(formData, "userInvocable"),
       published: checkbox(formData, "published"),
+      // Um papel fora da lista não é erro de digitação possível no formulário;
+      // descartá-lo mantém a coluna restrita aos papéis que um preset declara.
+      roles: formData.getAll("roles").filter(isAgentRole),
     },
   };
 }

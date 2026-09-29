@@ -14,6 +14,7 @@ import {
   metadataExpressionErrors,
   packageTestFixtureDependencyErrors,
   packageTestPluginDependencyErrors,
+  missingDelegationPresets,
   undeclaredDesktopRows,
 } from './verify-cordis-config.ts'
 
@@ -204,5 +205,27 @@ describe('desktop composition plane declaration', () => {
 
   it('ignores operations that address an existing row instead of inserting one', () => {
     expect(undeclaredDesktopRows([{ id: 'ui-brand-official', disabled: true }])).toEqual([])
+  })
+})
+
+describe('delegation preset referents', () => {
+  it('rejects a delegation row whose agentPreset has no sibling preset', () => {
+    const presetRoot = mkdtempSync(join(tmpdir(), 'verify-delegation-presets-'))
+    try {
+      mkdirSync(join(presetRoot, 'team-backend'))
+      writeFileSync(join(presetRoot, 'team-backend', 'agent.cordis.yml'), '[]\n')
+      const entries = [{
+        id: 'delegation',
+        name: 'cordis:group',
+        config: [
+          { id: 'backend', name: '@deepseek-ai/dsh-tool-subagent', config: { provider: 'spawn', agentPreset: 'team-backend' } },
+          { id: 'tester', name: '@deepseek-ai/dsh-tool-subagent', config: { provider: 'spawn', agentPreset: 'team-tester' } },
+        ],
+      }]
+
+      expect(missingDelegationPresets(entries, presetRoot)).toEqual([{ id: 'tester', agentPreset: 'team-tester' }])
+    } finally {
+      rmSync(presetRoot, { recursive: true, force: true })
+    }
   })
 })

@@ -204,6 +204,7 @@ describe('dsh-subagent-fork-in-process', () => {
       depthLimit: true,
       toolFilter: true,
       persona: true,
+      agentPreset: false,
     })
   })
 

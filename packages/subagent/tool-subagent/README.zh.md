@@ -51,6 +51,9 @@ kind: "package-reference"
 | `persona` | — | 每个子 agent 独立的 persona；要求提供方具备 `persona` 能力 |
 | `toolFilter` | — | 每个子 agent 独立的全局工具限制；要求提供方具备 `toolFilter` 能力 |
 | `maxDepth` | `3` | 绝对委派深度上限（`0` 禁止委派）；`'provider-managed'` 不向进程外提供方发送上限 |
+| `agentPreset` | — | 每个子 agent 改为挂载的 agent preset（取代调用方的组装），使其工具、提示词段落与 skill 只来自该 preset；要求提供方具备 `agentPreset` 能力（仅 spawn） |
+| `outputSchema` | — | 子 agent 最终答案须满足的对象根 JSON Schema，以 `structured` 返回；要求 `backgroundMode: one-shot`、`enableRunInBackground: false` 以及提供方的 `outputSchema` 能力 |
+| `toolDescription` | — | 替换由提供方推导的工具描述，使多个实例能描述不同角色；后台指引仍会追加 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -177,7 +180,7 @@ Use subagent in the background by default. Start independent delegations togethe
 
 #### 模型看到什么
 
-调用会保留描述与提示词。成功时只包含子 agent 的最终文本；其他结果变为 `Error: <stop reason>`，随后在存在时附上安全的提供方诊断，再附上任何部分 assistant 文本。子 agent 中间步骤不会进入父级。
+调用会保留描述与提示词。成功时只包含子 agent 的最终文本；实例配置了 `outputSchema` 时则为格式化后的 JSON `structured` 值；其他结果变为 `Error: <stop reason>`，随后在存在时附上安全的提供方诊断，再附上任何部分 assistant 文本。子 agent 中间步骤不会进入父级。
 
 #### Token 影响
 

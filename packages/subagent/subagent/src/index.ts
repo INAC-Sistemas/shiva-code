@@ -101,6 +101,7 @@ export {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
   SUBAGENT_DESCRIPTOR_VERSION,
+  SUBAGENT_PRESET_DESCRIPTOR_VERSION,
 } from './descriptor.ts'
 export type {
   ContinuableSubagentDescriptorData,
@@ -119,11 +120,14 @@ export {
   captureDelegatedPolicyOverrides,
   childSessionMeta,
   parentAgentOptionsForDelegation,
+  prepareChildComposition,
   resolveChildAgentOptions,
   resolveChildDepth,
   SubagentDepthError,
 } from './child-agent.ts'
-export type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
+export type {
+  ChildComposition, DelegatedPolicyOverrides, PreparedChildComposition, PreparedChildPreset,
+} from './child-agent.ts'
 export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
 export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
@@ -226,6 +230,15 @@ export class SubagentRuntime extends TypertRemoteService {
    * @throws when continuation services are unavailable or materialization fails.
    */
   async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart> {
+    if (spec.request.agentPreset !== undefined) {
+      const provider = this.expectProvider(spec.provider)
+      if (!provider.capabilities.agentPreset) {
+        throw new SubagentError(
+          `subagent provider "${provider.name}" does not support the "agentPreset" capability`,
+          'UNSUPPORTED_CAPABILITY',
+        )
+      }
+    }
     return this.requireContinuations().startContinuable(spec)
   }
 
@@ -645,6 +658,7 @@ export class SubagentRuntime extends TypertRemoteService {
       { when: request.maxDepth !== undefined, cap: 'depthLimit' },
       { when: request.toolFilter !== undefined, cap: 'toolFilter' },
       { when: request.persona !== undefined, cap: 'persona' },
+      { when: request.agentPreset !== undefined, cap: 'agentPreset' },
     ]
     for (const { when, cap } of needs) {
       if (when && !provider.capabilities[cap]) {

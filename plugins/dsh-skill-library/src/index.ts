@@ -33,10 +33,11 @@ import {
   assertHeaders,
   assertMaxBodyBytes,
   assertRank,
+  assertRole,
   assertTimeout,
   resolveEndpoint,
 } from './config.ts'
-import { LibrarySkillProvider, notInProfileText } from './provider.ts'
+import { LibrarySkillProvider, notInProfileText, notInRoleText } from './provider.ts'
 import {
   assertPrerequisites,
   loadedSkills,
@@ -46,7 +47,8 @@ import {
 } from './prerequisites.ts'
 import type { PostExecuteDecision, PreExecuteDecision } from './tool-events.ts'
 
-export { LibrarySkillProvider, notInProfileText, type ProviderOptions } from './provider.ts'
+export { LibrarySkillProvider, notInProfileText, notInRoleText, type ProviderOptions } from './provider.ts'
+export { AGENT_ROLES, type AgentRole } from './config.ts'
 export {
   parseCatalog,
   parseSkill,
@@ -111,6 +113,13 @@ export interface Config {
    */
   prerequisites?: Record<string, string[]>
   /**
+   * Agent role whose skills this agent receives (`pm`, `backend`, `frontend`,
+   * `tester`). Sent as `?role=` on every request; the library then serves only
+   * the selected profile's skills tagged with it. Omitted, the catalog is the
+   * whole profile slice.
+   */
+  role?: string
+  /**
    * Static headers added to every request (a gateway key, a tenant id).
    * `authorization` is rejected: it carries the signed-in user's session and has
    * one source.
@@ -128,6 +137,7 @@ export const Config: z<Config> = z.object({
   maxBodyBytes: z.number().default(512 * 1024),
   headers: z.dict(z.string()).default({}),
   prerequisites: z.dict(z.array(z.string())).default({}),
+  role: z.string(),
 })
 
 /** Name of the model-facing tool that loads skills (`@deepseek-ai/dsh-tool-skill`). */
@@ -144,7 +154,7 @@ function skillNameOf(args: unknown): string | undefined {
 }
 
 /** Complete config after schemastery applies every field default. */
-type ResolvedConfig = Required<Config>
+type ResolvedConfig = Required<Omit<Config, 'role'>> & Pick<Config, 'role'>
 
 /**
  * Register the provider.
@@ -165,6 +175,7 @@ export function apply(ctx: Context, config: Config): void {
   assertMaxBodyBytes(resolved.maxBodyBytes)
   assertHeaders(resolved.headers)
   const prerequisites: Prerequisites = assertPrerequisites(resolved.prerequisites)
+  const role = assertRole(resolved.role)
   // Calls this plugin denied for load order; the post-execute probe skips them.
   const deniedForOrder = new WeakSet<object>()
 
@@ -179,6 +190,7 @@ export function apply(ctx: Context, config: Config): void {
     getTimeoutMs: resolved.getTimeoutMs,
     maxBodyBytes: resolved.maxBodyBytes,
     headers: resolved.headers,
+    ...role === undefined ? {} : { role },
     authorize: store => resolveLoginAuthorization(store, Date.now()),
     // Read per call, not captured: the credential seam is optional and may
     // mount after this plugin.
@@ -220,12 +232,14 @@ export function apply(ctx: Context, config: Config): void {
     if (deniedForOrder.has(exec)) return downstream
     const requested = skillNameOf(exec.arguments)
     if (requested === undefined) return downstream
-    if (!await provider.refusedByProfile(requested, exec.signal)) return downstream
-    return { kind: 'block', feedback: [{ type: 'text', text: notInProfileText(requested) }] }
+    const refusal = await provider.refusal(requested, exec.signal)
+    if (refusal === undefined) return downstream
+    const text = refusal === 'profile' ? notInProfileText(requested) : notInRoleText(requested)
+    return { kind: 'block', feedback: [{ type: 'text', text }] }
   })
 
   // Named at load because the two failure modes look identical from the chat:
   // skills that never appear are either this endpoint being wrong or nobody
   // being signed in, and only the log separates them.
-  console.log(`[dsh-skill-library] skills from ${endpoint.href} (rank ${resolved.rank})`)
+  console.log(`[dsh-skill-library] skills from ${endpoint.href} (rank ${resolved.rank}${role === undefined ? '' : `, role ${role}`})`)
 }

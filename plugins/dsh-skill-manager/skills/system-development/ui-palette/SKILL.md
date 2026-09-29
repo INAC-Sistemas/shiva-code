@@ -2,6 +2,7 @@
 name: ui-palette
 description: Let the requester choose the product's color palette before the first screen is built — propose palettes from the architecture and open the Paletas tab with the palette_pick tool (presets, generator, custom hex), complete every role, check contrast, and record the result as mds/epics/<epic>/02-palette.md, the one source of every color the React app uses.
 whenToUse: At the start of /02-frontend, before any page is built. Also when /01-arquitetura records the frontend stack, when /02-frontend briefs a UI tarefa, and whenever the requester asks to change the product's colors.
+roles: [pm, frontend]
 ---
 
 # UI palette

@@ -47,9 +47,17 @@ declare module '@deepseek-ai/dsh-session/types' {
  */
 export const SUBAGENT_DESCRIPTOR_VERSION = 3
 
+/**
+ * The descriptor version of a continuable child composed from its own agent
+ * preset: {@link SUBAGENT_DESCRIPTOR_VERSION} plus a required `agentPreset`.
+ * Only such children are stamped with it, so every child created without a
+ * preset keeps the v3 record older runtimes already resume.
+ */
+export const SUBAGENT_PRESET_DESCRIPTOR_VERSION = 4
+
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
-  /** Descriptor format version ({@link SUBAGENT_DESCRIPTOR_VERSION}). */
+  /** Descriptor format version ({@link SUBAGENT_DESCRIPTOR_VERSION} or {@link SUBAGENT_PRESET_DESCRIPTOR_VERSION}). */
   readonly version: number
   /** Whether the child is a terminal one-shot run or a resumable conversation. */
   readonly mode: 'one-shot' | 'continuable'
@@ -83,6 +91,11 @@ export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBas
   readonly persona?: string
   /** Child tool scoping reapplied on resume. */
   readonly toolFilter?: ToolRestriction
+  /**
+   * Agent preset the child mounts instead of joining its parent's composition;
+   * present exactly on {@link SUBAGENT_PRESET_DESCRIPTOR_VERSION} records.
+   */
+  readonly agentPreset?: string
 }
 
 /** The supported durable subagent identity and optional continuation composition. */
@@ -120,6 +133,8 @@ export interface ContinuableSubagentDescriptorInput extends SubagentDescriptorIn
   readonly persona?: string
   /** Requested child tool scoping. */
   readonly toolFilter?: ToolRestriction
+  /** Requested child agent preset. */
+  readonly agentPreset?: string
 }
 
 /** Inputs {@link snapshotSubagentDescriptor} validates and detaches. */
@@ -142,6 +157,7 @@ const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
   'persona',
   'toolFilter',
 ])
+const PRESET_DESCRIPTOR_KEYS = new Set([...CONTINUABLE_DESCRIPTOR_KEYS, 'agentPreset'])
 const TOOL_FILTER_KEYS = new Set(['allow', 'deny'])
 
 /** Whether a persisted JSON value is an object record. */
@@ -207,15 +223,20 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
   if (typeof version !== 'number') {
     throw new Error('persisted subagent descriptor version must be a number')
   }
-  if (version !== SUBAGENT_DESCRIPTOR_VERSION) return undefined
+  if (version !== SUBAGENT_DESCRIPTOR_VERSION && version !== SUBAGENT_PRESET_DESCRIPTOR_VERSION) return undefined
 
   const mode = value['mode']
   if (mode !== 'one-shot' && mode !== 'continuable') {
     throw new Error('persisted subagent descriptor mode must be "one-shot" or "continuable"')
   }
+  if (version === SUBAGENT_PRESET_DESCRIPTOR_VERSION && mode !== 'continuable') {
+    throw new Error(`persisted subagent descriptor version ${version} must be continuable`)
+  }
   assertKnownKeys(
     value,
-    mode === 'one-shot' ? ONE_SHOT_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS,
+    mode === 'one-shot'
+      ? ONE_SHOT_DESCRIPTOR_KEYS
+      : version === SUBAGENT_PRESET_DESCRIPTOR_VERSION ? PRESET_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS,
     'payload',
   )
   const provider = value['provider']
@@ -242,8 +263,12 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
   const toolFilter = Object.hasOwn(value, 'toolFilter')
     ? parseToolFilter(value['toolFilter'])
     : undefined
+  const agentPreset = optionalString(value, 'agentPreset')
+  if (version === SUBAGENT_PRESET_DESCRIPTOR_VERSION && agentPreset === undefined) {
+    throw new Error(`persisted subagent descriptor version ${version} must declare agentPreset`)
+  }
   return {
-    version: SUBAGENT_DESCRIPTOR_VERSION,
+    version,
     mode,
     provider,
     label,
@@ -252,6 +277,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
     ...persona !== undefined ? { persona } : {},
     ...toolFilter !== undefined ? { toolFilter } : {},
+    ...agentPreset !== undefined ? { agentPreset } : {},
   }
 }
 
@@ -285,7 +311,7 @@ export function snapshotSubagentDescriptor(input: SubagentDescriptorInput): Suba
       ...input.label !== undefined ? { label: input.label } : {},
     }
     : {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
+      version: input.agentPreset === undefined ? SUBAGENT_DESCRIPTOR_VERSION : SUBAGENT_PRESET_DESCRIPTOR_VERSION,
       mode: input.mode,
       provider: input.provider,
       label: input.label,
@@ -294,6 +320,7 @@ export function snapshotSubagentDescriptor(input: SubagentDescriptorInput): Suba
       ...input.agentReasoningEffort !== undefined ? { agentReasoningEffort: input.agentReasoningEffort } : {},
       ...input.persona !== undefined ? { persona: input.persona } : {},
       ...input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {},
+      ...input.agentPreset !== undefined ? { agentPreset: input.agentPreset } : {},
     }
   const snapshot = snapshotJsonValue(candidate)
   if (snapshot === undefined) {
@@ -309,7 +336,8 @@ export function snapshotSubagentDescriptor(input: SubagentDescriptorInput): Suba
  * composition.
  * @param events - the loaded child session events.
  * @returns the descriptor, or `undefined` when the log has none or its
- *   version is not {@link SUBAGENT_DESCRIPTOR_VERSION} (the child cannot be
+ *   version is neither {@link SUBAGENT_DESCRIPTOR_VERSION} nor
+ *   {@link SUBAGENT_PRESET_DESCRIPTOR_VERSION} (the child cannot be
  *   classified by this runtime).
  * @throws when a current-version persisted payload does not match its complete
  *   declared schema.

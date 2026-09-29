@@ -31,9 +31,9 @@ kind: "package-reference"
 
 ### preset 给会话带来什么
 
-从 preset 组装的会话会运行该 preset `agent.cordis.yml` 所列插件：它的工具、提示词段落与 skill。加入同一 preset 的会话共享一份已安装的组装，且各会话的状态彼此隔离。subagent 会加入其父方的组装，因此它看到的工具与提示词段落和创建它的 agent 相同。
+从 preset 组装的会话会运行该 preset `agent.cordis.yml` 所列插件：它的工具、提示词段落与 skill。加入同一 preset 的会话共享一份已安装的组装，且各会话的状态彼此隔离。subagent 会加入其父方的组装，因此它看到的工具与提示词段落和创建它的 agent 相同；若其委派指定了自己的 preset，则改为运行该 preset 的工具、提示词段落与 skill。
 
-可选的 preset 来自三类来源：本包 `presets/` 下随包交付的 preset、已配置的根目录，以及你自己放在 `<dshHome>/.agent-presets` 下的 preset。选择器会展示每个 preset 的显示名与描述；组装无法加载的 preset 会连同原因一起列出而不是被隐藏，因此你能看到该修什么或删什么。
+可选的 preset 来自三类来源：本包 `presets/` 下随包交付的 preset、已配置的根目录，以及你自己放在 `<dshHome>/.agent-presets` 下的 preset。选择器会展示每个 preset 的显示名与描述；组装无法加载的 preset 会连同原因一起列出而不是被隐藏，因此你能看到该修什么或删什么。`preset.yml` 设置 `hidden: true` 的 preset 不会出现在选择器中，但委派中点名它的子 agent 仍会用它组装；委派用的角色 preset 就是这样避开顶层选择的。
 
 ### 最小配置
 
@@ -119,7 +119,7 @@ agent-presets:
 
 ### 常驻挂载
 
-`ensureStanding` 为每个 preset id 保留一个进行中的 promise（single-flight），因此两个竞争首次使用同一 preset 的 agent 共享一份组装。已结算的失败会被移除，以便后续会话重试文件已被修复的 preset。挂载运行在 roster 服务自己的未追踪上下文中——从被追踪上下文派生的子树会经调用方的 shadow fiber 解析服务——因此它比任何 agent 都活得久，只随整棵树卸载。`serviceForAgent` 读取某 agent 对其 preset 挂在 `isolate` realm 之后（组外不可见）的某个服务实例。
+`ensureStanding` 为每个 preset id 保留一个进行中的 promise（single-flight），因此两个竞争首次使用同一 preset 的 agent 共享一份组装。已结算的失败会被移除，以便后续会话重试文件已被修复的 preset。挂载运行在 roster 服务自己的未追踪上下文中——从被追踪上下文派生的子树会经调用方的 shadow fiber 解析服务——因此它比任何 agent 都活得久，只随整棵树卸载。以自有 preset 组装的委派子 agent 无法在同步的创建 `setup` 中等待 `mount()`，因此由 `prepareJoin(id)` 先解析并挂载该 preset，再由 `joinPrepared()` 把子 agent 同步绑定到这一确切世代；所有失败都在可等待的步骤中暴露，早于任何子 agent 的存在。`serviceForAgent` 读取某 agent 对其 preset 挂在 `isolate` realm 之后（组外不可见）的某个服务实例。
 
 ### 组合清单
 

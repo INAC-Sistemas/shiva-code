@@ -330,18 +330,19 @@ describe('get', () => {
   })
 })
 
-describe('refusedByProfile', () => {
-  it('is true only when the library answers 403 skill-not-in-profile', async () => {
-    const answers: Array<[Response, boolean]> = [
-      [json({ error: 'x', code: 'skill-not-in-profile' }, 403), true],
-      [json({ error: 'x' }, 403), false],
-      [json({ error: 'x' }, 404), false],
-      [json({ error: 'x' }, 500), false],
+describe('refusal', () => {
+  it('names the profile or role refusal and nothing else', async () => {
+    const answers: Array<[Response, 'profile' | 'role' | undefined]> = [
+      [json({ error: 'x', code: 'skill-not-in-profile' }, 403), 'profile'],
+      [json({ error: 'x', code: 'skill-not-in-role' }, 403), 'role'],
+      [json({ error: 'x' }, 403), undefined],
+      [json({ error: 'x' }, 404), undefined],
+      [json({ error: 'x' }, 500), undefined],
     ]
     for (const [response, expected] of answers) {
       const fetch = vi.fn<typeof globalThis.fetch>(async () => response)
       const { provider } = makeProvider({ fetch })
-      await expect(provider.refusedByProfile('11-connections', undefined)).resolves.toBe(expected)
+      await expect(provider.refusal('11-connections', undefined)).resolves.toBe(expected)
       expect(String(fetch.mock.calls[0]?.[0])).toBe('https://vps/api/plugins/skill-library/skills/11-connections')
     }
   })
@@ -351,7 +352,25 @@ describe('refusedByProfile', () => {
       authorize: async () => ({ ok: false, reason: 'absent', message: 'x' }) as unknown as LoginAuthorization,
     })
 
-    await expect(provider.refusedByProfile('11-connections', undefined)).resolves.toBe(false)
+    await expect(provider.refusal('11-connections', undefined)).resolves.toBeUndefined()
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('a role-narrowed provider', () => {
+  it('sends its role on catalog and body requests', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ error: 'x' }, 404))
+    const { provider } = makeProvider({ fetch, role: 'backend' })
+
+    await provider.refusal('backend-page', undefined)
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe('https://vps/api/plugins/skill-library/skills/backend-page?role=backend')
+  })
+
+  it('tells the model a skill of another role is not its own', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ error: 'x', code: 'skill-not-in-role' }, 403))
+    const { provider } = makeProvider({ fetch, role: 'tester' })
+
+    await expect(provider.get(candidate(), {})).rejects.toThrow(/belongs to another agent role/)
   })
 })

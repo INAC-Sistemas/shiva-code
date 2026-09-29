@@ -2,6 +2,7 @@
 name: ui-ux-pro-max
 description: Choose a product's design system from a built-in catalog — style, landing pattern, color mood, signature effects and font pairing for 96 product types, 57 styles, 57 font pairings and 27 landing patterns — and check UI against prioritized UX rules and a pre-delivery checklist.
 whenToUse: When /frontend-design decides a direction (at the start of /02-frontend), when /ui-palette needs the color mood of the product type, when a landing page, dashboard or new product UI is designed, and when UI is reviewed for UX quality.
+roles: [frontend]
 ---
 
 # UI/UX Pro Max

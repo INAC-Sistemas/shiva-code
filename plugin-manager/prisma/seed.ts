@@ -123,6 +123,7 @@ function skillFieldsChanged(
     modelInvocable: boolean;
     userInvocable: boolean;
     published: boolean;
+    roles: string[];
   },
   next: SeededSkillFields,
 ): boolean {
@@ -132,7 +133,8 @@ function skillFieldsChanged(
     existing.content !== next.content ||
     existing.modelInvocable !== next.modelInvocable ||
     existing.userInvocable !== next.userInvocable ||
-    existing.published !== next.published
+    existing.published !== next.published ||
+    existing.roles.join(",") !== next.roles.join(",")
   );
 }
 
@@ -266,6 +268,7 @@ async function seedSkills(): Promise<string[]> {
         modelInvocable: true,
         userInvocable: true,
         published: true,
+        roles: true,
         revision: true,
       },
     });

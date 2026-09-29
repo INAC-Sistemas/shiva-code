@@ -12,7 +12,7 @@
 
 import "server-only";
 import { prisma } from "@/lib/db";
-import { SKILL_NAME_PATTERN } from "@/lib/skills";
+import { type AgentRole, isAgentRole, SKILL_NAME_PATTERN } from "@/lib/skills";
 import {
   type ProfileScope,
   readSelectedProfileId,
@@ -66,6 +66,25 @@ export function assertSkillName(value: unknown): string {
   return value;
 }
 
+/**
+ * Valida o papel opcional da query string (`?role=`).
+ *
+ * Ausente devolve `undefined`, que mantém a leitura sem recorte de papel. Um
+ * valor fora de `KNOWN_AGENT_ROLES` é recusado com 400: responder um catálogo
+ * vazio esconderia um preset mal configurado atrás de "nenhuma skill".
+ * @param value - valor bruto de `searchParams.get("role")`.
+ * @returns o papel validado, ou `undefined` quando ausente.
+ * @throws SkillLibraryRequestError 400 quando o papel é desconhecido.
+ */
+export function assertOptionalAgentRole(value: string | null): AgentRole | undefined {
+  if (value === null) return undefined;
+  if (!isAgentRole(value)) {
+    throw new SkillLibraryRequestError(`Papel de agente desconhecido: "${value}".`, 400);
+  }
+
+  return value;
+}
+
 /** Projeta uma linha nos campos do wire, omitindo o `whenToUse` ausente. */
 function toSummary(row: {
   name: string;
@@ -94,9 +113,10 @@ function toSummary(row: {
  * {@link readSelectedProfileId}: custa nada e fecha a corrida de um perfil
  * desativado ou tornado privado entre as duas consultas.
  */
-function scopedWhere(scope: ProfileScope, selectedProfileId: string) {
+function scopedWhere(scope: ProfileScope, selectedProfileId: string, role?: AgentRole) {
   return {
     published: true,
+    ...(role === undefined ? {} : { roles: { has: role } }),
     profiles: {
       some: {
         profile: { id: selectedProfileId, ...selectableWhere(scope.userId) },
@@ -119,11 +139,12 @@ function scopedWhere(scope: ProfileScope, selectedProfileId: string) {
  * trata catálogo vazio como estado de primeira classe, então isto degrada para
  * "nenhuma skill", não para erro.
  * @param scope - quem está lendo, vindo do token.
+ * @param role - papel do agente leitor; presente, serve só as skills marcadas com ele.
  * @returns os sumários, a revisão da fatia, e o perfil que a recortou — `null`
  * distingue "sem perfil selecionado" de "perfil com seleção vazia", que a soma das
  * revisões sozinha não separa.
  */
-export async function listSkills(scope: ProfileScope): Promise<{
+export async function listSkills(scope: ProfileScope, role?: AgentRole): Promise<{
   revision: number;
   skills: SkillLibrarySummary[];
   profileId: string | null;
@@ -135,7 +156,7 @@ export async function listSkills(scope: ProfileScope): Promise<{
   }
 
   const rows = await prisma.librarySkill.findMany({
-    where: scopedWhere(scope, selectedProfileId),
+    where: scopedWhere(scope, selectedProfileId, role),
     orderBy: { name: "asc" },
     select: {
       name: true,
@@ -166,6 +187,8 @@ export type SkillRead =
   | { kind: "found"; skill: SkillLibraryEntry }
   /** Publicada, mas fora do perfil selecionado — ou nenhum perfil selecionado. */
   | { kind: "not-in-profile" }
+  /** Do perfil selecionado, mas não marcada com o papel do agente leitor. */
+  | { kind: "not-in-role" }
   /** Inexistente ou despublicada. */
   | { kind: "not-found" };
 
@@ -180,15 +203,17 @@ export type SkillRead =
  * existência de trabalho ainda não liberado.
  * @param scope - quem está lendo, vindo do token.
  * @param name - nome já validado por {@link assertSkillName}.
- * @returns a skill, ou por que ela não é alcançável por este perfil.
+ * @param role - papel do agente leitor; presente, a skill precisa estar marcada com ele.
+ * @returns a skill, ou por que ela não é alcançável por este perfil e papel.
  */
 export async function readSkill(
   scope: ProfileScope,
   name: string,
+  role?: AgentRole,
 ): Promise<SkillRead> {
   const selectedProfileId = await readSelectedProfileId(scope);
   const row = selectedProfileId === null ? null : await prisma.librarySkill.findFirst({
-    where: { name, ...scopedWhere(scope, selectedProfileId) },
+    where: { name, ...scopedWhere(scope, selectedProfileId, role) },
     select: {
       name: true,
       description: true,
@@ -202,6 +227,13 @@ export async function readSkill(
 
   if (row !== null) {
     return { kind: "found", skill: { ...toSummary(row), content: row.content } };
+  }
+
+  if (role !== undefined && selectedProfileId !== null) {
+    const inProfile = await prisma.librarySkill.count({
+      where: { name, ...scopedWhere(scope, selectedProfileId) },
+    });
+    if (inProfile > 0) return { kind: "not-in-role" };
   }
 
   const published = await prisma.librarySkill.count({

@@ -2,18 +2,22 @@ import { NextResponse } from "next/server";
 import { authenticatePluginRequest } from "@/lib/plugin-auth";
 import {
   SkillLibraryRequestError,
+  assertOptionalAgentRole,
   assertSkillName,
   readSkill,
 } from "@plugins/skill-library";
 
 /**
  * GET /api/plugins/skill-library/skills/<name>
+ * Query:  role?=pm|backend|frontend|tester — a skill precisa ter esse papel
  * Header: Authorization: Bearer <token>
  * 403:    { error, code: "plugin-not-in-profile", plugin } — o perfil
  *         selecionado não inclui `dsh-skill-library`
  * 200:    { name, description, whenToUse?, invocation, revision, content }
  * 403:    { error, code: "skill-not-in-profile" } — publicada, mas fora do
  *         perfil selecionado (ou nenhum perfil selecionado)
+ * 403:    { error, code: "skill-not-in-role" } — do perfil, mas sem o papel pedido
+ * 400:    { error } — nome fora de kebab-case ou papel desconhecido
  * 404:    inexistente ou despublicada
  *
  * O corpo da skill. É a única rota que o serve, e ela exige um token válido a
@@ -34,7 +38,8 @@ export async function GET(
 
   try {
     const name = assertSkillName((await context.params).name);
-    const read = await readSkill({ userId: auth.session.userId }, name);
+    const role = assertOptionalAgentRole(new URL(request.url).searchParams.get("role"));
+    const read = await readSkill({ userId: auth.session.userId }, name, role);
 
     switch (read.kind) {
       case "found":
@@ -49,6 +54,14 @@ export async function GET(
           {
             error: `O perfil selecionado não contempla a skill "${name}".`,
             code: "skill-not-in-profile",
+          },
+          { status: 403 },
+        );
+      case "not-in-role":
+        return NextResponse.json(
+          {
+            error: `A skill "${name}" não é deste papel de agente.`,
+            code: "skill-not-in-role",
           },
           { status: 403 },
         );

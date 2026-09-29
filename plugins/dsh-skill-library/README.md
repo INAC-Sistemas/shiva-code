@@ -38,6 +38,8 @@ The catalog only lists skills in the user's selected profile, so the `skill` too
 
 `prerequisites` maps a skill name to the skills that must have been loaded earlier in the same session. A `tools/pre-execute` listener denies a `skill` call whose prerequisites are missing, with a reason naming what to load first, in order. "Loaded" is read from the session log — a `skill` call whose result did not fail — so the rule survives a harness restart and a refused call does not count. The field is empty by default; the desktop's `profile` preset sets the system-development pipeline: `00-start-here` → `01-arquitetura` → `02-frontend` → `03-backend`, each stage requiring `00-start-here` and the previous stage, and `10-profiles`/`11-connections` requiring only `00-start-here`. A skill a person invokes by slash command does not go through the `skill` tool, so it neither counts nor is checked.
 
+`role` narrows the catalog to one agent role of the `team` presets: `pm`, `backend`, `frontend`, or `tester`. The provider sends it as `?role=` on every request, and the library serves only the selected profile's skills whose `roles` include it. A skill of the profile that another role owns answers 403 `skill-not-in-role`, which the model reads as a skill that belongs to another agent. Omitted, the catalog is the whole profile slice. An unknown role fails at load.
+
 There is no offline mode. When the library cannot be reached, its skills are simply absent — local skills are unaffected.
 
 ## Rank

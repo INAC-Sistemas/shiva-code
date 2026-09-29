@@ -2,6 +2,7 @@
 name: fixing-accessibility
 description: Make interfaces usable by keyboard, screen reader and low-vision users — accessible names, keyboard access, focus and dialogs, semantics, form errors, announcements, contrast, and motion that respects reduced-motion — and audit a file with quoted violations and minimal fixes.
 whenToUse: Whenever buttons, links, inputs, menus, dialogs, tabs, forms, icon-only controls, hover interactions or animations are added or changed in the React app, and when the /02-frontend evaluator checks a UI tarefa. Pass a file path to get a review.
+roles: [frontend]
 ---
 
 # Fixing accessibility

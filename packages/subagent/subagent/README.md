@@ -44,7 +44,7 @@ An agent that calls the tool gets the child's final answer as the tool result. M
 
 ### One-shot and continuable children
 
-One-shot children run once and settle with a single result, plus an optional structured output and a safe diagnostic on failure. A start request may override the child Agent's provider, model, reasoning effort, and output-token limit through `agentOptions`; every requested option requires the provider's matching capability. Continuable children keep a durable session and accept later messages in order: the caller receives a stable child id, sends adjacent-Agent messages, and can interrupt the current turn without destroying the child. The tool row's `backgroundMode` picks the shape (`one-shot` by default, or `continuable` on providers that support it).
+One-shot children run once and settle with a single result, plus an optional structured output and a safe diagnostic on failure. A start request may override the child Agent's provider, model, reasoning effort, and output-token limit through `agentOptions`; every requested option requires the provider's matching capability. A request may also name an `agentPreset`: the child then mounts that preset instead of joining its parent's composition, so its tools, prompt sections, and skills are the preset's alone; only the spawn backend supports it, and an unknown preset or a deployment without a preset roster rejects the start with `AGENT_PRESET_UNAVAILABLE`. Continuable children keep a durable session and accept later messages in order: the caller receives a stable child id, sends adjacent-Agent messages, and can interrupt the current turn without destroying the child. The tool row's `backgroundMode` picks the shape (`one-shot` by default, or `continuable` on providers that support it).
 
 ### Messaging, interrupting, and discovering
 
@@ -103,7 +103,7 @@ Successful local child creation appends a `subagent/catalog` fact to the parent 
 - **Publication is the boundary** — before it the provider owns the setup and must roll back on failure; after it the caller owns the run and must dispose it.
 - **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
 - **Agent-message authority is exact adjacency** — `sendMessage()` requires the exact live sender; every sender may target a direct continuable child, while only a sender with a resident continuable Activation may target its direct parent.
-- **The descriptor is log-only** — a session event absent from model history and retained across compaction; a continuable descriptor records the resolved child provider, model, and reasoning effort explicitly for cold resume.
+- **The descriptor is log-only** — a session event absent from model history and retained across compaction; a continuable descriptor records the resolved child provider, model, and reasoning effort explicitly for cold resume. A continuable child with its own preset is stamped version 4 (version 3 plus `agentPreset`), so children created without one keep the version-3 record older runtimes resume.
 
 </details>
 

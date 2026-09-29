@@ -2,6 +2,7 @@
 name: ui-icons
 description: Take every application icon from Lucide, or from Tabler when Lucide has no glyph — install the package with pnpm, import by name, and never hand-write an SVG, ship an emoji as an icon, or add a third icon pack.
 whenToUse: Whenever work adds or changes an icon in a UI — buttons, navigation, empty states, menus, status, form fields — in the React app. Also when /01-arquitetura records the frontend stack and when /02-frontend briefs a UI tarefa.
+roles: [frontend]
 ---
 
 # UI icons

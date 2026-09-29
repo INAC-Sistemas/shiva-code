@@ -582,6 +582,33 @@ async mount(agentCtx: Context, id?: string): Promise<AgentPreset>
 composeFrom(agentCtx: Context, parentCtx: Context): string | undefined
 
 /**
+ * Resolve and mount one preset ahead of a synchronous {@link joinPrepared}.
+ *
+ * The in-process subagent drivers compose a child inside a synchronous
+ * creation `setup`, where {@link mount} cannot run. Splitting the work keeps
+ * every failure mode — unknown id, broken composition, mount rejection — in
+ * this awaited step, before any child agent exists, and pins the exact
+ * standing generation the later join binds to.
+ * @param id - the preset id.
+ * @returns an opaque handle for {@link joinPrepared} on this roster.
+ * @throws when the preset is unknown or its composition is unusable.
+ */
+async prepareJoin(id: string): Promise<PreparedPresetJoin>
+
+/**
+ * Join one agent to the standing generation a {@link prepareJoin} resolved.
+ *
+ * Synchronous, like {@link composeFrom}, so a child creation window can
+ * compose an agent from a preset other than its parent's.
+ * @param agentCtx - the joining agent's scope context.
+ * @param prepared - a handle this roster's {@link prepareJoin} returned.
+ * @returns the preset id joined.
+ * @throws when `agentCtx` carries no scope, has already joined a preset, or
+ * `prepared` did not come from this roster.
+ */
+joinPrepared(agentCtx: Context, prepared: PreparedPresetJoin): string
+
+/**
  * The preset one live agent runs on.
  *
  * Read from the live scope chain rather than from the session, so it answers

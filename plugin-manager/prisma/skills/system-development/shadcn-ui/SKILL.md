@@ -2,6 +2,7 @@
 name: shadcn-ui
 description: Build React UI from shadcn/ui components installed with the shadcn CLI — create or initialize the project, search the registry, read component docs, add components — instead of hand-writing buttons, dialogs, forms, tables, menus or other standard UI.
 whenToUse: Whenever work creates or changes UI in a React + Tailwind project (Vite, Next.js, React Router, TanStack Start, Astro, Laravel), and when /01-arquitetura chooses the frontend stack.
+roles: [frontend]
 ---
 
 # shadcn/ui

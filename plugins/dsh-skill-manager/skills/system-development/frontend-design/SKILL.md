@@ -2,6 +2,7 @@
 name: frontend-design
 description: Give every interface a deliberate visual direction — named aesthetic, font pairing, composition, depth and a motion language where every page animates — record it as mds/epics/<epic>/02-design.md, and build screens that could not be mistaken for a template.
 whenToUse: At the start of /02-frontend right after /ui-palette, before the first screen is built; whenever a page, landing, dashboard or component is created or restyled in the React app, and when /02-frontend briefs a UI tarefa.
+roles: [frontend]
 ---
 
 # Frontend design

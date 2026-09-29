@@ -74,6 +74,7 @@ export default async function SkillsPage() {
       modelInvocable: true,
       userInvocable: true,
       published: true,
+      roles: true,
       revision: true,
       updatedAt: true,
     },
@@ -163,6 +164,7 @@ export default async function SkillsPage() {
                         modelInvocable: skill.modelInvocable,
                         userInvocable: skill.userInvocable,
                         published: skill.published,
+                        roles: skill.roles,
                       }}
                     />
 

@@ -6,7 +6,7 @@
 // recebe de outro.
 
 import { parse as parseYaml } from "yaml";
-import { SKILL_NAME_PATTERN } from "./skills";
+import { type AgentRole, isAgentRole, KNOWN_AGENT_ROLES, SKILL_NAME_PATTERN } from "./skills";
 
 /** Uma skill lida de um SKILL.md, já projetada nas colunas de `LibrarySkill`. */
 export type ParsedSkillFile = {
@@ -16,6 +16,8 @@ export type ParsedSkillFile = {
   content: string;
   modelInvocable: boolean;
   userInvocable: boolean;
+  /** Papéis de agente que recebem a skill; vazio quando o frontmatter não declara `roles`. */
+  roles: AgentRole[];
 };
 
 /** Frontmatter ausente, YAML inválido ou campo obrigatório faltando. */
@@ -104,6 +106,24 @@ function optionalFlag(
 }
 
 /**
+ * Lê a lista opcional `roles`. O provider de filesystem do `dsh` ignora a
+ * chave, então um SKILL.md com papéis continua carregando fora da biblioteca.
+ */
+function optionalRoles(fields: Record<string, unknown>): AgentRole[] {
+  const value = fields.roles;
+
+  if (value === undefined || value === null) return [];
+
+  if (!Array.isArray(value) || !value.every(isAgentRole)) {
+    throw new SkillFrontmatterError(
+      `O campo "roles" precisa ser uma lista com papéis entre: ${KNOWN_AGENT_ROLES.join(", ")}.`,
+    );
+  }
+
+  return [...new Set(value)];
+}
+
+/**
  * Lê um SKILL.md completo.
  *
  * As chaves aceitas são exatamente as que o provider de filesystem do `dsh` lê,
@@ -169,5 +189,6 @@ export function parseSkillFile(source: string): ParsedSkillFile {
     // de ausência é "pode ser invocada" nos dois casos.
     modelInvocable: !optionalFlag(fields, "disable-model-invocation", false),
     userInvocable: optionalFlag(fields, "user-invocable", true),
+    roles: optionalRoles(fields),
   };
 }

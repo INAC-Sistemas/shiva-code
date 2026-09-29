@@ -280,7 +280,8 @@ export class AgentPresets extends TypertRemoteService {
     // Keep the visible policy and marked default from the same settings
     // snapshot even when discovery yields while settings are hot-reloaded.
     const policy = this.selectionPolicy()
-    const presets = await this.list()
+    // Hidden presets compose delegated children only; a picker never offers them.
+    const presets = (await this.list()).filter(preset => preset.hidden !== true)
     return {
       presets: presets.map(preset => ({
         id: preset.id,
@@ -420,6 +421,9 @@ export class AgentPresets extends TypertRemoteService {
    */
   private readonly bindings = new WeakMap<ScopeKey, ScopeParentBinding>()
 
+  /** Standing keys behind the handles {@link prepareJoin} issued; entries die with their handles. */
+  private readonly prepared = new WeakMap<PreparedPresetJoin, ScopeKey>()
+
   /**
    * Compose one agent from a preset: ensure the preset's standing mount, then
    * parent the agent's scope key to it so the mount's registrations and
@@ -483,6 +487,50 @@ export class AgentPresets extends TypertRemoteService {
     if (standing === undefined) return undefined
     this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
     return standing.presetId
+  }
+
+  /**
+   * Resolve and mount one preset ahead of a synchronous {@link joinPrepared}.
+   *
+   * The in-process subagent drivers compose a child inside a synchronous
+   * creation `setup`, where {@link mount} cannot run. Splitting the work keeps
+   * every failure mode — unknown id, broken composition, mount rejection — in
+   * this awaited step, before any child agent exists, and pins the exact
+   * standing generation the later join binds to.
+   * @param id - the preset id.
+   * @returns an opaque handle for {@link joinPrepared} on this roster.
+   * @throws when the preset is unknown or its composition is unusable.
+   */
+  async prepareJoin(id: string): Promise<PreparedPresetJoin> {
+    const preset = await this.resolveMountable(id)
+    const standing = await this.ensureStanding(preset)
+    const handle: PreparedPresetJoin = Object.freeze({ presetId: preset.id })
+    this.prepared.set(handle, standing.key)
+    return handle
+  }
+
+  /**
+   * Join one agent to the standing generation a {@link prepareJoin} resolved.
+   *
+   * Synchronous, like {@link composeFrom}, so a child creation window can
+   * compose an agent from a preset other than its parent's.
+   * @param agentCtx - the joining agent's scope context.
+   * @param prepared - a handle this roster's {@link prepareJoin} returned.
+   * @returns the preset id joined.
+   * @throws when `agentCtx` carries no scope, has already joined a preset, or
+   * `prepared` did not come from this roster.
+   */
+  joinPrepared(agentCtx: Context, prepared: PreparedPresetJoin): string {
+    const agentKey = scopeOf(agentCtx)
+    if (agentKey === undefined) {
+      throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
+    }
+    const standingKey = this.prepared.get(prepared)
+    if (standingKey === undefined) {
+      throw new Error(`agent-presets: preset "${prepared.presetId}" was not prepared by this roster`)
+    }
+    this.bindings.set(agentKey, bindScopeParent(agentKey, standingKey))
+    return prepared.presetId
   }
 
   /**
@@ -815,6 +863,16 @@ export class AgentPresets extends TypertRemoteService {
     this.standing.set(preset.id, created)
     return created
   }
+}
+
+/**
+ * A preset standing composition resolved by {@link AgentPresets.prepareJoin},
+ * joinable synchronously through {@link AgentPresets.joinPrepared}. Opaque:
+ * only the roster that issued it can resolve its standing generation.
+ */
+export interface PreparedPresetJoin {
+  /** The prepared preset's id. */
+  readonly presetId: string
 }
 
 /** The composition file identity one standing generation was mounted from. */

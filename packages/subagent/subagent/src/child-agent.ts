@@ -25,8 +25,10 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 // documented `ctx.get` pattern), never as a hard dep. A rosterless deployment
 // keeps its model-facing rows on the host plane, where the child already sees
 // them through the tool registry's global layer.
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type AgentPresets from '@deepseek-ai/dsh-agent-presets'
+import type { PreparedPresetJoin } from '@deepseek-ai/dsh-agent-presets'
 import { delegationDepthOf } from './depth.ts'
+import { SubagentError } from './error.ts'
 
 /** Thrown when starting a child would exceed the requested depth cap. */
 export class SubagentDepthError extends Error {
@@ -124,7 +126,8 @@ export function resolveChildAgentOptions(
  * survive persistence, the seed boundary that separates inherited parent
  * history from child work, and the composition the child runs under.
  *
- * The preset is read from the parent's LIVE scope chain rather than from its
+ * A prepared role preset is recorded as is. Otherwise the preset is read
+ * from the parent's LIVE scope chain rather than from its
  * header, because a parent that switched preset while blank runs on the newer
  * composition and its header still names the older one. Recording it is what
  * makes a child's history reconstructable: without it a cold read of the child
@@ -133,15 +136,18 @@ export function resolveChildAgentOptions(
  * @param parent - the delegating parent agent.
  * @param childDepth - the resolved delegation depth to persist.
  * @param isSeeded - whether this child inherits a parent-log prefix, including an explicitly empty one.
+ * @param composition - the prepared composition whose role preset, when present, the child runs.
  * @returns the `meta` for `ctx.agents.create()`.
  */
 export function childSessionMeta(
   parent: Agent,
   childDepth: number,
   isSeeded: boolean,
+  composition: PreparedChildComposition,
 ): NonNullable<CreateAgentOptions['meta']> {
   const parentHeader = parent.session.header
-  const agentPreset = parent.ctx.get('agentPresets')?.composedPreset(parent.ctx)
+  const agentPreset = composition.preset?.join.presetId
+    ?? parent.ctx.get('agentPresets')?.composedPreset(parent.ctx)
   return {
     ...parentHeader.cwd !== undefined ? { cwd: parentHeader.cwd } : {},
     ...agentPreset === undefined ? {} : { agentPreset },
@@ -161,6 +167,66 @@ export interface ChildComposition {
   readonly persona?: string | undefined
   /** Per-child tool scoping. */
   readonly toolFilter?: ToolRestriction | undefined
+  /** Agent preset the child mounts instead of joining its parent's composition. */
+  readonly agentPreset?: string | undefined
+}
+
+/**
+ * A {@link ChildComposition} whose preset, when one was requested, is already
+ * mounted and ready for a synchronous join. Produced only by
+ * {@link prepareChildComposition}; `preset` is required so a caller cannot
+ * hand an unprepared composition to {@link applyChildComposition}.
+ */
+export interface PreparedChildComposition {
+  /** Per-child persona shadowing the deployment persona. */
+  readonly persona: string | undefined
+  /** Per-child tool scoping. */
+  readonly toolFilter: ToolRestriction | undefined
+  /** The prepared role preset, or `undefined` to join the parent's composition. */
+  readonly preset: PreparedChildPreset | undefined
+}
+
+/** One prepared role preset together with the roster that can join it. */
+export interface PreparedChildPreset {
+  /** The roster whose {@link AgentPresets.prepareJoin} issued {@link join}. */
+  readonly roster: AgentPresets
+  /** The handle the child's creation window joins synchronously. */
+  readonly join: PreparedPresetJoin
+}
+
+/**
+ * Resolve and mount a child's requested agent preset before its synchronous
+ * creation window, so an unknown or broken preset rejects before any child
+ * exists.
+ * @param parent - the delegating parent, whose context supplies the roster.
+ * @param composition - the requested per-child composition.
+ * @returns the composition {@link applyChildComposition} installs.
+ * @throws {SubagentError} `AGENT_PRESET_UNAVAILABLE` when a preset is requested
+ * and the deployment composes no roster, or the roster cannot mount it.
+ */
+export async function prepareChildComposition(
+  parent: Agent,
+  composition: ChildComposition,
+): Promise<PreparedChildComposition> {
+  const { persona, toolFilter, agentPreset } = composition
+  if (agentPreset === undefined) return { persona, toolFilter, preset: undefined }
+  const roster = parent.ctx.get('agentPresets')
+  if (roster === undefined) {
+    throw new SubagentError(
+      `subagent agent preset "${agentPreset}" requires the agent-presets roster, which this deployment does not compose`,
+      'AGENT_PRESET_UNAVAILABLE',
+    )
+  }
+  try {
+    return { persona, toolFilter, preset: { roster, join: await roster.prepareJoin(agentPreset) } }
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new SubagentError(
+      `subagent agent preset "${agentPreset}" is unavailable: ${reason}`,
+      'AGENT_PRESET_UNAVAILABLE',
+      { cause: error },
+    )
+  }
 }
 
 /**
@@ -175,8 +241,8 @@ export const SUBAGENT_DELEGATION_CONTEXT
     + 'limitation in your reply so the delegating agent can handle it.'
 
 /**
- * Compose one child inside its creation window: join its parent's preset,
- * register the fixed delegation-scope statement, then apply the child's own
+ * Compose one child inside its creation window: join its prepared role preset,
+ * or its parent's preset when none was requested, register the fixed delegation-scope statement, then apply the child's own
  * shadowing persona section and tool restriction, all owned by the child's
  * scope and therefore invisible to its parent and siblings. Creation and cold
  * resume both pass through here.
@@ -193,15 +259,20 @@ export const SUBAGENT_DELEGATION_CONTEXT
  * sections. Taking the parent as a parameter is what makes that omission
  * unrepresentable at the call sites.
  * @param childCtx - the child agent's scoped creation context.
- * @param parent - the delegating parent whose composition the child joins.
- * @param composition - the per-child persona and tool filter to install.
+ * @param parent - the delegating parent whose composition the child joins
+ * when no preset was prepared.
+ * @param composition - the prepared preset, persona, and tool filter to install.
  */
 export function applyChildComposition(
   childCtx: Context,
   parent: Agent,
-  composition: ChildComposition,
+  composition: PreparedChildComposition,
 ): void {
-  childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+  if (composition.preset === undefined) {
+    childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+  } else {
+    composition.preset.roster.joinPrepared(childCtx, composition.preset.join)
+  }
   childCtx.systemPrompt.context({
     name: 'subagent:delegation',
     order: childCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),

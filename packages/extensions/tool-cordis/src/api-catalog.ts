@@ -175,6 +175,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when `agentCtx` carries no scope, or has already joined a preset.'],
       },
       {
+        signature: 'async prepareJoin(id: string): Promise<PreparedPresetJoin>',
+        description: 'Resolve and mount one preset ahead of a synchronous joinPrepared.\n\nThe in-process subagent drivers compose a child inside a synchronous creation `setup`, where mount cannot run. Splitting the work keeps every failure mode — unknown id, broken composition, mount rejection — in this awaited step, before any child agent exists, and pins the exact standing generation the later join binds to.',
+        parameters: [{ name: 'id', description: 'the preset id.' }],
+        returns: 'an opaque handle for {@link joinPrepared} on this roster.',
+        throws: ['when the preset is unknown or its composition is unusable.'],
+      },
+      {
+        signature: 'joinPrepared(agentCtx: Context, prepared: PreparedPresetJoin): string',
+        description: 'Join one agent to the standing generation a prepareJoin resolved.\n\nSynchronous, like composeFrom, so a child creation window can compose an agent from a preset other than its parent\'s.',
+        parameters: [{ name: 'agentCtx', description: 'the joining agent\'s scope context.' }, { name: 'prepared', description: 'a handle this roster\'s {@link prepareJoin} returned.' }],
+        returns: 'the preset id joined.',
+        throws: ['when `agentCtx` carries no scope, has already joined a preset, or `prepared` did not come from this roster.'],
+      },
+      {
         signature: 'composedPreset(agentCtx: Context): string | undefined',
         description: 'The preset one live agent runs on.\n\nRead from the live scope chain rather than from the session, so it answers for an agent whose session has not recorded a preset yet — a child agent whose durable header is being built from its parent\'s composition.',
         parameters: [{ name: 'agentCtx', description: 'the agent\'s scope context.' }],
@@ -3601,7 +3615,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentPreset',
-    declaration: 'export interface AgentPreset {\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly path: string;\n    readonly name?: string;\n    readonly description?: string;\n    readonly order?: number;\n    readonly broken?: string;\n}',
+    declaration: 'export interface AgentPreset {\n    readonly id: string;\n    readonly trust: PresetTrust;\n    readonly path: string;\n    readonly name?: string;\n    readonly description?: string;\n    readonly order?: number;\n    readonly hidden?: boolean;\n    readonly broken?: string;\n}',
   },
   {
     name: 'AgentPresetComposition',
@@ -3953,7 +3967,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ContinuableSubagentDescriptorData',
-    declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
+    declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'CordisDynamicPackageId',
@@ -4778,6 +4792,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PreparedLlmCall',
     declaration: 'export interface PreparedLlmCall {\n    readonly config: LlmCallConfig;\n    readonly retryPolicy: ResolvedRetryPolicy;\n    readonly context?: LlmModelContext;\n    readonly inputModalities?: readonly ModelModality[];\n    readonly systemPromptUpdate?: SystemPromptUpdate;\n    readonly adapterDefaults: LlmCallConfigAdapterDefaults;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+  },
+  {
+    name: 'PreparedPresetJoin',
+    declaration: 'export interface PreparedPresetJoin {\n    readonly presetId: string;\n}',
   },
   {
     name: 'PreparedReferencedMessage',
@@ -5717,7 +5735,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentCapabilities',
-    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n}',
+    declaration: 'export interface SubagentCapabilities {\n    readonly agentOptions: boolean;\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n    readonly agentPreset: boolean;\n}',
   },
   {
     name: 'SubagentCatalog',
@@ -5789,7 +5807,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentStartRequest',
-    declaration: 'export interface SubagentStartRequest {\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
+    declaration: 'export interface SubagentStartRequest {\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SubagentStopReason',

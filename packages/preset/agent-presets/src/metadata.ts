@@ -36,6 +36,12 @@ export interface PresetMetadata {
    * can read in capability order while authored ones stay alphabetical.
    */
   readonly order?: number
+  /**
+   * Whether the roster a client reads omits this preset. A hidden preset
+   * still resolves and mounts by id: it exists to compose delegated children
+   * (a subagent tool row names it), not to be picked for a top-level session.
+   */
+  readonly hidden?: boolean
 }
 
 /** A non-empty trimmed string, or undefined for anything else. */
@@ -77,10 +83,12 @@ export async function readPresetMetadata(directory: string): Promise<PresetMetad
   const order = typeof record.order === 'number' && Number.isFinite(record.order)
     ? record.order
     : undefined
+  const hidden = record.hidden === true
   return {
     ...name === undefined ? {} : { name },
     ...description === undefined ? {} : { description },
     ...order === undefined ? {} : { order },
+    ...hidden ? { hidden } : {},
   }
 }
 
@@ -95,11 +103,12 @@ export async function readPresetMetadata(directory: string): Promise<PresetMetad
 export function renderPresetMetadata(metadata: PresetMetadata): string | undefined {
   const name = text(metadata.name)
   const description = text(metadata.description)
-  const { order } = metadata
-  if (name === undefined && description === undefined && order === undefined) return undefined
+  const { order, hidden } = metadata
+  if (name === undefined && description === undefined && order === undefined && hidden !== true) return undefined
   return yaml.dump({
     ...name === undefined ? {} : { name },
     ...description === undefined ? {} : { description },
     ...order === undefined ? {} : { order },
+    ...hidden === true ? { hidden } : {},
   }, { lineWidth: -1 })
 }

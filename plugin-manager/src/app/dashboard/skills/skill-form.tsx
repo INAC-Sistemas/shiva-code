@@ -3,7 +3,20 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createSkill, updateSkill } from "@/app/actions/skills";
-import { SKILL_NAME_HINT, initialSkillFormState } from "@/lib/skills";
+import {
+  type AgentRole,
+  KNOWN_AGENT_ROLES,
+  SKILL_NAME_HINT,
+  initialSkillFormState,
+} from "@/lib/skills";
+
+/** Rótulo de cada papel de agente no formulário. */
+const ROLE_LABELS: Record<AgentRole, string> = {
+  pm: "Gerente de projeto",
+  backend: "Backend",
+  frontend: "Frontend",
+  tester: "Testes",
+};
 
 const inputClass =
   "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-indigo-500";
@@ -22,6 +35,7 @@ export type EditableSkill = {
   modelInvocable: boolean;
   userInvocable: boolean;
   published: boolean;
+  roles: string[];
 };
 
 function FieldError({ message }: { message?: string }) {
@@ -46,11 +60,13 @@ function SubmitButton({ label }: { label: string }) {
 
 function Checkbox({
   name,
+  value,
   label,
   hint,
   defaultChecked,
 }: {
   name: string;
+  value?: string;
   label: string;
   hint: string;
   defaultChecked: boolean;
@@ -60,6 +76,7 @@ function Checkbox({
       <input
         type="checkbox"
         name={name}
+        value={value}
         defaultChecked={defaultChecked}
         className="mt-0.5 size-4 rounded border-zinc-300 text-indigo-500 focus:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900"
       />
@@ -166,6 +183,25 @@ function SkillFields({
           defaultChecked={skill?.published ?? true}
         />
       </div>
+
+      <fieldset className="mt-5">
+        <legend className={labelClass}>Papéis de agente</legend>
+        <p className={hintClass}>
+          Um agente de papel da equipe só recebe as skills marcadas com o papel dele.
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-4">
+          {KNOWN_AGENT_ROLES.map((role) => (
+            <Checkbox
+              key={role}
+              name="roles"
+              value={role}
+              label={ROLE_LABELS[role]}
+              hint={`papel "${role}"`}
+              defaultChecked={skill?.roles.includes(role) ?? false}
+            />
+          ))}
+        </div>
+      </fieldset>
     </>
   );
 }

@@ -2,6 +2,7 @@
 name: tailwind-patterns
 description: Write Tailwind the way this flow ships it — v4 CSS-first @theme in the React app — with palette role colors, design-direction fonts, motion tokens and keyframes, container queries, responsive and dark-mode patterns, and no arbitrary-value sprawl.
 whenToUse: Whenever Tailwind classes, theme CSS, tokens, keyframes or responsive layout are written or reviewed in a React + Tailwind app, and when /02-frontend briefs a UI tarefa that touches styling or the theme file.
+roles: [frontend]
 ---
 
 # Tailwind patterns

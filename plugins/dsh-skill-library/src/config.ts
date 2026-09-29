@@ -8,6 +8,31 @@
  * @module
  */
 
+/**
+ * Agent roles the library can narrow a catalog to. Mirrors the server's
+ * `KNOWN_AGENT_ROLES` (plugin-manager `src/lib/skills.ts`): the client cannot
+ * import server code, and an unknown role would be refused with 400 on every
+ * lookup.
+ */
+export const AGENT_ROLES = ['pm', 'backend', 'frontend', 'tester'] as const
+
+/** One of {@link AGENT_ROLES}. */
+export type AgentRole = (typeof AGENT_ROLES)[number]
+
+/**
+ * Check the optional agent role.
+ * @param role - the configured role, or undefined for an unnarrowed catalog.
+ * @returns the role.
+ * @throws Error when the role is not one of {@link AGENT_ROLES}.
+ */
+export function assertRole(role: string | undefined): AgentRole | undefined {
+  if (role === undefined) return undefined
+  if (!(AGENT_ROLES as readonly string[]).includes(role)) {
+    throw new Error(`dsh-skill-library: role must be one of ${AGENT_ROLES.join(', ')}, got "${role}"`)
+  }
+  return role as AgentRole
+}
+
 /** Hosts allowed to be reached over plain http. */
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 

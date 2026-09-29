@@ -31,9 +31,9 @@ The shipped Web `standard`, `ptc`, and `cordis` presets include [explicit file d
 
 ### What a preset gives a session
 
-A session composed from a preset runs the plugins that preset's `agent.cordis.yml` names: its tools, prompt sections, and skills. Sessions joined to the same preset share one installed composition, and each session's state stays separate. A child agent (subagent) joins its parent's composition, so it sees the same tools and prompt sections as the agent that spawned it.
+A session composed from a preset runs the plugins that preset's `agent.cordis.yml` names: its tools, prompt sections, and skills. Sessions joined to the same preset share one installed composition, and each session's state stays separate. A child agent (subagent) joins its parent's composition, so it sees the same tools and prompt sections as the agent that spawned it, unless its delegation names its own preset; then it runs on that preset's tools, prompt sections, and skills instead.
 
-The presets you can choose from come from three sources: the presets shipped inside this package under `presets/`, configured roots, and your own presets under `<dshHome>/.agent-presets`. The picker shows each preset's display name and description; a preset whose composition cannot load is listed with the reason rather than hidden, so you can see what to fix or delete.
+The presets you can choose from come from three sources: the presets shipped inside this package under `presets/`, configured roots, and your own presets under `<dshHome>/.agent-presets`. The picker shows each preset's display name and description; a preset whose composition cannot load is listed with the reason rather than hidden, so you can see what to fix or delete. A preset whose `preset.yml` sets `hidden: true` is left out of the picker but still composes any child whose delegation names it, which is how role presets for delegated agents stay out of top-level selection.
 
 ### Minimal configuration
 
@@ -119,7 +119,7 @@ This section explains the design behind the roster and the standing mount; obser
 
 ### The standing mount
 
-`ensureStanding` keeps one pending promise per preset id, single-flight, so two agents racing the first use of a preset share one composition. A settled failure is removed so a later session retries a preset whose file has been fixed. The mount runs in the roster service's own untraced context — a subtree minted from a traced context would resolve services through the caller's shadow fiber — so it survives every agent and unwinds only with whole-tree teardown. `serviceForAgent` reads an agent's instance of a service its preset mounted behind an `isolate` realm, which is otherwise invisible outside the group.
+`ensureStanding` keeps one pending promise per preset id, single-flight, so two agents racing the first use of a preset share one composition. A settled failure is removed so a later session retries a preset whose file has been fixed. The mount runs in the roster service's own untraced context — a subtree minted from a traced context would resolve services through the caller's shadow fiber — so it survives every agent and unwinds only with whole-tree teardown. A delegated child composed from its own preset cannot await `mount()` inside the synchronous creation `setup`, so `prepareJoin(id)` resolves and mounts the preset first and `joinPrepared()` binds the child to that exact generation synchronously; every failure surfaces at the awaited step, before a child exists. `serviceForAgent` reads an agent's instance of a service its preset mounted behind an `isolate` realm, which is otherwise invisible outside the group.
 
 ### The composition inventory
 

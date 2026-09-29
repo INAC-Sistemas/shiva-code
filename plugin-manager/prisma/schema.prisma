@@ -140,6 +140,10 @@ model LibrarySkill {
   /// Despublicar tira a skill de circulação sem apagá-la: a API responde 404,
   /// e o painel continua mostrando a linha como rascunho.
   published      Boolean  @default(true)
+  /// Papéis de agente que recebem a skill (`KNOWN_AGENT_ROLES` em
+  /// `src/lib/skills.ts`). Uma leitura que declara papel serve só as skills que
+  /// o listam; uma leitura sem papel ignora a coluna. Vazio = nenhum papel.
+  roles          String[] @default([])
   /// Incrementa a cada escrita de conteúdo; o cliente usa para detectar
   /// mudança sem baixar corpo.
   revision       Int      @default(1)

@@ -157,7 +157,7 @@ export interface PresetRoot {
 export type PresetTrust = 'system' | 'user'
 ```
 
-Source: [`packages/preset/agent-presets/src/preset.ts:52`](../packages/preset/agent-presets/src/preset.ts)
+Source: [`packages/preset/agent-presets/src/preset.ts:54`](../packages/preset/agent-presets/src/preset.ts)
 
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -3075,12 +3075,31 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Agent preset every child mounts instead of joining the calling agent's
+   * composition, so the child's tools, prompt sections, and skills come from
+   * that preset alone. Requires the provider's `agentPreset` capability.
+   */
+  agentPreset?: string
+  /**
+   * Object-rooted JSON Schema the child's final answer must satisfy; the
+   * validated value is returned as the call's `structured` result. Requires
+   * the provider's `outputSchema` capability, `backgroundMode: one-shot`, and
+   * `enableRunInBackground: false`, because only a foreground call returns it.
+   */
+  outputSchema?: ObjectJsonSchema
+  /**
+   * Model-facing description that replaces the provider-derived delegation
+   * wording, so several instances can describe distinct roles. Background and
+   * model-selection guidance is still appended.
+   */
+  toolDescription?: string
 }
 ```
 
-Depends on: [`AgentOptions`](subsystems/core.md)
+Depends on: [`AgentOptions`](subsystems/core.md) · [`ObjectJsonSchema`](../packages/core/tools/src/index.ts)
 
-Source: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
+Source: [`packages/subagent/tool-subagent/src/index.ts:49`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 

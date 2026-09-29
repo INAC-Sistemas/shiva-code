@@ -29,7 +29,7 @@ Mount this backend when delegated work must build on the parent's conversation. 
 
 ### When to choose it
 
-Choose fork when the child needs the conversation's completed turns — a follow-up analysis, a review, a continuation. Choose spawn when the child should start clean, or an out-of-process backend when the child must not share this process. The seed carries conversation history only: the child still gets a fresh tool scope and none of the parent's authority.
+Choose fork when the child needs the conversation's completed turns — a follow-up analysis, a review, a continuation. Choose spawn when the child should start clean, or an out-of-process backend when the child must not share this process. The seed carries conversation history only: the child still gets a fresh tool scope and none of the parent's authority. Fork refuses a request's `agentPreset`, because the seeded history was produced under the parent's tools.
 
 ### Seed boundary
 

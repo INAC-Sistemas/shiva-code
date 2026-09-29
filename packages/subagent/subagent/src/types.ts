@@ -133,6 +133,13 @@ export interface SubagentCapabilities {
   readonly depthLimit: boolean
   readonly toolFilter: boolean
   readonly persona: boolean
+  /**
+   * Whether the child can mount its own agent preset. Unlike the other flags,
+   * this one also gates {@link ContinuableStartSpec} requests: a provider whose
+   * children must share the parent's composition (a fork seeds history the
+   * parent's tools produced) sets it `false` for both shapes.
+   */
+  readonly agentPreset: boolean
 }
 
 /**
@@ -198,6 +205,14 @@ export interface SubagentStartRequest {
    * persona (strict `{{…}}` interpolation against the registered variables).
    */
   readonly persona?: string
+  /**
+   * Optional agent preset the child mounts instead of joining its parent's
+   * composition, so its tools, prompt sections, and skills are that preset's
+   * alone. Requires {@link SubagentCapabilities.agentPreset}; rejected at start
+   * otherwise, and when the deployment composes no preset roster or the roster
+   * cannot mount the preset.
+   */
+  readonly agentPreset?: string
 }
 
 /**

@@ -7,7 +7,7 @@
  * child's own request — rather than the join that produces it.
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
@@ -131,5 +131,59 @@ describe('a child agent composed in-process', () => {
     expect(ctx.tools.schemas(run.localAgent).map(schema => schema.name)).toEqual(['reviewing_only'])
     expect(run.localAgent?.session.header.agentPreset).toBe('reviewing')
     await run.dispose()
+  })
+})
+
+describe('a child agent composed from its own role preset', () => {
+  it('reaches the model with the role preset\'s tools instead of its parent\'s', async () => {
+    const { ctx, adapter, parent } = await setupPresetHost()
+
+    const run = await startInProcessRun({ ...spawnRequest(parent), agentPreset: 'reviewing' }, {})
+    await run.result
+
+    expect(adapter.requests.at(-1)?.tools?.map(tool => tool.name)).toEqual(['reviewing_only'])
+    expect(ctx.tools.schemas(parent).map(schema => schema.name)).toEqual(['preset_only'])
+    expect(run.localAgent?.session.header.agentPreset).toBe('reviewing')
+    await run.dispose()
+  })
+
+  it('rejects an unknown role preset before any child is published', async () => {
+    const { ctx, parent } = await setupPresetHost()
+    const before = ctx.agents.list().length
+
+    await expect(startInProcessRun({ ...spawnRequest(parent), agentPreset: 'ghost' }, {}))
+      .rejects.toMatchObject({ code: 'AGENT_PRESET_UNAVAILABLE' })
+    expect(ctx.agents.list()).toHaveLength(before)
+  })
+
+  it('names a non-Error roster failure in the rejection', async () => {
+    const { ctx, parent } = await setupPresetHost()
+    vi.spyOn(ctx.agentPresets, 'prepareJoin').mockRejectedValueOnce('roster offline')
+
+    await expect(startInProcessRun({ ...spawnRequest(parent), agentPreset: 'reviewing' }, {}))
+      .rejects.toThrow('subagent agent preset "reviewing" is unavailable: roster offline')
+  })
+
+  it('rejects a role preset when the deployment composes no roster', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    const parent = (await ctx.agents.create({ sessionId: SessionId('bare-parent') })).agent
+
+    await expect(startInProcessRun({ ...spawnRequest(parent), agentPreset: 'reviewing' }, {}))
+      .rejects.toThrow(/requires the agent-presets roster/)
+  })
+
+  it('does not publish a child when cancelled while its preset mounts', async () => {
+    const { ctx, parent } = await setupPresetHost()
+    const controller = new AbortController()
+    const before = ctx.agents.list().length
+
+    const start = startInProcessRun({ ...spawnRequest(parent), signal: controller.signal, agentPreset: 'reviewing' }, {})
+    controller.abort()
+
+    await expect(start).rejects.toThrow()
+    expect(ctx.agents.list()).toHaveLength(before)
   })
 })

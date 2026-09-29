@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_ROLES,
   assertHeaders,
   assertMaxBodyBytes,
   assertRank,
+  assertRole,
   assertTimeout,
   resolveEndpoint,
 } from '../src/config.ts'
@@ -83,5 +85,16 @@ describe('assertHeaders', () => {
 
   it('refuses a blank value', () => {
     expect(() => assertHeaders({ 'x-tenant': '  ' })).toThrow(/has a blank value/)
+  })
+})
+
+describe('assertRole', () => {
+  it('accepts every known role and an omitted one', () => {
+    for (const role of AGENT_ROLES) expect(assertRole(role)).toBe(role)
+    expect(assertRole(undefined)).toBeUndefined()
+  })
+
+  it('refuses a role the library would answer 400 for', () => {
+    expect(() => assertRole('designer')).toThrow(/role must be one of pm, backend, frontend, tester/)
   })
 })

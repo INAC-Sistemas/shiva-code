@@ -55,6 +55,15 @@ uma skill fora do perfil do usuário logado não existe para aquele token.
 
 Skills criadas só no painel, sem pasta em `prisma/skills/`, o seed não apaga.
 
+Uma skill de papel da equipe declara `roles:` no frontmatter com valores de
+`KNOWN_AGENT_ROLES` (`pm`, `backend`, `frontend`, `tester`, em
+[src/lib/skills.ts](src/lib/skills.ts)). Cada preset de papel do `dsh` pede o
+catálogo com `?role=<papel>`, e o servidor serve só as skills do perfil marcadas
+com aquele papel; um papel desconhecido responde 400 e uma skill do perfil sem o
+papel responde 403 `skill-not-in-role`. Leituras sem `role` ignoram a coluna.
+Papel novo exige a constante, o preset e o config `role` do `dsh-skill-library`
+no mesmo PR.
+
 Renomear ou retirar uma skill do produto não basta apagar ou mover a pasta: registre
 a troca em `RENAMED_SKILLS` (a linha é renomeada no lugar e as seleções de perfil
 sobrevivem) ou o nome em `RETIRED_SKILLS` (a linha é apagada), ambos em

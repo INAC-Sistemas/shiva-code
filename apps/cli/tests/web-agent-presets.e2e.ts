@@ -12,7 +12,7 @@ import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 import { SETTINGS_NAMESPACE, SHIPPED_PRESET_ROOT } from '@deepseek-ai/dsh-agent-presets'
-import { applyChildComposition, childSessionMeta } from '@deepseek-ai/dsh-subagent'
+import { applyChildComposition, childSessionMeta, prepareChildComposition } from '@deepseek-ai/dsh-subagent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-compaction-basic'
 import type {} from '@deepseek-ai/dsh-skill'
@@ -20,6 +20,9 @@ import type {} from '@deepseek-ai/dsh-tools'
 // Type-only: resolves `ctx.get('sessionProjections')` and `ctx.get('tokenMeter')`.
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-token-meter'
+
+/** A child composition that names no role preset, so the child joins its parent's. */
+const NO_ROLE_PRESET = { persona: undefined, toolFilter: undefined, preset: undefined } as const
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 /** The shipped Web surface: the dsh-base and dsh-web-app bundle patches over an empty preset root. */
@@ -698,9 +701,9 @@ describe('a delegated child', () => {
     // Exactly what an in-process subagent driver's creation window does.
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child'),
-      meta: childSessionMeta(parent.agent, 1, false),
+      meta: childSessionMeta(parent.agent, 1, false, NO_ROLE_PRESET),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        applyChildComposition(agentCtx, parent.agent, NO_ROLE_PRESET)
       },
     })
     try {
@@ -724,9 +727,9 @@ describe('a delegated child', () => {
     await ctx.agentPresets.recompose(parent.agent.ctx, 'minimal')
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child-switch'),
-      meta: childSessionMeta(parent.agent, 1, false),
+      meta: childSessionMeta(parent.agent, 1, false, NO_ROLE_PRESET),
       setup: (agentCtx) => {
-        applyChildComposition(agentCtx, parent.agent, {})
+        applyChildComposition(agentCtx, parent.agent, NO_ROLE_PRESET)
       },
     })
     try {
@@ -734,6 +737,80 @@ describe('a delegated child', () => {
       // header — which still names `standard`.
       expect(toolNames(ctx, child.agent)).toEqual(toolNames(ctx, parent.agent))
       expect(child.agent.session.header.agentPreset).toBe('minimal')
+    } finally {
+      await child.dispose()
+      await parent.dispose()
+    }
+  })
+})
+
+describe('the team presets', () => {
+  // The product's role compositions, mounted through the real roster exactly as
+  // a deployment that adds their root would: the project manager's delegation
+  // rows must reach the role presets beside it, and a role child must see its
+  // own composition, not the manager's.
+  const TEAM_ROOT = join(REPO_ROOT, 'apps/cli/config/agent-presets')
+  let teamCtx: Context
+
+  beforeAll(async () => {
+    const settingsFile = join(await mkdtemp(join(tmpdir(), 'dsh-team-presets-')), 'settings.yaml')
+    await writeFile(settingsFile, '{}\n')
+    teamCtx = await bootWeb(settingsFile, [
+      { id: 'agent-presets', config: { default: 'standard', includeUserRoot: false, roots: [{ path: TEAM_ROOT, trust: 'system' }] } },
+    ])
+  }, 120_000)
+
+  afterAll(async () => {
+    await teamCtx.fiber.dispose()
+  })
+
+  it('keeps the role presets out of the picker', async () => {
+    const roster = await teamCtx.agentPresets.remoteExportList()
+
+    expect(roster.presets.map(row => row.id)).toContain('team')
+    expect(roster.presets.map(row => row.id)).not.toContain('team-backend')
+  })
+
+  it('gives the project manager delegation and documents, but no shell', async () => {
+    const handle = await teamCtx.agents.create({
+      sessionId: SessionId('team-manager'),
+      setup: agentCtx => teamCtx.agentPresets.mount(agentCtx, 'team').then(() => undefined),
+    })
+    try {
+      const tools = toolNames(teamCtx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')
+      expect(tools).toEqual([
+        'ask_user_question', 'delegate_backend', 'delegate_frontend', 'delegate_tester', 'edit', 'interrupt_agent',
+        'list_agents', 'read', 'read_image', 'send_message', 'skill', 'todo_write', 'web_search', 'write',
+      ])
+    } finally {
+      await handle.dispose()
+    }
+  })
+
+  it.each([
+    ['team-backend', true],
+    ['team-frontend', true],
+    ['team-tester', false],
+  ])('composes a %s child from its own preset', async (agentPreset, messages) => {
+    const parent = await teamCtx.agents.create({
+      sessionId: SessionId(`team-parent-${agentPreset}`),
+      setup: agentCtx => teamCtx.agentPresets.mount(agentCtx, 'team').then(() => undefined),
+    })
+    const composition = await prepareChildComposition(parent.agent, { agentPreset })
+    const child = await parent.agent.ctx.agents.create({
+      sessionId: SessionId(`team-child-${agentPreset}`),
+      meta: childSessionMeta(parent.agent, 1, false, composition),
+      setup: (agentCtx) => {
+        applyChildComposition(agentCtx, parent.agent, composition)
+      },
+    })
+    try {
+      const tools = toolNames(teamCtx, child.agent).filter(name => name !== 'glob' && name !== 'grep')
+      expect(tools).toEqual([
+        'bash', 'edit', 'job_kill', 'job_list', 'job_output', 'read', 'read_image',
+        ...messages ? ['send_message'] : [], 'skill', 'todo_write', 'write',
+      ])
+      expect(child.agent.session.header.agentPreset).toBe(agentPreset)
     } finally {
       await child.dispose()
       await parent.dispose()

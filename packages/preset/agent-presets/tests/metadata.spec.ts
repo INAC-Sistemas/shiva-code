@@ -85,6 +85,11 @@ describe('reading display metadata', () => {
     expect(await readPresetMetadata(await presetDir('order: .inf\n'))).toEqual({})
   })
 
+  it('reads a hidden flag only when it is literally true', async () => {
+    expect(await readPresetMetadata(await presetDir('hidden: true\n'))).toEqual({ hidden: true })
+    expect(await readPresetMetadata(await presetDir('hidden: yes please\n'))).toEqual({})
+  })
+
   it('cannot carry identity or trust', async () => {
     const dir = await presetDir('name: mine\nid: standard\ntrust: system\n')
 
@@ -104,6 +109,10 @@ describe('rendering display metadata', () => {
 
   it('stores a declared order', () => {
     expect(renderPresetMetadata({ name: '标准模式', order: 1 })).toBe('name: 标准模式\norder: 1\n')
+  })
+
+  it('stores a hidden flag', () => {
+    expect(renderPresetMetadata({ hidden: true })).toBe('hidden: true\n')
   })
 
   it('omits an absent field rather than writing it blank', () => {

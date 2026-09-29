@@ -8,6 +8,7 @@ import SubagentRuntime, {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
   SUBAGENT_DESCRIPTOR_VERSION,
+  SUBAGENT_PRESET_DESCRIPTOR_VERSION,
   SubagentError,
   assertSubagentMaxDepth,
   type ResolvedSubagentStartRequest,
@@ -25,8 +26,22 @@ function fakeParent(id = 'parent-1'): Agent {
   return { id: SessionId(id) } as unknown as Agent
 }
 
-const ALL_CAPS: SubagentCapabilities = { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
-const NO_CAPS: SubagentCapabilities = { agentOptions: false, outputSchema: false, depthLimit: false, toolFilter: false, persona: false }
+const ALL_CAPS: SubagentCapabilities = {
+  agentOptions: true,
+  outputSchema: true,
+  depthLimit: true,
+  toolFilter: true,
+  persona: true,
+  agentPreset: true,
+}
+const NO_CAPS: SubagentCapabilities = {
+  agentOptions: false,
+  outputSchema: false,
+  depthLimit: false,
+  toolFilter: false,
+  persona: false,
+  agentPreset: false,
+}
 
 function baseRequest(overrides: Partial<SubagentStartRequest> = {}): SubagentStartRequest {
   return {
@@ -189,6 +204,7 @@ describe('SubagentRuntime', () => {
     ['depthLimit', { maxDepth: 1 }],
     ['toolFilter', { toolFilter: { deny: ['bash'] } }],
     ['persona', { persona: 'reviewer' }],
+    ['agentPreset', { agentPreset: 'team-backend' }],
   ] as const)('rejects unsupported %s before provider startup', async (_capability, override) => {
     const { subagents } = await service()
     const provider = new StubProvider('weak', NO_CAPS)
@@ -444,7 +460,7 @@ describe('subagent descriptors', () => {
       }),
     ])).toMatchObject({ toolFilter: { deny: ['bash'] } })
     expect(foldSubagentDescriptor([
-      event({ version: SUBAGENT_DESCRIPTOR_VERSION + 1, provider: 'spawn' }),
+      event({ version: SUBAGENT_PRESET_DESCRIPTOR_VERSION + 1, provider: 'spawn' }),
     ])).toBeUndefined()
     expect(() => snapshotSubagentDescriptor({
       mode: 'continuable',
@@ -452,6 +468,41 @@ describe('subagent descriptors', () => {
       label: 'bad',
       toolFilter: { deny: [Symbol('not-json')] as unknown as string[] },
     })).toThrow('not losslessly JSON-serializable')
+  })
+
+  it('stamps a continuable child with its own agent preset as the preset version', () => {
+    const withPreset = snapshotSubagentDescriptor({
+      mode: 'continuable',
+      provider: 'spawn',
+      label: 'backend',
+      agentPreset: 'team-backend',
+    })
+
+    expect(withPreset).toEqual({
+      version: SUBAGENT_PRESET_DESCRIPTOR_VERSION,
+      mode: 'continuable',
+      provider: 'spawn',
+      label: 'backend',
+      agentPreset: 'team-backend',
+    })
+    expect(foldSubagentDescriptor([event(withPreset)])).toEqual(withPreset)
+    // Children without a preset keep the record older runtimes resume.
+    expect(snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'plain' }).version)
+      .toBe(SUBAGENT_DESCRIPTOR_VERSION)
+  })
+
+  it.each([
+    ['preset version without agentPreset', {
+      version: SUBAGENT_PRESET_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'l',
+    }, 'must declare agentPreset'],
+    ['preset version one-shot', {
+      version: SUBAGENT_PRESET_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn',
+    }, 'must be continuable'],
+    ['agentPreset on the base version', {
+      version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'l', agentPreset: 'x',
+    }, 'unknown field "agentPreset"'],
+  ])('rejects a malformed preset descriptor: %s', (_name, payload, message) => {
+    expect(() => foldSubagentDescriptor([event(payload)])).toThrow(message)
   })
 
   it.each([
