@@ -88,7 +88,11 @@
 # ── delegation ──────────────────────────────────────────────────────────────
 
 # `maxDepth: 1` lets the manager (depth 0) start role agents and keeps them
-# from delegating further; their presets carry no delegation tool either.
+# from delegating further; their presets carry no delegation tool either. All
+# three run `continuable`, so the manager never blocks on a role agent and each
+# one keeps its context across the slices and fixes it receives by send_message.
+# `agentOptions` sets each role's model and reasoning effort; change a role's
+# speed or quality here.
 - id: delegation
   name: cordis:group
   group: true
@@ -107,6 +111,10 @@
         agentPreset: team-backend
         backgroundMode: continuable
         maxDepth: 1
+        agentOptions:
+          provider: deepseek-official
+          model: deepseek-v4-flash
+          reasoningEffort: high
         toolDescription: >-
           Delegate a page's backend to the backend developer, one slice at a time and
           in two phases: first the slice's validated contracts, then, on your
@@ -124,6 +132,10 @@
         agentPreset: team-frontend
         backgroundMode: continuable
         maxDepth: 1
+        agentOptions:
+          provider: deepseek-official
+          model: deepseek-v4-flash-vision-exp
+          reasoningEffort: high
         toolDescription: >-
           Delegate a page's screen to the frontend developer, one slice at a time:
           layout, components, states, and calls to the slice's API contracts, built while
@@ -140,33 +152,23 @@
         provider: spawn
         toolName: delegate_tester
         agentPreset: team-tester
-        backgroundMode: one-shot
-        enableRunInBackground: false
+        backgroundMode: continuable
         maxDepth: 1
         guardRole: qa
+        agentOptions:
+          provider: deepseek-official
+          model: deepseek-v4-flash
+          reasoningEffort: low
         toolDescription: >-
-          Delegate testing of one delivered slice to the tester. It builds and runs the
-          slice's test suite against the running application and returns a verdict:
-          `status` pass or fail, and on failure the `side` (backend or frontend) that
-          must change, the `evidence`, and the `failingTests`. It does not see this
+          Delegate the epic's testing to the tester, one slice at a time and in two
+          phases: first it writes the slice's test suite from the task file and the
+          contracts while the developers build, then, on your send_message "run", it runs
+          the suite against the running application. Each run ends with a JSON verdict
+          block: `status` pass or fail, and on failure the `side` (backend or frontend)
+          that must change, the `evidence`, and the `failingTests`. It does not see this
           conversation, so name the slice, its task file, and how to start the app.
-        outputSchema:
-          type: object
-          additionalProperties: false
-          properties:
-            status:
-              type: string
-              enum: [pass, fail]
-            side:
-              type: string
-              enum: [backend, frontend]
-            evidence:
-              type: string
-            failingTests:
-              type: array
-              items:
-                type: string
-          required: [status, evidence, failingTests]
+          Record the returned id in the task file: later slices and reruns go to the same
+          tester through send_message.
 
 # ── remaining model-facing rows ─────────────────────────────────────────────
 

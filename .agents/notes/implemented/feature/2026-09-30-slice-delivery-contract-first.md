@@ -17,7 +17,7 @@ The `team` preset ([agent preset roles](../architecture/2026-09-29-subagent-agen
 
 ## Alternatives considered
 
-- **Tester writes the suite while the developers build.** It would shorten the path further, but the tester's `delegate_tester` row is one-shot and blocking. Deferred until the verdict can arrive as a background notice.
+- **Tester writes the suite while the developers build.** Deferred here because `delegate_tester` was one-shot and blocking; [team faster delivery](2026-09-30-team-faster-delivery.md) adopted it by making the tester continuable.
 - **Preview only after `pass`.** It keeps the old rule but loses the earliest feedback, which the requester asked for.
 
 ## Consequences
