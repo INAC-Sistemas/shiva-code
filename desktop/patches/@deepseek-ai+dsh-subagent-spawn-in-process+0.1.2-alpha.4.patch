@@ -1,0 +1,13 @@
+diff --git a/node_modules/@deepseek-ai/dsh-subagent-spawn-in-process/lib/index.js b/node_modules/@deepseek-ai/dsh-subagent-spawn-in-process/lib/index.js
+--- a/node_modules/@deepseek-ai/dsh-subagent-spawn-in-process/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-subagent-spawn-in-process/lib/index.js
+@@ -25,7 +25,8 @@ var SpawnInProcessProvider = class {
+ 		outputSchema: true,
+ 		depthLimit: true,
+ 		toolFilter: true,
+-		persona: true
++		persona: true,
++		agentPreset: true
+ 	};
+ 	inheritsParentContext = false;
+ 	constructor(name) {

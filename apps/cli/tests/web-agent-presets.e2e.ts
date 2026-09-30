@@ -793,12 +793,12 @@ describe('the team presets', () => {
     ['team-tester', false],
   ])('composes a %s child from its own preset', async (agentPreset, messages) => {
     const parent = await teamCtx.agents.create({
-      sessionId: SessionId(`team-parent-${agentPreset}`),
+      sessionId: SessionId(`team-parent-${agentPreset}-${randomUUID()}`),
       setup: agentCtx => teamCtx.agentPresets.mount(agentCtx, 'team').then(() => undefined),
     })
     const composition = await prepareChildComposition(parent.agent, { agentPreset })
     const child = await parent.agent.ctx.agents.create({
-      sessionId: SessionId(`team-child-${agentPreset}`),
+      sessionId: SessionId(`team-child-${agentPreset}-${randomUUID()}`),
       meta: childSessionMeta(parent.agent, 1, false, composition),
       setup: (agentCtx) => {
         applyChildComposition(agentCtx, parent.agent, composition)
@@ -807,7 +807,7 @@ describe('the team presets', () => {
     try {
       const tools = toolNames(teamCtx, child.agent).filter(name => name !== 'glob' && name !== 'grep')
       expect(tools).toEqual([
-        'bash', 'edit', 'job_kill', 'job_list', 'job_output', 'read', 'read_image',
+        'bash', 'edit', ...messages ? ['interrupt_agent'] : [], 'job_kill', 'job_list', 'job_output', 'read', 'read_image',
         ...messages ? ['send_message'] : [], 'skill', 'todo_write', 'write',
       ])
       expect(child.agent.session.header.agentPreset).toBe(agentPreset)

@@ -47,7 +47,7 @@ Before this change, every in-process child joined its parent's standing preset c
 | Preset | Role | Model-facing surface |
 |---|---|---|
 | `team` | Project manager (selectable) | File tools for `mds/`, `ask_user_question`, `todo_write`, `web_search`, `send_message`/`interrupt_agent`/`list_agents`, and three delegation tools |
-| `team-backend` (hidden) | Backend developer | Shell, file tools, jobs, `send_message`, `todo_write`, skills |
+| `team-backend` (hidden) | Backend developer | Shell, file tools, jobs, `send_message`/`interrupt_agent`, `todo_write`, skills |
 | `team-frontend` (hidden) | Frontend developer | Same as backend |
 | `team-tester` (hidden) | Tester | Shell, file tools, jobs, `todo_write`, skills; no messaging, because its verdict is its answer |
 
@@ -81,7 +81,11 @@ The three delegation tools differ in mode:
 
 ## Consequences
 
-- The desktop runs a packaged harness (`0.1.2-alpha.4`) without `agentPreset`. Its Schemastery config would drop the unknown field, and every role child would silently join the manager's preset. The team presets therefore stay out of `desktop/build/agent-presets` until the harness is repacked with this change.
+- The desktop runs the packaged harness `0.1.2-alpha.4`, which predates this change. Patches under `desktop/patches/` port it to the packaged JS of `dsh-agent-presets`, `dsh-subagent`, `dsh-subagent-in-process-driver`, `dsh-subagent-spawn-in-process`, and `dsh-tool-subagent`, and `desktop/test/role-presets-patch.test.ts` proves the behavior on those modules. The packaged declarations are not patched.
+- `desktop/build/agent-presets/team*` equal the CLI copies except two lines, which `desktop/test/agent-presets.test.ts` pins:
+  - the packaged persona row takes `text` instead of `prefix`;
+  - the tester row sets `guardRole: qa`, so `dsh-tool-guard` limits its writes to `testes/`.
+- The packaged tool-subagent forwards `guardRole` through `agentOptions`, which a continuable descriptor does not record. The developer rows therefore bind no guard role, because a cold-resumed fixer would lose it.
 - The seed attaches new skills only to profiles named "Padrão". Other profiles need the team skills selected in the dashboard before role agents receive them.
 - A role preset must mount every model-facing row its role needs, including `tool-subagent-control` when the child should message its parent.
 - Host-plane tools on the registry's global layer remain visible to every preset. Role compositions that must hide them need those rows on the agent plane.

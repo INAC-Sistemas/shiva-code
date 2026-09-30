@@ -1,0 +1,195 @@
+# The desktop's `team` agent preset, kept equal to
+# `apps/cli/config/agent-presets/team` except for what the packaged harness
+# (0.1.2-alpha.4) needs: the persona row takes `text`, and the tester row binds
+# the `qa` guard role so `dsh-tool-guard` limits its writes to `testes/`. The
+# harness patches under `desktop/patches/` add `agentPreset`, `outputSchema`,
+# `toolDescription`, and `guardRole` to the packaged delegation tool.
+#
+# The `team` agent preset: a project manager that owns the requirements, the
+# architecture, the stack, and the per-page plan, and delegates every page to
+# role agents that run on their own presets.
+#
+# Each delegation tool names an `agentPreset`, so its child MOUNTS that preset
+# instead of joining this one: the backend, frontend, and tester agents see only
+# their own persona, tools, and skills, and none of this composition. The
+# manager itself carries no shell and writes no code; its filesystem tools exist
+# for the architecture and task documents under `mds/`.
+#
+# The role presets (`team-backend`, `team-frontend`, `team-tester`) are hidden
+# from the picker and live beside this one; `verify-cordis-config` fails when a
+# delegation row names a preset that is not a sibling directory.
+#
+# Rules shared with `profile`: this is an AGENT-PLANE composition, a service
+# row must sit inside a group carrying an `isolate` realm, and profile-scoped
+# rows gate on `$DSH_PROFILE_PLUGINS`.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are the project manager of a software team, powered by the {{model}} model.
+      Your working directory is {{cwd}}. You own the requirements, the architecture,
+      the technology stack, and the delivery plan: you interview the requester, record
+      every feature, and break the system into one task per page. You never write
+      application code yourself. Each page is delivered by delegation: the backend
+      developer builds its data and API, the frontend developer builds its screen on
+      that API, and the tester builds and runs the page's tests. When the tester
+      reports a failure, forward its evidence with send_message to the same developer
+      who built that side of the page, then test again. Reply to the requester in
+      the language they write in.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── documents ───────────────────────────────────────────────────────────────
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# No `skill-filesystem`: the manager's skills come only from the VPS library,
+# narrowed to the `pm` role below.
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation ──────────────────────────────────────────────────────────────
+
+# `maxDepth: 1` lets the manager (depth 0) start role agents and keeps them
+# from delegating further; their presets carry no delegation tool either.
+- id: delegation
+  name: cordis:group
+  group: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: delegate-backend
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: delegate_backend
+        agentPreset: team-backend
+        backgroundMode: continuable
+        maxDepth: 1
+        toolDescription: >-
+          Delegate one page's backend to the backend developer: its data model,
+          persistence, seed data, validated contracts, and API endpoints. The developer
+          works in its own session with backend tools and skills and does not see this
+          conversation, so give it the page's task file and every decision it needs.
+          Record the returned id in the page's task file: fixes for this page go to the
+          same developer through send_message.
+
+    - id: delegate-frontend
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: delegate_frontend
+        agentPreset: team-frontend
+        backgroundMode: continuable
+        maxDepth: 1
+        toolDescription: >-
+          Delegate one page's screen to the frontend developer: layout, components,
+          states, and calls to the page's real API contracts. The developer works in its
+          own session with frontend tools and skills and does not see this conversation,
+          so give it the page's task file, the contracts the backend delivered, and the
+          design decisions. Record the returned id in the page's task file: fixes for this
+          page go to the same developer through send_message.
+
+    - id: delegate-tester
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: delegate_tester
+        agentPreset: team-tester
+        backgroundMode: one-shot
+        enableRunInBackground: false
+        maxDepth: 1
+        guardRole: qa
+        toolDescription: >-
+          Delegate testing of one delivered page to the tester. It builds and runs the
+          page's test suite against the running application and returns a verdict:
+          `status` pass or fail, and on failure the `side` (backend or frontend) that
+          must change, the `evidence`, and the `failingTests`. It does not see this
+          conversation, so name the page, its task file, and how to start the app.
+        outputSchema:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+              enum: [pass, fail]
+            side:
+              type: string
+              enum: [backend, frontend]
+            evidence:
+              type: string
+            failingTests:
+              type: array
+              items:
+                type: string
+          required: [status, evidence, failingTests]
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000
+
+# ── profile-scoped rows ─────────────────────────────────────────────────────
+
+# The VPS skill library narrowed to the `pm` role: the server serves only the
+# active profile's skills tagged for it.
+- id: skill-library
+  name: dsh-skill-library
+  disabled: !!js "!(process.env.DSH_PROFILE_PLUGINS ?? '').split(',').includes('dsh-skill-library')"
+  config:
+    endpoint: !!js "new URL('/api/plugins/skill-library', process.env.VPS_URL).href"
+    role: pm
+    prerequisites:
+      pm-architecture: [pm-start-here]
+      pm-page-loop: [pm-start-here, pm-architecture]

@@ -1,0 +1,82 @@
+diff --git a/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js b/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js
+--- a/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js
+@@ -66,10 +66,12 @@ async function readPresetMetadata(directory) {
+ 	const name = text(record.name);
+ 	const description = text(record.description);
+ 	const order = typeof record.order === "number" && Number.isFinite(record.order) ? record.order : void 0;
++	const hidden = record.hidden === true;
+ 	return {
+ 		...name === void 0 ? {} : { name },
+ 		...description === void 0 ? {} : { description },
+-		...order === void 0 ? {} : { order }
++		...order === void 0 ? {} : { order },
++		...hidden ? { hidden } : {}
+ 	};
+ }
+ /**
+@@ -83,12 +85,13 @@ async function readPresetMetadata(directory) {
+ function renderPresetMetadata(metadata) {
+ 	const name = text(metadata.name);
+ 	const description = text(metadata.description);
+-	const { order } = metadata;
+-	if (name === void 0 && description === void 0 && order === void 0) return void 0;
++	const { order, hidden } = metadata;
++	if (name === void 0 && description === void 0 && order === void 0 && hidden !== true) return void 0;
+ 	return yaml.dump({
+ 		...name === void 0 ? {} : { name },
+ 		...description === void 0 ? {} : { description },
+-		...order === void 0 ? {} : { order }
++		...order === void 0 ? {} : { order },
++		...hidden === true ? { hidden } : {}
+ 	}, { lineWidth: -1 });
+ }
+ //#endregion
+@@ -1355,7 +1358,7 @@ let AgentPresets = (() => {
+ 		async remoteExportList() {
+ 			const defaultId = this.defaultId;
+ 			return {
+-				presets: (await this.list()).map((preset) => ({
++				presets: (await this.list()).filter((preset) => preset.hidden !== true).map((preset) => ({
+ 					id: preset.id,
+ 					trust: preset.trust,
+ 					isDefault: preset.id === defaultId,
+@@ -1483,6 +1486,38 @@ let AgentPresets = (() => {
+ 		* standing compositions. WeakMap: entries die with their agents.
+ 		*/
+ 		bindings = /* @__PURE__ */ new WeakMap();
++		/** Standing keys behind the handles {@link prepareJoin} issued; entries die with their handles. */
++		prepared = /* @__PURE__ */ new WeakMap();
++		/**
++		* Resolve and mount one preset ahead of a synchronous {@link joinPrepared},
++		* so a delegated child can run on a composition other than its parent's.
++		* @param id - the preset id.
++		* @returns an opaque handle for {@link joinPrepared} on this roster.
++		* @throws when the preset is unknown or its composition is unusable.
++		*/
++		async prepareJoin(id) {
++			const preset = await this.resolveMountable(id);
++			const standing = await this.ensureStanding(preset);
++			const handle = Object.freeze({ presetId: preset.id });
++			this.prepared.set(handle, standing.key);
++			return handle;
++		}
++		/**
++		* Join one agent to the standing generation a {@link prepareJoin} resolved.
++		* @param agentCtx - the joining agent's scope context.
++		* @param prepared - a handle this roster's {@link prepareJoin} returned.
++		* @returns the preset id joined.
++		* @throws when `agentCtx` carries no scope, has already joined a preset, or
++		* `prepared` did not come from this roster.
++		*/
++		joinPrepared(agentCtx, prepared) {
++			const agentKey = scopeOf(agentCtx);
++			if (agentKey === void 0) throw new Error("agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset");
++			const standingKey = this.prepared.get(prepared);
++			if (standingKey === void 0) throw new Error(`agent-presets: preset "${prepared.presetId}" was not prepared by this roster`);
++			this.bindings.set(agentKey, bindScopeParent(agentKey, standingKey));
++			return prepared.presetId;
++		}
+ 		/**
+ 		* Compose one agent from a preset: ensure the preset's standing mount, then
+ 		* parent the agent's scope key to it so the mount's registrations and

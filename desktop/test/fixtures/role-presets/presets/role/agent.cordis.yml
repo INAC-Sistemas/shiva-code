@@ -1,0 +1,4 @@
+- id: tool
+  name: ../../plugins/role-tool.mjs
+  config:
+    tool: role_only

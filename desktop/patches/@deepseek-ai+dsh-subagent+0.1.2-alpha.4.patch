@@ -1,0 +1,214 @@
+diff --git a/node_modules/@deepseek-ai/dsh-subagent/lib/index.js b/node_modules/@deepseek-ai/dsh-subagent/lib/index.js
+--- a/node_modules/@deepseek-ai/dsh-subagent/lib/index.js
++++ b/node_modules/@deepseek-ai/dsh-subagent/lib/index.js
+@@ -440,6 +440,9 @@ const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
+ 	"persona",
+ 	"toolFilter"
+ ]);
++/** Version of a continuable descriptor that names its own agent preset: version 3 plus `agentPreset`. */
++const SUBAGENT_PRESET_DESCRIPTOR_VERSION = 4;
++const PRESET_DESCRIPTOR_KEYS = new Set([...CONTINUABLE_DESCRIPTOR_KEYS, "agentPreset"]);
+ const TOOL_FILTER_KEYS = new Set(["allow", "deny"]);
+ /** Whether a persisted JSON value is an object record. */
+ function isRecord(value) {
+@@ -483,10 +486,11 @@ function parseSubagentDescriptor(value) {
+ 	if (!isRecord(value)) throw new Error("persisted subagent descriptor payload must be an object");
+ 	const version = value["version"];
+ 	if (typeof version !== "number") throw new Error("persisted subagent descriptor version must be a number");
+-	if (version !== 3) return void 0;
++	if (version !== 3 && version !== SUBAGENT_PRESET_DESCRIPTOR_VERSION) return void 0;
+ 	const mode = value["mode"];
+ 	if (mode !== "one-shot" && mode !== "continuable") throw new Error("persisted subagent descriptor mode must be \"one-shot\" or \"continuable\"");
+-	assertKnownKeys(value, mode === "one-shot" ? ONE_SHOT_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS, "payload");
++	if (version === SUBAGENT_PRESET_DESCRIPTOR_VERSION && mode !== "continuable") throw new Error(`persisted subagent descriptor version ${version} must be continuable`);
++	assertKnownKeys(value, mode === "one-shot" ? ONE_SHOT_DESCRIPTOR_KEYS : version === SUBAGENT_PRESET_DESCRIPTOR_VERSION ? PRESET_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS, "payload");
+ 	const provider = value["provider"];
+ 	if (typeof provider !== "string") throw new Error("persisted subagent descriptor provider must be a string");
+ 	if (mode === "one-shot") {
+@@ -505,8 +509,10 @@ function parseSubagentDescriptor(value) {
+ 	const agentReasoningEffort = optionalString(value, "agentReasoningEffort");
+ 	const persona = optionalString(value, "persona");
+ 	const toolFilter = Object.hasOwn(value, "toolFilter") ? parseToolFilter(value["toolFilter"]) : void 0;
++	const agentPreset = optionalString(value, "agentPreset");
++	if (version === SUBAGENT_PRESET_DESCRIPTOR_VERSION && agentPreset === void 0) throw new Error(`persisted subagent descriptor version ${version} must declare agentPreset`);
+ 	return {
+-		version: 3,
++		version,
+ 		mode,
+ 		provider,
+ 		label,
+@@ -514,7 +520,8 @@ function parseSubagentDescriptor(value) {
+ 		...agentModel !== void 0 ? { agentModel } : {},
+ 		...agentReasoningEffort !== void 0 ? { agentReasoningEffort } : {},
+ 		...persona !== void 0 ? { persona } : {},
+-		...toolFilter !== void 0 ? { toolFilter } : {}
++		...toolFilter !== void 0 ? { toolFilter } : {},
++		...agentPreset !== void 0 ? { agentPreset } : {}
+ 	};
+ }
+ function snapshotSubagentDescriptor(input) {
+@@ -524,7 +531,7 @@ function snapshotSubagentDescriptor(input) {
+ 		provider: input.provider,
+ 		...input.label !== void 0 ? { label: input.label } : {}
+ 	} : {
+-		version: 3,
++		version: input.agentPreset === void 0 ? 3 : SUBAGENT_PRESET_DESCRIPTOR_VERSION,
+ 		mode: input.mode,
+ 		provider: input.provider,
+ 		label: input.label,
+@@ -532,7 +539,8 @@ function snapshotSubagentDescriptor(input) {
+ 		...input.agentModel !== void 0 ? { agentModel: input.agentModel } : {},
+ 		...input.agentReasoningEffort !== void 0 ? { agentReasoningEffort: input.agentReasoningEffort } : {},
+ 		...input.persona !== void 0 ? { persona: input.persona } : {},
+-		...input.toolFilter !== void 0 ? { toolFilter: input.toolFilter } : {}
++		...input.toolFilter !== void 0 ? { toolFilter: input.toolFilter } : {},
++		...input.agentPreset !== void 0 ? { agentPreset: input.agentPreset } : {}
+ 	});
+ 	if (snapshot === void 0) throw new Error("subagent descriptor is not losslessly JSON-serializable");
+ 	return snapshot;
+@@ -656,9 +664,9 @@ function resolveChildAgentOptions(parent, requested, childDepth) {
+ * @param isSeeded - whether this child inherits a parent-log prefix, including an explicitly empty one.
+ * @returns the `meta` for `ctx.agents.create()`.
+ */
+-function childSessionMeta(parent, childDepth, isSeeded) {
++function childSessionMeta(parent, childDepth, isSeeded, composition) {
+ 	const parentHeader = parent.session.header;
+-	const agentPreset = parent.ctx.get("agentPresets")?.composedPreset(parent.ctx);
++	const agentPreset = composition?.preset?.join.presetId ?? parent.ctx.get("agentPresets")?.composedPreset(parent.ctx);
+ 	return {
+ 		...parentHeader.cwd !== void 0 ? { cwd: parentHeader.cwd } : {},
+ 		...agentPreset === void 0 ? {} : { agentPreset },
+@@ -696,8 +704,28 @@ const SUBAGENT_DELEGATION_CONTEXT = "You are a delegated subagent: your permissi
+ * @param parent - the delegating parent whose composition the child joins.
+ * @param composition - the per-child persona and tool filter to install.
+ */
++/**
++* Resolve and mount a child's requested agent preset before its synchronous
++* creation window, so an unknown or broken preset rejects before any child exists.
++* @param parent - the delegating parent, whose context supplies the roster.
++* @param composition - the requested persona, tool filter, and agent preset.
++* @returns the composition {@link applyChildComposition} installs.
++*/
++async function prepareChildComposition(parent, composition) {
++	const { persona, toolFilter, agentPreset } = composition;
++	if (agentPreset === void 0) return { persona, toolFilter, preset: void 0 };
++	const roster = parent.ctx.get("agentPresets");
++	if (roster === void 0) throw new SubagentError(`subagent agent preset "${agentPreset}" requires the agent-presets roster, which this deployment does not compose`, "AGENT_PRESET_UNAVAILABLE");
++	try {
++		return { persona, toolFilter, preset: { roster, join: await roster.prepareJoin(agentPreset) } };
++	} catch (error) {
++		const reason = error instanceof Error ? error.message : String(error);
++		throw new SubagentError(`subagent agent preset "${agentPreset}" is unavailable: ${reason}`, "AGENT_PRESET_UNAVAILABLE", { cause: error });
++	}
++}
+ function applyChildComposition(childCtx, parent, composition) {
+-	childCtx.get("agentPresets")?.composeFrom(childCtx, parent.ctx);
++	if (composition.preset === void 0) childCtx.get("agentPresets")?.composeFrom(childCtx, parent.ctx);
++	else composition.preset.roster.joinPrepared(childCtx, composition.preset.join);
+ 	childCtx.systemPrompt.context({
+ 		name: "subagent:delegation",
+ 		order: childCtx.systemPrompt.getContextOrder("SUBAGENT_DELEGATION"),
+@@ -1023,7 +1051,8 @@ var SubagentContinuationManager = class {
+ 			...agentModel !== void 0 ? { agentModel } : {},
+ 			...agentReasoningEffort !== void 0 ? { agentReasoningEffort } : {},
+ 			...request.persona !== void 0 ? { persona: request.persona } : {},
+-			...request.toolFilter !== void 0 ? { toolFilter: request.toolFilter } : {}
++			...request.toolFilter !== void 0 ? { toolFilter: request.toolFilter } : {},
++			...request.agentPreset !== void 0 ? { agentPreset: request.agentPreset } : {}
+ 		});
+ 		const delegatedPolicies = captureDelegatedPolicyOverrides(parent);
+ 		const prepared = await this.host.prepareContinuable(spec.provider, {
+@@ -1032,6 +1061,12 @@ var SubagentContinuationManager = class {
+ 			signal: spec.signal
+ 		});
+ 		spec.signal.throwIfAborted();
++		const composition = await prepareChildComposition(parent, {
++			persona: request.persona,
++			toolFilter: request.toolFilter,
++			agentPreset: request.agentPreset
++		});
++		spec.signal.throwIfAborted();
+ 		this.assertAdmitting(parent);
+ 		const inheritedEventCount = SessionLogOffset(prepared.seed?.length ?? 0);
+ 		const seed = seedDescriptorTurn(childId, prepared.seed, descriptor);
+@@ -1054,15 +1089,12 @@ var SubagentContinuationManager = class {
+ 					parent,
+ 					create: {
+ 						seed,
+-						meta: childSessionMeta(parent, childDepth, prepared.seed !== void 0),
++						meta: childSessionMeta(parent, childDepth, prepared.seed !== void 0, composition),
+ 						inheritedEventCount,
+ 						delegatedPolicies
+ 					},
+ 					agentOptions,
+-					composition: {
+-						persona: request.persona,
+-						toolFilter: request.toolFilter
+-					},
++					composition,
+ 					signal: spec.signal
+ 				});
+ 				return this.submitMaterialized(activation, isAdjacentAgentSendMessageTool(this.ctx.get("tools")?.get("send_message", activation.handle.agent)) ? continuableInitialPrompt(parent.id, request.prompt) : request.prompt, {
+@@ -1397,6 +1429,12 @@ var SubagentContinuationManager = class {
+ 			if (descriptor === void 0 || descriptor.mode !== "continuable") throw new SubagentError(`subagent "${childId}" has no supported continuation state and cannot be resumed; choose a different target`, "NOT_RESUMABLE");
+ 			let activation;
+ 			try {
++				const composition = await prepareChildComposition(parent, {
++					persona: descriptor.persona,
++					toolFilter: descriptor.toolFilter,
++					agentPreset: descriptor.agentPreset
++				});
++				options.signal.throwIfAborted();
+ 				activation = await this.materialize({
+ 					childId,
+ 					provider: descriptor.provider,
+@@ -1406,10 +1444,7 @@ var SubagentContinuationManager = class {
+ 						...descriptor.agentModel !== void 0 ? { model: descriptor.agentModel } : {},
+ 						...descriptor.agentReasoningEffort !== void 0 ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) } : {}
+ 					},
+-					composition: {
+-						persona: descriptor.persona,
+-						toolFilter: descriptor.toolFilter
+-					},
++					composition,
+ 					signal: options.signal
+ 				});
+ 			} catch (error) {
+@@ -2359,7 +2394,8 @@ const NO_START_CAPABILITIES = Object.freeze({
+ 	outputSchema: false,
+ 	depthLimit: false,
+ 	toolFilter: false,
+-	persona: false
++	persona: false,
++	agentPreset: false
+ });
+ /**
+ * Assert a configured timing bound is a positive finite number (it bounds a
+@@ -2731,6 +2767,10 @@ let SubagentRuntime = (() => {
+ 		* @throws when continuation services are unavailable or materialization fails.
+ 		*/
+ 		async startContinuable(spec) {
++			if (spec.request.agentPreset !== void 0) {
++				const provider = this.expectProvider(spec.provider);
++				if (!provider.capabilities.agentPreset) throw new SubagentError(`subagent provider "${provider.name}" does not support the "agentPreset" capability`, "UNSUPPORTED_CAPABILITY");
++			}
+ 			return this.requireContinuations().startContinuable(spec);
+ 		}
+ 		/**
+@@ -3056,6 +3096,10 @@ let SubagentRuntime = (() => {
+ 				{
+ 					when: request.persona !== void 0,
+ 					cap: "persona"
++				},
++				{
++					when: request.agentPreset !== void 0,
++					cap: "agentPreset"
+ 				}
+ 			];
+ 			for (const { when, cap } of needs) if (when && !provider.capabilities[cap]) throw new SubagentError(`subagent provider "${provider.name}" does not support the "${cap}" capability`, "UNSUPPORTED_CAPABILITY");
+@@ -3063,4 +3107,4 @@ let SubagentRuntime = (() => {
+ 	};
+ })();
+ //#endregion
+-export { AssistantOutputFold, NO_START_CAPABILITIES, SUBAGENT_DESCRIPTOR_VERSION, SubagentDepthError, SubagentError, SubagentRunId, SubagentRuntime, SubagentRuntime as default, appendDelegatedPolicyOverrides, applyChildComposition, assertPositiveFinite, assertSubagentMaxDepth, assertUsableCwd, captureDelegatedPolicyOverrides, childSessionMeta, delegationDepthOf, finalAssistantOutput, foldSubagentDescriptor, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildCwd, resolveChildDepth, seedDescriptorTurn, settleRun, settleRunResult, snapshotSubagentDescriptor, subprocessRunHandle, validateConfiguredCwd };
++export { AssistantOutputFold, NO_START_CAPABILITIES, SUBAGENT_DESCRIPTOR_VERSION, SUBAGENT_PRESET_DESCRIPTOR_VERSION, prepareChildComposition, SubagentDepthError, SubagentError, SubagentRunId, SubagentRuntime, SubagentRuntime as default, appendDelegatedPolicyOverrides, applyChildComposition, assertPositiveFinite, assertSubagentMaxDepth, assertUsableCwd, captureDelegatedPolicyOverrides, childSessionMeta, delegationDepthOf, finalAssistantOutput, foldSubagentDescriptor, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildCwd, resolveChildDepth, seedDescriptorTurn, settleRun, settleRunResult, snapshotSubagentDescriptor, subprocessRunHandle, validateConfiguredCwd };

@@ -1,0 +1,3 @@
+name: Equipe
+description: Gerente de projeto que levanta o sistema e delega cada página a agentes de backend, frontend e teste isolados.
+order: 6

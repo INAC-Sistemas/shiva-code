@@ -244,7 +244,8 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(document).toContain('sandbox:')
     expect(document).toContain('enabled: false')
     expect(scaffold.ctx.sandboxPolicy.resolve({ session: existing }).mode).toBe('danger-full-access')
-    expect(existing.events.find(event => event.type === 'sandbox/mode')?.data)
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
+    expect(existing.snapshotEvents().find(event => event.type === 'sandbox/mode')?.data)
       .toEqual({ mode: 'workspace-write' })
 
     await toggle.click()
