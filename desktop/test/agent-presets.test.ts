@@ -24,11 +24,6 @@ describe('the desktop profile agent preset', () => {
       expect(rows).toContain(`split(',').includes('${plugin}')`)
     }
   })
-
-  it('is the roster default the desktop patch composes', async () => {
-    const patch = await readFile(join(__dirname, '..', 'build', 'dsh-desktop.patch.yml'), 'utf8')
-    expect(patch).toMatch(/- id: agent-presets\n {2}config:\n {4}default: profile\n {4}roots: .*DSH_DESKTOP_PRESET_ROOT/)
-  })
 })
 
 describe('the desktop team agent presets', () => {
@@ -49,6 +44,11 @@ describe('the desktop team agent presets', () => {
         .toBe(await readFile(join(CLI_PRESETS, preset, 'preset.yml'), 'utf8'))
     },
   )
+
+  it('is the roster default the desktop patch composes', async () => {
+    const patch = await readFile(join(__dirname, '..', 'build', 'dsh-desktop.patch.yml'), 'utf8')
+    expect(patch).toMatch(/- id: agent-presets\n {2}config:\n {4}default: team\n {4}roots: .*DSH_DESKTOP_PRESET_ROOT/)
+  })
 
   it('binds the tester delegation to the qa guard role', async () => {
     const team = await readFile(join(DESKTOP_PRESETS, 'team', 'agent.cordis.yml'), 'utf8')

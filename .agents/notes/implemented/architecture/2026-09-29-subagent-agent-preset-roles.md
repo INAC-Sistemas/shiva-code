@@ -46,7 +46,7 @@ Before this change, every in-process child joined its parent's standing preset c
 
 | Preset | Role | Model-facing surface |
 |---|---|---|
-| `team` | Project manager (selectable) | File tools for `mds/`, `ask_user_question`, `todo_write`, `web_search`, `send_message`/`interrupt_agent`/`list_agents`, and three delegation tools |
+| `team` | Project manager (the desktop's default preset) | File tools for `mds/`, `ask_user_question`, `todo_write`, `web_search`, `send_message`/`interrupt_agent`/`list_agents`, and three delegation tools |
 | `team-backend` (hidden) | Backend developer | Shell, file tools, jobs, `send_message`/`interrupt_agent`, `todo_write`, skills |
 | `team-frontend` (hidden) | Frontend developer | Same as backend |
 | `team-tester` (hidden) | Tester | Shell, file tools, jobs, `todo_write`, skills; no messaging, because its verdict is its answer |
