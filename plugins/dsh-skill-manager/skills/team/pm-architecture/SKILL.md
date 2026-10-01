@@ -104,8 +104,10 @@ A domain is one subject of the business, named in the requester's words, with th
 
 List the domains in build order, one line each: `NN — <domain> — <what it is for, in one sentence> — <roles that use it>`, and under each:
 
-- **Objects**: `<object> — <what it is, in one sentence>`. Names and purpose only: fields, states, permissions and rules are that domain's session questions.
-- **Pages**: `<page, as the requester names it> — <roles> — <features it serves>`. The navigable shell renders every one as a route before the first domain is built.
+- **Objects**: `<object, in their words> → <English code name> — <what it is, in one sentence>` ("agendamento → `Appointment`"). Names and purpose only: fields, states, permissions and rules are that domain's session questions.
+- **Pages**: `<page, as the requester names it> → <English route> — <roles> — <features it serves>` ("Moradores → `/residents`"). The navigable shell renders every one as a route before the first domain is built.
+
+The English names and routes are the glossary every agent codes with (`skill engineering-standards` rule 10): the code is entirely in English, and only the screen copy speaks the requester's language.
 
 Then the **relations between domains**, one row each: `<object> → <object of an earlier domain> — <the relation in their words>` ("todo agendamento é de um cliente"). Relations inside one domain are that domain's session questions.
 
@@ -143,7 +145,7 @@ mode: rapido | completo
 ## Decisions (table: # | Question | Options | Choice | Why)
 ## Deploy mode (target, what it must support; "not deployed by this team")
 ## Running locally (start command, fixed port)
-## Domains, in build order (table: NN | Domain | What it is for | Roles; then per domain its objects: object → what it is, and its pages: page → roles → features)
+## Domains, in build order (table: NN | Domain | What it is for | Roles; then per domain its objects: object → English code name → what it is, and its pages: page → English route → roles → features)
 ## Relations between domains (table: object → object of an earlier domain → relation in their words)
 ## Deferred questions (table: question → recommendation → domain or slice that asks it)
 ## In scope / Out of scope (with why) / ## Constraints (constraint → source → consequence)

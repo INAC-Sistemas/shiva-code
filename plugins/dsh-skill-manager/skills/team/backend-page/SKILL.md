@@ -29,7 +29,7 @@ A slice arrives in two phases, each its own message from the project manager, an
 **Phase 1 — contracts only.** The frontend developer starts building the screen on them as soon as you close, so this phase is short and writes nothing else.
 
 1. **Read first.** The tarefa's Contracts, Rules and "Done when", the domain document's Objects, Permissions, Rules and Relations, and the architecture's Decisions, Relations between domains and Running locally. Batch these reads in one step.
-2. **Contracts.** Every request the slice sends and every response it reads is a Zod schema in the contracts module, with its type inferred by `z.infer`, and a typed API client function per endpoint. Typecheck the contracts module, and close with the contract files, the endpoints each one serves (method, path, roles), and the client functions.
+2. **Contracts.** Names come from the domain document's English code names (`/engineering-standards` rule 10): files, routes, API paths, schemas, fields, tables and error codes are all English; only error `message` text speaks the requester's language. Every request the slice sends and every response it reads is a Zod schema in the contracts module, with its type inferred by `z.infer`, and a typed API client function per endpoint. Typecheck the contracts module, and close with the contract files, the endpoints each one serves (method, path, roles), and the client functions.
 
 **Phase 2 — implementation**, when the project manager sends it:
 

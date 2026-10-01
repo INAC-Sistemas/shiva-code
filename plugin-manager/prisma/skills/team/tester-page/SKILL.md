@@ -26,7 +26,8 @@ The message names a tarefa and its contract files. The app may not serve these e
 1. Tests live in `testes/NN.x-slug/`, never beside the application code, and you never edit application code, migrations or contracts.
 2. **API tests**: for each endpoint of the slice, the success case and each refusal the domain document's Permissions table and the contract name, with a seed user of each role (and, for "own only", a record of another user); for each rule the tarefa names, its Given/When/Then from the domain document: the violating request is refused and the allowed one succeeds — call the running app on the fixed port and validate every response body with the slice's Zod contract schema.
 3. **Screen tests**: for each "Done when" line, the interaction that proves it, driven through a real browser against the running app (Playwright when the project has it or can add it under `testes/`), signing in as the seed user of each role the slice serves.
-4. Reuse the project's test runner when it has one; otherwise add the smallest one under `testes/` with its own command.
+4. Test file names, `describe` and `it` titles, helpers and variables are in English (`skill engineering-standards` rule 10); assertions on screen copy use the requester's language the screen shows.
+5. Reuse the project's test runner when it has one; otherwise add the smallest one under `testes/` with its own command.
 
 ## Phase 2 — run and judge
 

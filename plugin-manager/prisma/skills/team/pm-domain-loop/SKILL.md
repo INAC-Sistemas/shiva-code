@@ -49,7 +49,7 @@ Each domain starts with one question session, before any of its slices. Tell the
    status: draft
    ---
    # NN — <domain>
-   ## Objects (table: object → information it keeps, in plain words → mandatory → never repeats)
+   ## Objects (table: object → English code name → information it keeps, in plain words, each with its English field name → mandatory → never repeats)
    ## Life cycle (per object with states: state → what moves it → who)
    ## Permissions (table: object → role → sees (all / own) → creates → changes → deletes)
    ## Rules (R1, R2…: the restriction in their words → Given/When/Then → what the person sees when refused)
@@ -57,6 +57,8 @@ Each domain starts with one question session, before any of its slices. Tell the
    ## Slices, in build order (table: NN.x | behaviour | roles | objects | rules it enforces)
    ## Answers (question → answer, in their words)
    ```
+
+   Every object, field, state and route gets its English code name here, from the domain map's glossary or chosen now and added to it (`skill engineering-standards` rule 10): the agents code only with these names, and the requester's words stay in the screen copy.
 
    The first slice is what the domain's first page shows, including its empty state; each later slice adds one thing the person can do (create, change, cancel, filter, export). Each rule belongs to exactly one slice: the first one in which the refused action exists.
 3. **One approval.** Present the domain in one message, in their language: what the system keeps, who may do what, the rules as "nunca acontece: …", and the slices in order. Ask once with `ask_user_question` ("Aprovado" / "Quero ajustar"), fold any correction into the document, and set `status: validated` only on their explicit yes.
@@ -71,7 +73,7 @@ Each domain starts with one question session, before any of its slices. Tell the
    epic: <slug>
    domain: <NN — domain name>
    slice: <NN.x — behaviour>
-   route: <the page's route>
+   route: <the page's English route>
    status: active
    backend:
    frontend:

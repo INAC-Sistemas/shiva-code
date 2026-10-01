@@ -1,6 +1,6 @@
 ---
 name: engineering-standards
-description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — its files written only when the requester asks for them — whose application container runs migrations and seed on start, SQLite as the development database), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /01-arquitetura records, what /02-frontend and /03-backend require, and what their evaluators reject.
+description: The house engineering standards every system built here follows — backend rules that hold in any language (clear responsibilities per layer, explicit data transfer objects where a boundary needs them, repositories only when needed, responses serialized by a layer dedicated to external representation, formal and up-to-date documentation of every public API contract, asynchronous processing for long, heavy or external work, webhooks signed and made idempotent in both directions, a Docker deployment — its files written only when the requester asks for them — whose application container runs migrations and seed on start, SQLite as the development database, every name in the code in English), a consistent design system with reusable tokens and one standardized visualization library, and the frontend stack (React, Tailwind CSS, Recharts) — with what /01-arquitetura records, what /02-frontend and /03-backend require, and what their evaluators reject.
 whenToUse: In /01-arquitetura before writing Decisions, in /02-frontend and /03-backend when writing each tarefa's Done when, and for every builder and evaluator briefing of a backend, API or UI tarefa.
 roles: [pm, backend, frontend]
 ---
@@ -179,6 +179,15 @@ A webhook is an HTTP call the system did not ask for at that moment — someone 
 
 **Documentation.** An inbound endpoint is a public endpoint: it belongs in the OpenAPI of rule 3 with its payload, its signature header and every status it answers. Outbound events are documented as events — AsyncAPI, or a named section of `01-arquitetura.md` listing each event, when it fires, its payload and its retry policy.
 
+### 10. Code in English
+
+Everything written in code is in English, whatever language the requester speaks: a project mixes one language in its code, and English is the one every library, framework and future maintainer shares.
+
+- **In English**: file and folder names; page routes and API paths, path and query parameters (`/residents`, `/api/auth/me`, `?status=open`, never `/moradores` or `/api/acesso/eu`); identifiers of every kind — variables, constants, functions, classes, types, interfaces, components, hooks, enums and their values; database tables, columns, indexes and migration names; contract and schema names and their fields; JSON fields of requests and responses; error codes; environment variable names; CSS classes and design tokens; test file names, `describe` and `it` titles; code comments and commit messages.
+- **In the requester's language**: only what a person reads in the product — screen copy, labels, the `message` of an error envelope, notifications and e-mails, and seed data shown as content (names, list items) — plus the process artifacts under `mds/`.
+- **One English name per domain object.** The architecture's domain map and each domain document record the English name of every object and the route of every page next to the requester's word ("agendamento → `Appointment`, `/appointments`"), and every layer uses that name: model, table, contract, endpoint, component and test. A name not in the glossary is chosen once, added to it, and reused.
+- Fixed pipeline paths keep their names: `mds/`, `testes/` and the tarefa slugs.
+
 ## Backend: mapping roles to a stack
 
 The backend rules hold in any language; the architecture records how the chosen stack realizes each role. The table only illustrates — it is not a list of allowed stacks.
@@ -220,6 +229,7 @@ Record the backend language and framework, then add one **Decisions** row per ru
 | Asynchronous processing | which operations run in the background and why (rule 6 criteria); the queue mechanism and queues by workload; timeout, attempts and backoff per task; failure handling and alerting; status resource and how the UI follows it; scheduled tasks; the worker process in the deployment — or "none" with the reason |
 | Webhooks | inbound: each provider, the endpoint path, where its secret comes from, the signature scheme and replay window, the event-id store that makes it idempotent and the queue the work goes to; outbound: which events, the subscription store, the signing header, the queue, timeout/attempts/backoff, the dead-letter store and how a delivery is retried by hand, and the event catalog's format and URL — or "none", citing the architecture's Surface answer |
 | Deploy mode | the target the requester named (container on their server, managed platform, or local only) and what it must support; for a container, the Dockerfile stages and runtime base image, the production migration and seed commands, with the stable key that makes the seed idempotent and which data is production-only vs demo — the files themselves are not written by the pipeline |
+| Code language | English for every name in the code (rule 10); the domain map's glossary gives each object its English name and each page its English route |
 | Database | SQLite in development (the file path and the `DATABASE_URL` that names it) and the production database; when they differ, the ORM and migration command that keep one schema valid on both, and what is done about what SQLite cannot represent — or the recorded decision to run the production engine in development too |
 
 The traceability matrix names the request validator, use case and response serializer symbols per endpoint, plus the data transfer object where one crosses a boundary, and the handler and event-id store of each webhook in either direction. A rule the requester overrides is recorded with their words.
@@ -268,7 +278,10 @@ Builders of backend, API or UI tarefas load this skill with the others the taref
 - a background task without timeout, attempts or failure handling; one that is not idempotent although it can run twice; one carrying whole models or secrets in its payload; one dispatched inside an open transaction; a scheduled task that can overlap itself;
 - a chart built with a library other than the project's standard one (Recharts), or a second library for the same purpose without a recorded reason;
 - a development setup that requires a database server although the architecture records SQLite, or a hardcoded database URL instead of one read from the environment;
+- a name in the code in a language other than English — a file, folder, route, API path, identifier, table, column, contract field, error code or comment (`/api/acesso/eu`, `listaCompras`, `moradores.ts`) — or a domain object named differently from its glossary entry;
 - any deploy file (`Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml`, provider config) created during the build, or without the requester asking for it;
 - in the containerization tarefa: a `Dockerfile` that is not multi-stage, a missing `docker/entrypoint.sh` or `docker-compose.yml`; migrations or seed not run by the application container's entrypoint; a development migration command in the entrypoint; a seed that duplicates rows or overwrites user data on a second start; a migration CLI missing from the runtime image; a setting baked into the image instead of read from the environment; a container running as root.
 
 Frontend quick check: `grep -rnE "styled-components|@emotion|\.module\.css|chart\.js|echarts" <frontend> --exclude-dir=node_modules --exclude-dir=.next` finds nothing.
+
+Naming quick check: list the routes and API paths (`find app src -path '*/app/*' -name 'page.tsx' -o -path '*/app/*' -name 'route.ts'` in Next.js) and the schema's tables; every segment and name is an English word.
