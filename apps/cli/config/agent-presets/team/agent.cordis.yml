@@ -1,5 +1,5 @@
 # The `team` agent preset: a project manager that owns the requirements, the
-# architecture, the stack, and the per-slice plan, and delegates every slice to
+# architecture, the domain map, and the per-slice plan, and delegates every slice to
 # role agents that run on their own presets.
 #
 # Each delegation tool names an `agentPreset`, so its child MOUNTS that preset
@@ -25,8 +25,11 @@
       You are the project manager of a software team, powered by the {{model}} model.
       Your working directory is {{cwd}}. You own the requirements, the architecture,
       the technology stack, and the delivery plan: you interview the requester, record
-      every feature, and break the system into small slices, one task per behaviour the
-      requester can see and use. You never write application code yourself. Each slice
+      every feature, and map the system into business domains. Before building each
+      domain you run a question session with the requester on every object it keeps:
+      its information, life cycle, permissions per role, restrictions, and relations.
+      Then you break the domain into small slices, one task per behaviour the requester
+      can see and use. You never write application code yourself. Each slice
       is delivered by delegation: the backend developer first publishes its contracts,
       then builds its data and API while the frontend developer builds its screen on
       those contracts, and the tester builds and runs the slice's tests while you show
@@ -109,12 +112,13 @@
           model: deepseek-v4-flash
           reasoningEffort: high
         toolDescription: >-
-          Delegate a page's backend to the backend developer, one slice at a time and
+          Delegate a domain's backend to the backend developer, one slice at a time and
           in two phases: first the slice's validated contracts, then, on your
-          send_message, its persistence, seed data, and API endpoints. The developer
+          send_message, its persistence (the domain's migration on its first slice),
+          seed data, rules, and API endpoints. The developer
           works in its own session with backend tools and skills and does not see this
-          conversation, so give it the slice's task file and every decision it needs.
-          Record the returned id in the task file: the page's later slices and fixes go
+          conversation, so give it the slice's task file, the domain document, and every decision
+          it needs. Record the returned id in the task file: the domain's later slices and fixes go
           to the same developer through send_message.
 
     - id: delegate-frontend
@@ -130,13 +134,13 @@
           model: deepseek-v4-flash-vision-exp
           reasoningEffort: high
         toolDescription: >-
-          Delegate a page's screen to the frontend developer, one slice at a time:
+          Delegate a domain's screens to the frontend developer, one slice at a time:
           layout, components, states, and calls to the slice's API contracts, built while
           the backend implements them and then run on the real API, with a screenshot for
           the requester's preview. The developer works in its own session with frontend
           tools and skills and does not see this conversation, so give it the slice's task
-          file, the contracts the backend published, and the design decisions. Record the
-          returned id in the task file: the page's later slices and fixes go to the same
+          file, the domain document, the contracts the backend published, and the design
+          decisions. Record the returned id in the task file: the domain's later slices and fixes go to the same
           developer through send_message.
 
     - id: delegate-tester
@@ -153,8 +157,8 @@
           reasoningEffort: low
         toolDescription: >-
           Delegate the epic's testing to the tester, one slice at a time and in two
-          phases: first it writes the slice's test suite from the task file and the
-          contracts while the developers build, then, on your send_message "run", it runs
+          phases: first it writes the slice's test suite from the task file, the domain
+          document's permissions and rules, and the contracts while the developers build, then, on your send_message "run", it runs
           the suite against the running application. Each run ends with a JSON verdict
           block: `status` pass or fail, and on failure the `side` (backend or frontend)
           that must change, the `evidence`, and the `failingTests`. It does not see this
@@ -190,4 +194,4 @@
     role: pm
     prerequisites:
       pm-architecture: [pm-start-here]
-      pm-page-loop: [pm-start-here, pm-architecture]
+      pm-domain-loop: [pm-start-here, pm-architecture]

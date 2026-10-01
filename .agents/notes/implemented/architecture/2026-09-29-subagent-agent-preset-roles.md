@@ -64,7 +64,7 @@ The three delegation tools differ in mode:
   - a profile skill of another role answers 403 `skill-not-in-role`;
   - a read without `role` ignores the column, so the `profile` preset and the three-stage pipeline are unchanged.
 - The new skills live in `plugins/dsh-skill-manager/skills/team/`:
-  - `pm-start-here`, `pm-architecture` (derived from `01-arquitetura`), and `pm-page-loop`;
+  - `pm-start-here`, `pm-architecture` (derived from `01-arquitetura`), and `pm-domain-loop` (renamed from `pm-page-loop` by [domain sessions](../feature/2026-09-30-domain-question-sessions.md));
   - `backend-page`, `frontend-page`, and `tester-page`.
 - The existing helper skills are tagged with the roles that use them.
 

@@ -150,6 +150,7 @@ const RENAMED_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["01-epic-brief", "01-arquitetura"],
   ["04-construcao", "02-frontend"],
   ["05-revisao", "03-backend"],
+  ["pm-page-loop", "pm-domain-loop"],
 ];
 
 /**
