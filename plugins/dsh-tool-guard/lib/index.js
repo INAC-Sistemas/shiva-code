@@ -24,7 +24,14 @@
 //   5. a subagent briefing over ~50 KB is rejected — point at the artifact,
 //      do not paste it;
 //   6. `status: done` is denied to every subagent: the principal writes it
-//      after the requester approves the screen in the chat.
+//      after the requester approves the screen in the chat;
+//   7. the `team` preset's developers: `backend` and `frontend` write the
+//      product (and their own decision records under `mds/`) but never tests,
+//      test-runner configs, files in a dot-directory or outside the workspace,
+//      and never run a test suite — testing is the tester's (`qa`) job, and
+//      self-written verification scripts were where their time went. Package
+//      installs stay allowed. Only `frontend` drives the browser (its preview
+//      screenshot); `backend` checks its endpoints with requests.
 //
 // Role binding: the `subagent` tool takes `role` as free text (its schema names
 // `builder` and `qa`, and `evaluator` passes through the same way); the tool
@@ -73,6 +80,36 @@ const TEST_RUNNER_FILES = ['vitest.config.*', 'playwright.config.*']
  */
 const NON_PRODUCT_ROOTS = ['mds', 'testes', '.git']
 const QA_ALLOW_ROOTS = ['testes']
+
+/** The `team` preset's developer roles (rule 7). */
+const DEVELOPER_ROLES = new Set(['backend', 'frontend'])
+
+/**
+ * The epic artifacts each developer role writes under `mds/epics/<epic>/`:
+ * both record the decisions they take alone, and the frontend records the
+ * design direction.
+ */
+const DEVELOPER_MDS_FILES = {
+  backend: ['decisoes.md'],
+  frontend: ['decisoes.md', '02-design.md'],
+}
+
+/** Test files by name, in any folder: the tester writes them under testes/. */
+const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/i
+
+/** Shell commands that run a test suite (the tester's `run` phase). */
+const TEST_RUN_RE = /\b(?:(?:pnpm|npm|yarn|bun)\s+(?:run\s+)?test\b|vitest\b|jest\b|playwright\s+test\b|node\s+--test\b)/i
+
+/** A package-manager install segment, which may name a test runner without running it. */
+const INSTALL_RE = /\b(?:pnpm|npm|yarn|bun)\s+(?:add|install|i)\b/i
+
+/** True when some segment of `command` (split on `&&`, `||`, `;`, `|`) runs a test suite. */
+function runsTests(command) {
+  return command.split(/&&|\|\||[;|\n]/).some((segment) => TEST_RUN_RE.test(segment) && !INSTALL_RE.test(segment))
+}
+
+/** A node script run from a dot-directory or a temp folder: a self-written verification script. */
+const SCRATCH_SCRIPT_RE = /\bnode\s+(?:\S*[\\/])?(?:\.(?!\.?[\\/])[^\s\\/]+[\\/]|\/tmp\/)/i
 
 /** A subagent briefing may point at artifacts, never paste them. */
 const BRIEFING_MAX_CHARS = 50_000
@@ -125,6 +162,38 @@ function isRootConfigFile(cwd, p, patterns) {
   return patterns.some((pattern) => globMatch(pattern, rel))
 }
 
+/**
+ * True when `p`, relative to the workspace, passes through a dot-directory
+ * (`.verificacao/x.mjs`). Dotfiles themselves (`.env`, `.gitignore`) do not.
+ */
+function inDotDirectory(cwd, p) {
+  const parts = relative(resolve(cwd), resolve(cwd, p)).split(/[\\/]/)
+  return parts.slice(0, -1).some((part) => part.startsWith('.') && part !== '.' && part !== '..')
+}
+
+/** The denial reason for a developer role's write/edit, or undefined to allow. */
+function checkDeveloperWrite(cwd, file, role) {
+  const name = `GUARD[${role}]`
+  if (!inside(cwd, file, '.')) {
+    return `${name}: bloqueado — escrita fora do workspace (got ${file || '<empty>'}); scripts de verificação não são do ${role}: a suíte do tester verifica`
+  }
+  if (inside(cwd, file, 'mds')) {
+    const epic = epicOf(cwd, file)
+    const allowed = epic !== null && DEVELOPER_MDS_FILES[role].some((artifact) => resolve(cwd, file) === resolve(cwd, 'mds', 'epics', epic, artifact))
+    return allowed ? undefined : `${name}: bloqueado — em mds/ o ${role} escreve só ${DEVELOPER_MDS_FILES[role].join(' e ')} do epic (got ${file}); tarefas e arquitetura são do gerente`
+  }
+  if (inside(cwd, file, 'testes') || inside(cwd, file, '.git')) {
+    return `${name}: bloqueado — testes/ é do tester e .git/ é do humano (got ${file})`
+  }
+  if (isRootConfigFile(cwd, file, TEST_RUNNER_FILES) || TEST_FILE_RE.test(file)) {
+    return `${name}: bloqueado — arquivo de teste (got ${file}); o tester escreve e roda os testes, o ${role} não`
+  }
+  if (inDotDirectory(cwd, file)) {
+    return `${name}: bloqueado — pasta oculta não é código do produto (got ${file}); scripts de verificação não são do ${role}: a suíte do tester verifica`
+  }
+  return undefined
+}
+
 /** First replacement character in `text`, as a code-unit offset; -1 when none. */
 function firstFFFD(text) {
   return text.indexOf('\uFFFD')
@@ -158,7 +227,10 @@ function checkFs(exec, depth, role, allowedRoots, cwd) {
   const file = str(args.file_path)
 
   // Role-scoped write surface first: the allowlist IS the policy.
-  if (role === 'builder') {
+  if (DEVELOPER_ROLES.has(role)) {
+    const denied = checkDeveloperWrite(cwd, file, role)
+    if (denied !== undefined) return denied
+  } else if (role === 'builder') {
     if (!inside(cwd, file, '.')) {
       return `GUARD[builder]: bloqueado — escrita fora do workspace (got ${file || '<empty>'})`
     }
@@ -231,7 +303,10 @@ function check(exec, allowedRoots) {
   if ((role === 'builder' || role === 'evaluator') && (exec.name === 'browser' || exec.name === 'prototype_automation')) {
     return `GUARD[${role}]: bloqueado — tool de browser/prototype não é do ${role}; a conferência visual da página é do principal`
   }
-  if ((role === 'builder' || role === 'qa' || role === 'evaluator') && exec.name === 'subagent') {
+  if (role === 'backend' && (exec.name === 'browser' || exec.name === 'prototype_automation')) {
+    return 'GUARD[backend]: bloqueado — o backend confere os endpoints com requisições (curl); a tela e o navegador são do frontend'
+  }
+  if ((role === 'builder' || role === 'qa' || role === 'evaluator' || DEVELOPER_ROLES.has(role)) && exec.name === 'subagent') {
     return `GUARD[${role}]: bloqueado — subagente não delega (spawn é do principal)`
   }
 
@@ -252,6 +327,14 @@ function check(exec, allowedRoots) {
     }
     if (role === 'builder' && depth >= 1 && (PG_DENY_RE.test(command) || NET_DENY_RE.test(command))) {
       return `GUARD[builder]: bloqueado — comando com rede externa/Postgres não é do builder; permitido só build e typecheck`
+    }
+    if (DEVELOPER_ROLES.has(role) && depth >= 1) {
+      if (runsTests(command)) {
+        return `GUARD[${role}]: bloqueado — rodar suíte de teste é do tester; o ${role} roda só \`npm run check\` e confere o próprio trabalho uma vez`
+      }
+      if (SCRATCH_SCRIPT_RE.test(command)) {
+        return `GUARD[${role}]: bloqueado — script de verificação fora do produto (pasta oculta ou /tmp); a suíte do tester verifica`
+      }
     }
   }
 

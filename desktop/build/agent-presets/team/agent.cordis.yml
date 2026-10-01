@@ -1,7 +1,9 @@
 # The desktop's `team` agent preset, kept equal to
 # `apps/cli/config/agent-presets/team` except for what the packaged harness
-# (0.1.2-alpha.4) needs: the persona row takes `text`, and the tester row binds
-# the `qa` guard role so `dsh-tool-guard` limits its writes to `testes/`. The
+# (0.1.2-alpha.4) needs: the persona row takes `text`, and each delegation row
+# binds a guard role — `backend`, `frontend` and `qa` — so `dsh-tool-guard`
+# keeps the developers off tests and verification scripts and limits the
+# tester's writes to `testes/`. The
 # harness patches under `desktop/patches/` add `agentPreset`, `outputSchema`,
 # `toolDescription`, and `guardRole` to the packaged delegation tool.
 #
@@ -114,6 +116,7 @@
         agentPreset: team-backend
         backgroundMode: continuable
         maxDepth: 1
+        guardRole: backend
         agentOptions:
           provider: deepseek-official
           model: deepseek-v4-flash
@@ -136,6 +139,7 @@
         agentPreset: team-frontend
         backgroundMode: continuable
         maxDepth: 1
+        guardRole: frontend
         agentOptions:
           provider: deepseek-official
           model: deepseek-v4-flash-vision-exp

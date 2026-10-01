@@ -191,4 +191,57 @@ test('a denial names the rule and the allowed surface', () => {
   assert.match(reason, /testes\/ is qa-only/)
 })
 
+/** Run a shell command through the guard; returns the denial reason or undefined. */
+const bash = (command, opts) => guard(exec('bash', { command }, opts))
+
+test('team developers write the product, in any layout', () => {
+  for (const role of ['backend', 'frontend']) {
+    const dev = { depth: 1, role }
+    for (const file of ['src/app/page.tsx', 'prisma/schema.prisma', 'prisma/migrations/1_acesso/migration.sql', 'package.json', '.env', '.gitignore', 'vite.config.ts']) {
+      assert.equal(write(file, 'x', dev), ALLOW, `${role} must write ${file}`)
+    }
+  }
+})
+
+test('team developers never write tests, scratch scripts or outside the workspace', () => {
+  for (const role of ['backend', 'frontend']) {
+    const dev = { depth: 1, role }
+    for (const file of ['testes/00/a.test.ts', 'src/lib/api.test.ts', 'src/app/page.spec.tsx', 'vitest.config.ts', 'playwright.config.ts', '.verificacao/verificar-casca.mjs', 'src/.tmp/check.mjs', '/tmp/verif-casa/verificar.mjs', '.git/config']) {
+      assert.match(write(file, 'x', dev), new RegExp(`GUARD\\[${role}\\]`), `${role} must not write ${file}`)
+    }
+  }
+})
+
+test('team developers write only their own epic artifacts under mds/', () => {
+  assert.equal(write('mds/epics/e/decisoes.md', 'x', { depth: 1, role: 'backend' }), ALLOW)
+  assert.equal(write('mds/epics/e/decisoes.md', 'x', { depth: 1, role: 'frontend' }), ALLOW)
+  assert.equal(write('mds/epics/e/02-design.md', 'x', { depth: 1, role: 'frontend' }), ALLOW)
+  assert.match(write('mds/epics/e/02-design.md', 'x', { depth: 1, role: 'backend' }), /GUARD\[backend\]/)
+  for (const role of ['backend', 'frontend']) {
+    for (const file of ['mds/epics/e/tarefas/00-fundacao.md', 'mds/epics/e/01-arquitetura.md', 'mds/notas.md']) {
+      assert.match(write(file, 'x', { depth: 1, role }), /tarefas e arquitetura são do gerente/, `${role} must not write ${file}`)
+    }
+  }
+})
+
+test('team developers install packages and run checks, but never a test suite or a scratch script', () => {
+  for (const role of ['backend', 'frontend']) {
+    const dev = { depth: 1, role }
+    for (const command of ['pnpm add zod jose', 'pnpm add -D prisma vitest', 'npm install', 'pnpm check', 'npm run check', 'pnpm typecheck', 'pnpm prisma migrate dev --name acesso', 'node -e "1"', 'node scripts/seed.mjs', 'curl -s http://localhost:4300/api']) {
+      assert.equal(bash(command, dev), ALLOW, `${role} must run ${command}`)
+    }
+    for (const command of ['pnpm test', 'cd /w && timeout 600 pnpm test 2>&1 | tail -35', 'npm run test:e2e', 'pnpm exec vitest list', 'npx playwright test', 'pnpm install && pnpm test', 'node --test testes/']) {
+      assert.match(bash(command, dev), /rodar suíte de teste é do tester/, `${role} must not run ${command}`)
+    }
+    for (const command of ['node .verificacao/verificar-casca.mjs', 'cd /tmp/v && node /tmp/v/verificar.mjs']) {
+      assert.match(bash(command, dev), /script de verificação fora do produto/, `${role} must not run ${command}`)
+    }
+  }
+})
+
+test('the frontend drives the browser for its preview; the backend does not', () => {
+  assert.equal(guard(exec('browser', { op: 'screenshot' }, { depth: 1, role: 'frontend' })), ALLOW)
+  assert.match(guard(exec('browser', { op: 'navigate' }, { depth: 1, role: 'backend' })), /GUARD\[backend\]/)
+})
+
 test.after(() => rmSync(ws, { recursive: true, force: true }))

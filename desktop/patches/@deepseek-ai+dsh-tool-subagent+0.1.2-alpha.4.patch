@@ -18,7 +18,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js b/node_mod
 +	agentPreset: z.string(),
 +	outputSchema: z.any(),
 +	toolDescription: z.string(),
-+	guardRole: z.union(["builder", "qa", "evaluator"])
++	guardRole: z.union(["builder", "qa", "evaluator", "backend", "frontend"])
  });
  /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
  function outputValueText(values) {

@@ -17,6 +17,10 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
      `playwright.config.*`) directly at the workspace root, never nested.
    - **evaluator**: nothing. It judges the diff against the artifacts, and its
      verdict is the text it returns.
+   - **backend** and **frontend** (the `team` preset's developers): the product
+     surface, except test files (`*.test.*`, `*.spec.*`), the root test-runner
+     configs and any file inside a dot-directory (`.verificacao/`); under `mds/`
+     only the epic's `decisoes.md`, plus `02-design.md` for the frontend.
 2. **Done follows the requester's approval.** Any `write`/`edit` whose text
    contains a frontmatter `status: done` is denied for every subagent. The
    principal writes it after the requester approves the screen in the chat; the
@@ -27,11 +31,17 @@ can actually be checked, instead of leaving them as prose an agent may ignore.
 4. **Only the principal drives the browser.** `browser` and
    `prototype_automation` are denied to **builder** and **evaluator**: looking
    at the page is the principal's visual check, and no subagent walks a flow
-   before delivery.
+   before delivery. **backend** is denied them too and checks its endpoints
+   with requests; **frontend** keeps them for its preview screenshot.
 5. **In a pipeline workspace every spawn names its role.** When the workspace
    has `mds/epics/`, a principal `subagent` call without `role` is denied, so
    the role rules above always bind. Any role name is accepted; only
-   `builder`, `evaluator` and `qa` carry restrictions.
+   `builder`, `evaluator`, `qa`, `backend` and `frontend` carry restrictions.
+6. **Testing is the tester's.** **backend** and **frontend** may install
+   packages and run `check`, typecheck, migrations and seeds, but a shell
+   command that runs a test suite (`pnpm test`, `vitest`, `jest`,
+   `playwright test`, `node --test`) or a node script from a dot-directory or
+   `/tmp` is denied: the tester (`qa`) writes and runs the slice's suite.
 
 ## Mechanics
 

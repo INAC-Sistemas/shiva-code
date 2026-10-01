@@ -31,14 +31,14 @@ describe('the desktop team agent presets', () => {
   const DESKTOP_PRESETS = join(__dirname, '..', 'build', 'agent-presets')
 
   it.each(['team', 'team-backend', 'team-frontend', 'team-tester'])(
-    'keeps %s equal to the CLI copy except the packaged persona key and the tester guard role',
+    'keeps %s equal to the CLI copy except the packaged persona key and the guard roles',
     async (preset) => {
       const cli = await readFile(join(CLI_PRESETS, preset, 'agent.cordis.yml'), 'utf8')
       const desktop = await readFile(join(DESKTOP_PRESETS, preset, 'agent.cordis.yml'), 'utf8')
       const normalized = desktop
         .replace(/^# The desktop's `team` agent preset[\s\S]*?#\n(?=# The `team` agent preset:)/, '')
         .replace('    text: >-', '    prefix: >-')
-        .replace('        guardRole: qa\n', '')
+        .replace(/^ {8}guardRole: \w+\n/gm, '')
       expect(normalized).toBe(cli)
       expect(await readFile(join(DESKTOP_PRESETS, preset, 'preset.yml'), 'utf8'))
         .toBe(await readFile(join(CLI_PRESETS, preset, 'preset.yml'), 'utf8'))
@@ -50,8 +50,13 @@ describe('the desktop team agent presets', () => {
     expect(patch).toMatch(/- id: agent-presets\n {2}config:\n {4}default: team\n {4}roots: .*DSH_DESKTOP_PRESET_ROOT/)
   })
 
-  it('binds the tester delegation to the qa guard role', async () => {
+  it.each([
+    ['delegate_backend', 'backend'],
+    ['delegate_frontend', 'frontend'],
+    ['delegate_tester', 'qa'],
+  ])('binds %s to the %s guard role', async (toolName, role) => {
     const team = await readFile(join(DESKTOP_PRESETS, 'team', 'agent.cordis.yml'), 'utf8')
-    expect(team).toMatch(/toolName: delegate_tester[\s\S]*?guardRole: qa/)
+    const row = team.slice(team.indexOf(`toolName: ${toolName}`)).split('\n    - id:')[0]
+    expect(row).toContain(`guardRole: ${role}\n`)
   })
 })
