@@ -287,7 +287,7 @@ describe('client bundle activation', () => {
     const internal = { version: 'v1' as const, resolveSync }
 
     const { service } = constructWithRoute([packageName], {
-      internal: internal as NonNullable<Context['loader']['internal']>,
+      internal: internal as unknown as NonNullable<Context['loader']['internal']>,
     })
 
     expect(service.clientPath(packageName)).toBe(clientPath)
