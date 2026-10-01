@@ -6,4 +6,8 @@ npm-debug.log
 Dockerfile*
 docker-compose*.yml
 README.md
-.env*.local
+# Segredos locais (DATABASE_URL, SESSION_SECRET): o `next build` standalone copia
+# o `.env` do contexto para a imagem. O ambiente de execução fornece os valores.
+.env
+.env.*
+!.env.example

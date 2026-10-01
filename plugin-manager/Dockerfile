@@ -26,7 +26,11 @@ COPY . .
 # erro de runtime, com a query errada já em produção.
 RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# `src/lib/db.ts` exige DATABASE_URL ao ser importado, e o `next build` importa
+# as rotas para coletar a configuração delas; nenhuma conexão é aberta. O valor
+# vale só para este RUN: o `.env` local fica fora do contexto (.dockerignore),
+# porque o standalone o copiaria para a imagem com os segredos dele.
+RUN DATABASE_URL="postgresql://build:build@build.invalid:5432/build" npm run build
 
 # A CLI que aplica as migrations, mais o que o `prisma7.config.ts` importa.
 # As versões saem do manifesto, não repetidas aqui, para não haver duas fontes
