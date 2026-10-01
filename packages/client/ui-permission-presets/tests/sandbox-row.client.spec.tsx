@@ -44,6 +44,9 @@ const t: SandboxRowProps['t'] = key => dictionary[key] ?? key
 const runtime = {
   useSessions: (() => { throw new Error('unused') }) as never,
   useWorkspaces: (() => { throw new Error('unused') }) as never,
+  usePanelInfo: (() => { throw new Error('unused') }) as never,
+  useSessionPendingInteraction: (() => { throw new Error('unused') }) as never,
+  useResource: (() => { throw new Error('unused') }) as never,
 }
 
 function mount(controller: SandboxSettingsController) {
